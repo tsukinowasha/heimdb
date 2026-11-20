@@ -1,0 +1,2 @@
+go test fuzz v1
+string("SELECT INTERVAL @u DAY + '2024-01-01'")

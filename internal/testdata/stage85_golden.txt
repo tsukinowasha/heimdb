@@ -1,0 +1,367 @@
+-- SELECT CAST('' AS SIGNED), CAST('' AS UNSIGNED), CAST('' AS DECIMAL(30,1)), CAST('' AS DOUBLE), '' + 0
+0 | 0 | 0.0 | 0 | 0
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: ''
+Warning | 1292 | Truncated incorrect INTEGER value: ''
+Warning | 1292 | Truncated incorrect DECIMAL value: ''
+
+-- SELECT '' = 12, '' > 11, '' BETWEEN 1 AND 12, 12 IN ('', 5), '' = 0
+0 | 0 | 0 | 0 | 1
+
+-- SELECT CAST('  ' AS SIGNED), CAST('  ' AS UNSIGNED), CAST('  ' AS DECIMAL(30,1)), CAST('  ' AS DOUBLE), '  ' + 0
+0 | 0 | 0.0 | 0 | 0
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: '  '
+Warning | 1292 | Truncated incorrect INTEGER value: '  '
+Warning | 1292 | Truncated incorrect DECIMAL value: '  '
+
+-- SELECT '  ' = 12, '  ' > 11, '  ' BETWEEN 1 AND 12, 12 IN ('  ', 5), '  ' = 0
+0 | 0 | 0 | 0 | 1
+
+-- SELECT CAST('-' AS SIGNED), CAST('-' AS UNSIGNED), CAST('-' AS DECIMAL(30,1)), CAST('-' AS DOUBLE), '-' + 0
+0 | 0 | 0.0 | 0 | 0
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: '-'
+Warning | 1292 | Truncated incorrect INTEGER value: '-'
+Warning | 1292 | Truncated incorrect DECIMAL value: '-'
+Warning | 1292 | Truncated incorrect DOUBLE value: '-'
+Warning | 1292 | Truncated incorrect DOUBLE value: '-'
+
+-- SELECT '-' = 12, '-' > 11, '-' BETWEEN 1 AND 12, 12 IN ('-', 5), '-' = 0
+0 | 0 | 0 | 0 | 1
+
+-- SELECT CAST('+' AS SIGNED), CAST('+' AS UNSIGNED), CAST('+' AS DECIMAL(30,1)), CAST('+' AS DOUBLE), '+' + 0
+0 | 0 | 0.0 | 0 | 0
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: '+'
+Warning | 1292 | Truncated incorrect INTEGER value: '+'
+Warning | 1292 | Truncated incorrect DECIMAL value: '+'
+Warning | 1292 | Truncated incorrect DOUBLE value: '+'
+Warning | 1292 | Truncated incorrect DOUBLE value: '+'
+
+-- SELECT '+' = 12, '+' > 11, '+' BETWEEN 1 AND 12, 12 IN ('+', 5), '+' = 0
+0 | 0 | 0 | 0 | 1
+
+-- SELECT CAST('.5' AS SIGNED), CAST('.5' AS UNSIGNED), CAST('.5' AS DECIMAL(30,1)), CAST('.5' AS DOUBLE), '.5' + 0
+0 | 0 | 0.5 | 0.5 | 0.5
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: '.5'
+Warning | 1292 | Truncated incorrect INTEGER value: '.5'
+
+-- SELECT '.5' = 12, '.5' > 11, '.5' BETWEEN 1 AND 12, 12 IN ('.5', 5), '.5' = 0
+0 | 0 | 0 | 0 | 0
+
+-- SELECT CAST('5.' AS SIGNED), CAST('5.' AS UNSIGNED), CAST('5.' AS DECIMAL(30,1)), CAST('5.' AS DOUBLE), '5.' + 0
+5 | 5 | 5.0 | 5 | 5
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: '5.'
+Warning | 1292 | Truncated incorrect INTEGER value: '5.'
+
+-- SELECT '5.' = 12, '5.' > 11, '5.' BETWEEN 1 AND 12, 12 IN ('5.', 5), '5.' = 0
+0 | 0 | 1 | 0 | 0
+
+-- SELECT CAST('1e' AS SIGNED), CAST('1e' AS UNSIGNED), CAST('1e' AS DECIMAL(30,1)), CAST('1e' AS DOUBLE), '1e' + 0
+1 | 1 | 1.0 | 1 | 1
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: '1e'
+Warning | 1292 | Truncated incorrect INTEGER value: '1e'
+Warning | 1292 | Truncated incorrect DECIMAL value: '1e'
+Warning | 1292 | Truncated incorrect DOUBLE value: '1e'
+Warning | 1292 | Truncated incorrect DOUBLE value: '1e'
+
+-- SELECT '1e' = 12, '1e' > 11, '1e' BETWEEN 1 AND 12, 12 IN ('1e', 5), '1e' = 0
+0 | 0 | 1 | 0 | 0
+
+-- SELECT CAST('1e3' AS SIGNED), CAST('1e3' AS UNSIGNED), CAST('1e3' AS DECIMAL(30,1)), CAST('1e3' AS DOUBLE), '1e3' + 0
+1 | 1 | 1000.0 | 1000 | 1000
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: '1e3'
+Warning | 1292 | Truncated incorrect INTEGER value: '1e3'
+
+-- SELECT '1e3' = 12, '1e3' > 11, '1e3' BETWEEN 1 AND 12, 12 IN ('1e3', 5), '1e3' = 0
+0 | 1 | 0 | 0 | 0
+
+-- SELECT CAST('1e3x' AS SIGNED), CAST('1e3x' AS UNSIGNED), CAST('1e3x' AS DECIMAL(30,1)), CAST('1e3x' AS DOUBLE), '1e3x' + 0
+1 | 1 | 1000.0 | 1000 | 1000
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: '1e3x'
+Warning | 1292 | Truncated incorrect INTEGER value: '1e3x'
+Warning | 1292 | Truncated incorrect DECIMAL value: '1e3x'
+Warning | 1292 | Truncated incorrect DOUBLE value: '1e3x'
+Warning | 1292 | Truncated incorrect DOUBLE value: '1e3x'
+
+-- SELECT '1e3x' = 12, '1e3x' > 11, '1e3x' BETWEEN 1 AND 12, 12 IN ('1e3x', 5), '1e3x' = 0
+0 | 1 | 0 | 0 | 0
+
+-- SELECT CAST('-5x' AS SIGNED), CAST('-5x' AS UNSIGNED), CAST('-5x' AS DECIMAL(30,1)), CAST('-5x' AS DOUBLE), '-5x' + 0
+-5 | 18446744073709551611 | -5.0 | -5 | -5
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: '-5x'
+Warning | 1292 | Truncated incorrect INTEGER value: '-5x'
+Warning | 1105 | Cast to unsigned converted negative integer to its positive complement
+Warning | 1292 | Truncated incorrect DECIMAL value: '-5x'
+Warning | 1292 | Truncated incorrect DOUBLE value: '-5x'
+Warning | 1292 | Truncated incorrect DOUBLE value: '-5x'
+
+-- SELECT '-5x' = 12, '-5x' > 11, '-5x' BETWEEN 1 AND 12, 12 IN ('-5x', 5), '-5x' = 0
+0 | 0 | 0 | 0 | 0
+
+-- SELECT CAST(' 12 ' AS SIGNED), CAST(' 12 ' AS UNSIGNED), CAST(' 12 ' AS DECIMAL(30,1)), CAST(' 12 ' AS DOUBLE), ' 12 ' + 0
+12 | 12 | 12.0 | 12 | 12
+
+-- SHOW WARNINGS
+
+-- SELECT ' 12 ' = 12, ' 12 ' > 11, ' 12 ' BETWEEN 1 AND 12, 12 IN (' 12 ', 5), ' 12 ' = 0
+1 | 1 | 1 | 1 | 0
+
+-- SELECT CAST('\n12' AS SIGNED), CAST('\n12' AS UNSIGNED), CAST('\n12' AS DECIMAL(30,1)), CAST('\n12' AS DOUBLE), '\n12' + 0
+0 | 0 | 12.0 | 12 | 12
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: '
+12'
+Warning | 1292 | Truncated incorrect INTEGER value: '
+12'
+
+-- SELECT '\n12' = 12, '\n12' > 11, '\n12' BETWEEN 1 AND 12, 12 IN ('\n12', 5), '\n12' = 0
+1 | 1 | 1 | 1 | 0
+
+-- SELECT CAST('0x1A' AS SIGNED), CAST('0x1A' AS UNSIGNED), CAST('0x1A' AS DECIMAL(30,1)), CAST('0x1A' AS DOUBLE), '0x1A' + 0
+0 | 0 | 0.0 | 0 | 0
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: '0x1A'
+Warning | 1292 | Truncated incorrect INTEGER value: '0x1A'
+Warning | 1292 | Truncated incorrect DECIMAL value: '0x1A'
+Warning | 1292 | Truncated incorrect DOUBLE value: '0x1A'
+Warning | 1292 | Truncated incorrect DOUBLE value: '0x1A'
+
+-- SELECT '0x1A' = 12, '0x1A' > 11, '0x1A' BETWEEN 1 AND 12, 12 IN ('0x1A', 5), '0x1A' = 0
+0 | 0 | 0 | 0 | 1
+
+-- SELECT CAST('12abc' AS SIGNED), CAST('12abc' AS UNSIGNED), CAST('12abc' AS DECIMAL(30,1)), CAST('12abc' AS DOUBLE), '12abc' + 0
+12 | 12 | 12.0 | 12 | 12
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: '12abc'
+Warning | 1292 | Truncated incorrect INTEGER value: '12abc'
+Warning | 1292 | Truncated incorrect DECIMAL value: '12abc'
+Warning | 1292 | Truncated incorrect DOUBLE value: '12abc'
+Warning | 1292 | Truncated incorrect DOUBLE value: '12abc'
+
+-- SELECT '12abc' = 12, '12abc' > 11, '12abc' BETWEEN 1 AND 12, 12 IN ('12abc', 5), '12abc' = 0
+1 | 1 | 1 | 1 | 0
+
+-- SELECT CAST('12.7abc' AS SIGNED), CAST('12.7abc' AS UNSIGNED), CAST('12.7abc' AS DECIMAL(30,1)), CAST('12.7abc' AS DOUBLE), '12.7abc' + 0
+12 | 12 | 12.7 | 12.7 | 12.7
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: '12.7abc'
+Warning | 1292 | Truncated incorrect INTEGER value: '12.7abc'
+Warning | 1292 | Truncated incorrect DECIMAL value: '12.7abc'
+Warning | 1292 | Truncated incorrect DOUBLE value: '12.7abc'
+Warning | 1292 | Truncated incorrect DOUBLE value: '12.7abc'
+
+-- SELECT '12.7abc' = 12, '12.7abc' > 11, '12.7abc' BETWEEN 1 AND 12, 12 IN ('12.7abc', 5), '12.7abc' = 0
+0 | 1 | 0 | 0 | 0
+
+-- SELECT CAST('3.5e1abc' AS SIGNED), CAST('3.5e1abc' AS UNSIGNED), CAST('3.5e1abc' AS DECIMAL(30,1)), CAST('3.5e1abc' AS DOUBLE), '3.5e1abc' + 0
+3 | 3 | 35.0 | 35 | 35
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: '3.5e1abc'
+Warning | 1292 | Truncated incorrect INTEGER value: '3.5e1abc'
+Warning | 1292 | Truncated incorrect DECIMAL value: '3.5e1abc'
+Warning | 1292 | Truncated incorrect DOUBLE value: '3.5e1abc'
+Warning | 1292 | Truncated incorrect DOUBLE value: '3.5e1abc'
+
+-- SELECT '3.5e1abc' = 12, '3.5e1abc' > 11, '3.5e1abc' BETWEEN 1 AND 12, 12 IN ('3.5e1abc', 5), '3.5e1abc' = 0
+0 | 1 | 0 | 0 | 0
+
+-- SELECT CAST('99999999999999999999' AS SIGNED), CAST('99999999999999999999' AS UNSIGNED), CAST('99999999999999999999' AS DECIMAL(30,1)), CAST('99999999999999999999' AS DOUBLE), '99999999999999999999' + 0
+-1 | 18446744073709551615 | 99999999999999999999.0 | 1e+20 | 1e+20
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: '99999999999999999999'
+Warning | 1292 | Truncated incorrect INTEGER value: '99999999999999999999'
+
+-- SELECT '99999999999999999999' = 12, '99999999999999999999' > 11, '99999999999999999999' BETWEEN 1 AND 12, 12 IN ('99999999999999999999', 5), '99999999999999999999' = 0
+0 | 1 | 0 | 0 | 0
+
+-- SELECT CAST('-99999999999999999999' AS SIGNED), CAST('-99999999999999999999' AS UNSIGNED), CAST('-99999999999999999999' AS DECIMAL(30,1)), CAST('-99999999999999999999' AS DOUBLE), '-99999999999999999999' + 0
+-9223372036854775808 | 9223372036854775808 | -99999999999999999999.0 | -1e+20 | -1e+20
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: '-99999999999999999999'
+Warning | 1292 | Truncated incorrect INTEGER value: '-99999999999999999999'
+
+-- SELECT '-99999999999999999999' = 12, '-99999999999999999999' > 11, '-99999999999999999999' BETWEEN 1 AND 12, 12 IN ('-99999999999999999999', 5), '-99999999999999999999' = 0
+0 | 0 | 0 | 0 | 0
+
+-- SELECT CAST('１２' AS SIGNED), CAST('１２' AS UNSIGNED), CAST('１２' AS DECIMAL(30,1)), CAST('１２' AS DOUBLE), '１２' + 0
+0 | 0 | 0.0 | 0 | 0
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: '１２'
+Warning | 1292 | Truncated incorrect INTEGER value: '１２'
+Warning | 1292 | Truncated incorrect DECIMAL value: '１２'
+Warning | 1292 | Truncated incorrect DOUBLE value: '１２'
+Warning | 1292 | Truncated incorrect DOUBLE value: '１２'
+
+-- SELECT '１２' = 12, '１２' > 11, '１２' BETWEEN 1 AND 12, 12 IN ('１２', 5), '１２' = 0
+0 | 0 | 0 | 0 | 1
+
+-- SELECT CAST('12,5' AS SIGNED), CAST('12,5' AS UNSIGNED), CAST('12,5' AS DECIMAL(30,1)), CAST('12,5' AS DOUBLE), '12,5' + 0
+12 | 12 | 12.0 | 12 | 12
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: '12,5'
+Warning | 1292 | Truncated incorrect INTEGER value: '12,5'
+Warning | 1292 | Truncated incorrect DECIMAL value: '12,5'
+Warning | 1292 | Truncated incorrect DOUBLE value: '12,5'
+Warning | 1292 | Truncated incorrect DOUBLE value: '12,5'
+
+-- SELECT '12,5' = 12, '12,5' > 11, '12,5' BETWEEN 1 AND 12, 12 IN ('12,5', 5), '12,5' = 0
+1 | 1 | 1 | 1 | 0
+
+-- SELECT CAST('abc' AS SIGNED), CAST('abc' AS UNSIGNED), CAST('abc' AS DECIMAL(30,1)), CAST('abc' AS DOUBLE), 'abc' + 0
+0 | 0 | 0.0 | 0 | 0
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: 'abc'
+Warning | 1292 | Truncated incorrect INTEGER value: 'abc'
+Warning | 1292 | Truncated incorrect DECIMAL value: 'abc'
+Warning | 1292 | Truncated incorrect DOUBLE value: 'abc'
+Warning | 1292 | Truncated incorrect DOUBLE value: 'abc'
+
+-- SELECT 'abc' = 12, 'abc' > 11, 'abc' BETWEEN 1 AND 12, 12 IN ('abc', 5), 'abc' = 0
+0 | 0 | 0 | 0 | 1
+
+-- CREATE TABLE n85 (id int NOT NULL PRIMARY KEY, n int, u int unsigned, d decimal(6,2), KEY n (n), KEY u (u))
+ok affected=0 insert_id=0
+-- INSERT INTO n85 VALUES (1, 1, 1, 1), (12, 12, 12, 12), (13, 13, 13, 13), (20, 0, 0, 0), (35, 35, 35, 35), (-5, -5, 5, -5)
+ok affected=6 insert_id=0
+-- SELECT id FROM n85 WHERE id = '12abc'
+12
+
+-- SELECT id FROM n85 WHERE n = '12abc' ORDER BY id
+12
+
+-- SELECT id FROM n85 WHERE n > '11abc' ORDER BY id
+12
+13
+35
+
+-- SELECT id FROM n85 WHERE n > '12.5x' ORDER BY id
+13
+35
+
+-- SELECT id FROM n85 WHERE n >= '12.5x' ORDER BY id
+13
+35
+
+-- SELECT id FROM n85 WHERE n < '12.5x' ORDER BY id
+-5
+1
+12
+20
+
+-- SELECT id FROM n85 WHERE n = '12.5x' ORDER BY id
+
+-- SELECT id FROM n85 WHERE n IN ('12abc', '13') ORDER BY id
+12
+13
+
+-- SELECT id FROM n85 WHERE n BETWEEN '1x' AND '12x' ORDER BY id
+1
+12
+
+-- SELECT id FROM n85 WHERE n = 'abc' ORDER BY id
+20
+
+-- SELECT id FROM n85 WHERE u > '-1x' ORDER BY id
+-5
+1
+12
+13
+20
+35
+
+-- SELECT id FROM n85 WHERE u = '12abc' ORDER BY id
+12
+
+-- SELECT id FROM n85 WHERE d = '12abc' ORDER BY id
+12
+
+-- SELECT id FROM n85 WHERE d > '12.5x' ORDER BY id
+13
+35
+
+-- SELECT id FROM n85 WHERE n = '3.5e1abc' ORDER BY id
+35
+
+-- CREATE TABLE s85 (id int NOT NULL PRIMARY KEY, v varchar(20))
+ok affected=0 insert_id=0
+-- INSERT INTO s85 VALUES (1, '12abc'), (2, 'abc'), (3, '12.5x'), (4, '13'), (5, '-5x')
+ok affected=5 insert_id=0
+-- SELECT s85.id, n85.id FROM s85 JOIN n85 ON n85.n = s85.v ORDER BY s85.id, n85.id
+1 | 12
+2 | 20
+4 | 13
+5 | -5
+
+-- SELECT s85.id, n85.id FROM s85 JOIN n85 ON n85.id = s85.v ORDER BY s85.id, n85.id
+1 | 12
+4 | 13
+5 | -5
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- INSERT INTO n85 (id, n) VALUES (30, '12abc')
+ok affected=1 insert_id=0
+-- SHOW WARNINGS
+Warning | 1265 | Data truncated for column 'n' at row 1
+
+-- INSERT INTO n85 (id, n) VALUES (31, 'abc')
+ok affected=1 insert_id=0
+-- SHOW WARNINGS
+Warning | 1366 | Incorrect integer value: 'abc' for column 'n' at row 1
+
+-- INSERT INTO n85 (id, n, d) VALUES (32, '12.5x', '7.25zz'), (33, '1e3', '1e2'), (34, '-7y', 'q')
+ok affected=3 insert_id=0
+-- SHOW WARNINGS
+Warning | 1265 | Data truncated for column 'n' at row 1
+Note | 1265 | Data truncated for column 'd' at row 1
+Warning | 1265 | Data truncated for column 'n' at row 3
+Warning | 1366 | Incorrect decimal value: 'q' for column 'd' at row 3
+
+-- UPDATE n85 SET n = '44zz' WHERE id = 30
+ok affected=1 insert_id=0
+-- SHOW WARNINGS
+Warning | 1265 | Data truncated for column 'n' at row 1
+
+-- SELECT id, n, u, d FROM n85 WHERE id >= 30 ORDER BY id
+30 | 44 | NULL | NULL
+31 | 0 | NULL | NULL
+32 | 13 | NULL | 7.25
+33 | 1000 | NULL | 100.00
+34 | -7 | NULL | 0.00
+35 | 35 | 35 | 35.00
+
+-- SET SESSION sql_mode = 'STRICT_TRANS_TABLES'
+ok
+-- INSERT INTO n85 (id, n) VALUES (40, '12')
+ok affected=1 insert_id=0
+-- SELECT id, n FROM n85 WHERE id = 40
+40 | 12
+

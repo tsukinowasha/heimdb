@@ -1,0 +1,100 @@
+{
+  "uid": "heimdb",
+  "title": "HeimDB",
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": {"from": "now-1h", "to": "now"},
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "id": 1, "type": "timeseries", "title": "クエリ数（毎秒、種類ごと）",
+      "datasource": {"type": "prometheus", "uid": "prom"},
+      "gridPos": {"x": 0, "y": 0, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "targets": [
+        {"refId": "A", "expr": "sum by (type) (rate(heimdb_statements_total[$__rate_interval]))", "legendFormat": "{{type}}"}
+      ]
+    },
+    {
+      "id": 2, "type": "timeseries", "title": "クエリの時間（p50 / p95 / p99）",
+      "datasource": {"type": "prometheus", "uid": "prom"},
+      "gridPos": {"x": 8, "y": 0, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "targets": [
+        {"refId": "A", "expr": "histogram_quantile(0.5, sum by (le) (rate(heimdb_statement_duration_seconds_bucket[$__rate_interval])))", "legendFormat": "p50"},
+        {"refId": "B", "expr": "histogram_quantile(0.95, sum by (le) (rate(heimdb_statement_duration_seconds_bucket[$__rate_interval])))", "legendFormat": "p95"},
+        {"refId": "C", "expr": "histogram_quantile(0.99, sum by (le) (rate(heimdb_statement_duration_seconds_bucket[$__rate_interval])))", "legendFormat": "p99"}
+      ]
+    },
+    {
+      "id": 3, "type": "timeseries", "title": "エラー（毎分、番号ごと）",
+      "datasource": {"type": "prometheus", "uid": "prom"},
+      "gridPos": {"x": 16, "y": 0, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "targets": [
+        {"refId": "A", "expr": "sum by (code) (rate(heimdb_statement_errors_total[$__rate_interval])) * 60", "legendFormat": "{{code}}"}
+      ]
+    },
+    {
+      "id": 4, "type": "timeseries", "title": "接続と実行中のクエリ",
+      "datasource": {"type": "prometheus", "uid": "prom"},
+      "gridPos": {"x": 0, "y": 7, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "targets": [
+        {"refId": "A", "expr": "heimdb_connections", "legendFormat": "接続"},
+        {"refId": "B", "expr": "heimdb_running_statements", "legendFormat": "実行中のクエリ"},
+        {"refId": "C", "expr": "heimdb_open_transactions", "legendFormat": "開いたトランザクション"}
+      ]
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "メモリ",
+      "datasource": {"type": "prometheus", "uid": "prom"},
+      "gridPos": {"x": 8, "y": 7, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+      "targets": [
+        {"refId": "A", "expr": "heimdb_memory_live_bytes", "legendFormat": "生きているヒープ"},
+        {"refId": "B", "expr": "heimdb_memory_abort_bytes", "legendFormat": "クエリを止める境目"},
+        {"refId": "C", "expr": "heimdb_cache_used_bytes", "legendFormat": "キャッシュ"}
+      ]
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "ディスク（全体とブランチごと）",
+      "datasource": {"type": "prometheus", "uid": "prom"},
+      "gridPos": {"x": 16, "y": 7, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+      "targets": [
+        {"refId": "A", "expr": "heimdb_disk_bytes", "legendFormat": "全体"},
+        {"refId": "B", "expr": "heimdb_branch_size_bytes", "legendFormat": "{{branch}}"}
+      ]
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "最も古いスナップショット",
+      "datasource": {"type": "prometheus", "uid": "prom"},
+      "gridPos": {"x": 0, "y": 14, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "targets": [
+        {"refId": "A", "expr": "heimdb_oldest_snapshot_age_seconds", "legendFormat": "古さ"}
+      ]
+    },
+    {
+      "id": 8, "type": "timeseries", "title": "遅いクエリ、メモリで止めたクエリ、危ない変更（10 分）",
+      "datasource": {"type": "prometheus", "uid": "prom"},
+      "gridPos": {"x": 8, "y": 14, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "targets": [
+        {"refId": "A", "expr": "increase(heimdb_slow_statements_total[10m])", "legendFormat": "遅いクエリ"},
+        {"refId": "B", "expr": "increase(heimdb_memory_aborted_statements_total[10m])", "legendFormat": "メモリで止めたクエリ"},
+        {"refId": "C", "expr": "increase(heimdb_watch_changes_total[10m])", "legendFormat": "危ない変更"}
+      ]
+    },
+    {
+      "id": 9, "type": "timeseries", "title": "知らせ（発火中）",
+      "datasource": {"type": "prometheus", "uid": "prom"},
+      "gridPos": {"x": 16, "y": 14, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "targets": [
+        {"refId": "A", "expr": "ALERTS{alertstate=\"firing\"}", "legendFormat": "{{alertname}}"}
+      ]
+    }
+  ]
+}

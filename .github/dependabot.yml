@@ -1,0 +1,27 @@
+# 依存の更新（docs/plan.md の段階 40）。PR を作るだけで、取り込む前に Go のテスト、PHPUnit（docs/plan.md の
+# 「検証方法」）、必要ならベンチマークで確かめる。
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      # マイナーとパッチはまとめて 1 つの PR にする
+      go-minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # SQL エンジン（internal/sqlengine）が前提にする構文解析器。上げるときは手で合わせる
+      - dependency-name: github.com/dolthub/vitess
+      # 文字コードの表（sql/encodings）のためだけに使う。照合順序の重みはインデックスのキー（データ形式）に響く
+      - dependency-name: github.com/dolthub/go-mysql-server
+      # 新しいバージョンは C のライブラリ（ICU）を使う
+      - dependency-name: github.com/dolthub/go-icu-regex
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

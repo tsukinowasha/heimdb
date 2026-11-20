@@ -1,0 +1,724 @@
+# MySQL との既知の違い
+
+HeimDB と本物の MySQL 8.0 の違いをまとめる。WordPress での互換性の確かめの結果、WordPress 専用として割り切っている違い、細かな違いで記録だけにしたものの順に書く。
+
+## 互換性の確かめの結果
+
+wordpress-develop の PHPUnit の全テスト（26,475 件）を本物の MySQL 8.0 と比べ、本物で成功して HeimDB で失敗するものは 35 件。内訳は、utf8mb4 以外の文字セットの表 32 件、空間インデックス 1 件、ストアドプロシージャ 1 件、REST API の同じ日時の記事の並び 1 件（MySQL も決まった規則がない）で、どれも意図した差。接続の切断と panic は 0。手順は [`plan.md`](plan.md) の「検証方法」。
+
+WordPress の接続（wpdb）で MySQL との小さな違い（警告、エラーの字、double の字の形、照合順序）を見るテスト集（[`compat/`](../compat/README.md)、82 の記録）では、本物の MySQL 8.0 と違うのは 4 で、どれも [`compat/known-differences.txt`](../compat/known-differences.txt) に理由を書いた。
+
+プラグインごとに使えるかは [`plugins.md`](plugins.md)（wordpress.org の人気の上位 100 を含む 157 本。使えないものはなく、WooCommerce は注文の全文検索だけが使えない）。
+
+## WordPress 専用として割り切っている違い
+
+WordPress 専用として割り切っている。次のものは明示的なエラーを返す（接続は切らない）か、記録だけにしている。
+
+- ビュー、トリガー、ストアドプロシージャ、イベント
+- 主キーのない表は作れる（段階 72 から）。すべての列が `NOT NULL` の一意インデックスがあれば、MySQL と同じくその列で並べ、なければ足した順に並べる。`AUTO_INCREMENT` の列があり主キーのない表と、`__heimdb_row_` で始まる名前の列はエラー。`_rowid` と `sql_generate_invisible_primary_key` は対応しない。ブランチの両側で表を全部消して入れ直すと、マージで行が重複する
+- 主キーの列は、整数、`CHAR` / `VARCHAR`、`BINARY` / `VARBINARY`、`DATE` / `DATETIME` / `TIMESTAMP`、`ENUM` の組み合わせ（0.2.19 から。0.2.18 以前は整数の列か、1 列の `CHAR` / `VARCHAR`）。`TEXT`、`BLOB`、`DECIMAL` などと前方の長さ付きはエラー。文字列の主キーは照合順序で比べる（`_ci` なら大小だけ違う値は重複）が、PAD SPACE の照合順序（`utf8mb4_unicode_520_ci`、`utf8mb4_general_ci`）でも末尾の空白を区別する（MySQL は `'a'` と `'a '` を同じとみなす。二次インデックスと同じ差）
+- サーバのファイルを読み書きする `LOAD_FILE()`、`SELECT ... INTO OUTFILE` / `DUMPFILE`、`LOAD DATA`（SQL インジェクションでサーバのファイルを読まれないよう、常にエラー）
+- `SHOW PROCESSLIST` は管理者（PROCESS 権限）だけ（MySQL は自分の接続を見せる）。`information_schema.processlist` は MySQL と同じく、権限がなければ自分のユーザーの接続だけ
+- `OPTIMIZE TABLE`、`CHECK TABLE`、`REPAIR TABLE`、`ANALYZE TABLE` は何もせずに結果を返す（段階 74 から。古いバージョンは GC が消し、壊れの確かめは Pebble のチェックサムに任せる）。`OPTIMIZE` は `status` の `OK` だけ（InnoDB の `note` の行を返さない）。ない表はエラー 1146（MySQL は `Error` と `Operation failed` の行）
+- 文字コードは utf8mb4 だけ。utf8mb3（`utf8`）と ascii の表と列は、同じ名前の utf8mb4 の照合順序（`utf8mb3_general_ci` と `ascii_general_ci` は `utf8mb4_general_ci`）として保存し、警告を出す（`SHOW CREATE TABLE` とダンプには utf8mb4 と出る。ascii の列に ASCII 以外の文字を入れると、MySQL は WordPress の sql_mode（strict なし）では `?` にし、既定の strict ではエラー 1366 にするが、HeimDB はそのまま保存する）。latin1 などはエラー。`ALTER TABLE ... CONVERT TO CHARACTER SET` は、テーブルの既定の照合順序だけを変え、列の照合順序を変えない
+- 全文検索（`MATCH ... AGAINST`）。FULLTEXT インデックスは定義だけを扱う（dbDelta のため）。検索は外部のサービスに任せる（[`plan.md`](plan.md) の「検索は DB の外に任せる」）
+- WordPress が使わない SQL と、汎用 MySQL としての完全な互換性
+- `SHOW INDEX ... WHERE` は `Key_name` と `Column_name` の値を大小文字を区別して比べる（MySQL は区別しない）。`DO` は、バイナリプロトコルの準備（COM_STMT_PREPARE）では構文エラーになり、`DO 1 FROM t` のように MySQL では構文エラーの書き方も通す（[`plan.md`](plan.md) の段階 69）
+- キーワードのすぐ後の空の文字列（`SELECT''`、`SELECT""`）は構文のエラー（MySQL は空の文字列を返す。vitess の構文解析器が panic するのを HeimDB が止めている。[`plan.md`](plan.md) の段階 105）
+- 照合順序の PAD SPACE（末尾の空白の比較。`'1 ' = '1'` は偽）など、go-mysql-server 由来の細かな差。わかっている差は下の「記録だけにした違い」、各段階の記録の「記録だけ」と、互換のテスト集の [`compat/known-differences.txt`](../compat/known-differences.txt) にある
+
+## 記録だけにした違い
+
+HeimDB と本物の MySQL 8.0 の違いのうち、段階 110〜124 で記録だけにしたもの、受け入れたもの（「記録だけ」「受け入れた違い」、見つかった前からの違いで直さなかったもの）を、分野ごとにまとめる。後の段階で直したものは入れていない。
+
+- 各項目は、記録したときの文のまま（MySQL の結果と HeimDB の結果、再現の文は記録にあるときだけ書く）。ここに書いた後で MySQL で確かめ直してはいない。後の段階で候補として取り上げるときに、本物の MySQL で確かめ直す。
+- 「WordPress」は、WordPress 本体か WooCommerce の経路で当たるか（はい、いいえ、プラグインだけ）。記録の文から判断した。記録に書いていないものは、WordPress 本体と WooCommerce がその形の文を出すかで判断し、補足に「（推定）」と書いた。
+- 段階の中で直すのは、その段階の変更による回帰と、前からの違いのうち WordPress 本体か WooCommerce の経路で結果が誤るものだけにする（[`CLAUDE.md`](../CLAUDE.md)）。ほかの違いはここに足し、次の段階の候補にする。直したら、その項目を消す。
+- 詳しい経緯は、各段階の記録（[`stages/`](stages/)）と、エンジンの変更の一覧（[`engine.md`](engine.md#変更の一覧)）にある。段階 110 で見送った上流の PR は [`engine-upstream.md`](engine-upstream.md)。段階 109 より前の「記録だけ」は、まだここに集めていない（各段階の記録にある）。
+
+| 分野 | 件数 | WordPress で当たる（はい / プラグインだけ） |
+| --- | --- | --- |
+| [日時](#日時) | 45 | 0 / 1 |
+| [数](#数) | 45 | 0 / 3 |
+| [文字列と照合順序](#文字列と照合順序) | 15 | 0 / 0 |
+| [ENUM と SET](#enum-と-set) | 13 | 0 / 0 |
+| [集計とウィンドウ関数](#集計とウィンドウ関数) | 11 | 0 / 0 |
+| [SQL の形](#sql-の形) | 29 | 0 / 0 |
+| [誤りの番号と警告](#誤りの番号と警告) | 26 | 0 / 0 |
+| [そのほか](#そのほか) | 7 | 1 / 1 |
+
+## 日時
+
+- **TIMESTAMPDIFF の MICROSECOND、SECOND、DAY が大きな差であふれる**（段階 110。WordPress: いいえ）
+  - MySQL: 315537897599000000。HeimDB: 9223372036854775
+  - 再現: `TIMESTAMPDIFF(MICROSECOND, '0001-01-01 00:00:00', '9999-12-31 23:59:59')`
+  - 補足: 上流の #3410（段階 110 で見送った。WordPress が出さない文）。SECOND と DAY で '1000-01-01' からの差も（HeimDB 9223372036、106751、MySQL 32377449600、374739）。段階 114 の TIMESTAMPDIFF の直しは YEAR、QUARTER、MONTH だけ
+- **区切りのない短い日付の文字列を日付として読めない**（段階 110。WordPress: いいえ）
+  - MySQL: cast('200101' as date) は 2020-01-01。HeimDB: NULL
+  - 再現: `cast('200101' as date)`
+  - 補足: 上流の #3901（段階 110 で見送った。WordPress が出さない文）。cast('00200101.0203' as date) は NULL と 0020-01-01、cast('20101' as datetime(6)) は NULL と 2020-10-01 00:00:00.000000。段階 116 は数の YYYYMMDD を直したが、文字列の短い形の記録は見つからない。直っているかは確かめていない
+- **時刻の区切りが記号の日時の文字列**（段階 110。WordPress: いいえ）
+  - MySQL: CAST('2025/03/31 12.34.56' AS DATETIME) は 2025-03-31 12:34:56（警告 4095）。HeimDB: NULL
+  - 再現: `CAST('2025/03/31 12.34.56' AS DATETIME)`
+  - 補足: 上流の #4012（段階 110 で見送った。WordPress が出さない文）。同じ PR の後ろに余計な文字のある形（'...56xyz'）は段階 114（#3276、#3280）で直った。日付の区切りも段階 114 で直したが、時刻の中の '.' の区切りが直ったかは記録からは分からない
+- **本物の '0000-01-01' をゼロの日付として扱う**（段階 113。WordPress: いいえ）
+  - MySQL: YEARWEEK('0000-01-01') は 1。HeimDB: NULL
+  - 再現: `YEARWEEK('0000-01-01')`
+  - 補足: 受け入れた違い。ゼロの日付と '0000-01-01' が同じ内部の値なので、月 0、曜日 NULL などになる（表示は前からゼロの日付）。WordPress は 0000-01-01 を使わない
+- **時刻だけ 0 でないゼロの日付の STR_TO_DATE が NULL**（段階 113。WordPress: いいえ）
+  - MySQL: ゼロの日付と時刻。HeimDB: NULL
+  - 再現: `STR_TO_DATE('0000-00-00 01:02:03', ...)`
+  - 補足: 受け入れた違い。後の段階で直した記録は見つからない
+- **ゼロの日付の %f の小数の桁が出ない**（段階 113。WordPress: いいえ）
+  - 補足: 受け入れた違い。段階 113 の文は「`%f` の小数の桁は出ない」とだけ書き、どの関数の形かは記録からは分からない（ゼロの日付の STR_TO_DATE か DATE_FORMAT と見られる）。段階 114 は STR_TO_DATE の %f を直したが、ゼロの日付の形かは不明
+- **EXTRACT(WEEK FROM '2024-01-01') が 1**（段階 113。WordPress: いいえ）
+  - MySQL: 0。HeimDB: 1
+  - 再現: `EXTRACT(WEEK FROM '2024-01-01')`
+  - 補足: 段階 114 に回したが、後の段階で直した記録は見つからない。WordPress は EXTRACT を出さない（推定）
+  - 段階 118 で確かめた: ゼロでない日付の EXTRACT(WEEK) は MySQL の WEEK(d, 0) と違う（'2024-02-10' は MySQL 5、HeimDB 6、'2024-12-31' は 52 と 53）。段階 118 はゼロの日付だけ直した
+- **既定の sql_mode（NO_ZERO_DATE）でゼロの日付の DATE()、YEAR()、CAST が NULL にならない**（段階 114。WordPress: いいえ）
+  - MySQL: NULL（MONTH(0) と列の値は 0 のまま）。HeimDB: WordPress の sql_mode と同じ値（ゼロの日付）
+  - 再現: `DATE('0000-00-00'); YEAR('0000-00-00'); CAST('0000-00-00' AS DATE); DATE(0)`
+  - 補足: 段階 116 で `DATE(0)` も同じ違いとして記録（engine.md の 116 の行）。WordPress は既定の sql_mode を使わない（推定）
+  - 段階 118 で確かめた: EXTRACT(WEEK FROM '0000-00-00')、EXTRACT(YEAR ...)、MONTH、DAYOFWEEK、MONTHNAME などの文字列の引数も同じ（MySQL は不正な日付として NULL と警告。HeimDB は WordPress の sql_mode と同じ値）。段階 118 のゴールデンのゼロの日付の組は WordPress の sql_mode だけで流す
+- **NO_ZERO_IN_DATE のない sql_mode で STR_TO_DATE の '2024-00-00' が NULL**（段階 114。WordPress: いいえ）
+  - MySQL: 月か日が 0 の日付。HeimDB: NULL（表せない）
+  - 補足: WordPress の sql_mode は NO_ZERO_IN_DATE を含まないが、WordPress がこの形を出すかは記されていない（推定）
+- **'0000-01-01' との差（TIMESTAMPDIFF など）が NULL**（段階 114。WordPress: いいえ）
+  - MySQL: 差の値。HeimDB: NULL（'0000-01-01' をゼロの日付として扱う）
+  - 補足: 段階 113 の違いと同じ根。engine.md の 104 の行（TIMESTAMPDIFF）。WordPress が出すかは記されていない（推定）
+- **秒未満の定数を列の精度に丸めない（索引のある DATETIME(0) の列と小数の定数の等号）**（段階 116。WordPress: いいえ）
+  - MySQL: 索引の ref の読み方のときだけ定数を列の桁に丸めて行を返す。HeimDB: 返さない（索引を使わないときの MySQL と同じ）
+  - 再現: `post_date = FROM_UNIXTIME(1704189600.5)`
+  - 補足: 段階 114 から回し、段階 116 の計画のレビューで記録だけにした。ENUM の COLLATE と同じ種類
+- **既定の sql_mode で、ゼロの日付の後ろに余計な文字のある文字列との = が通る**（段階 116。WordPress: いいえ）
+  - MySQL: 1525。HeimDB: ゼロの日付の行
+  - 再現: `d = '0000-00-00 00:00:00x'`
+  - 補足: engine.md 148 の行
+- **日時の列と、日時として読めない数を含む IN が 1105**（段階 116。WordPress: いいえ）
+  - MySQL: 何も返さない。HeimDB: 1105
+  - 再現: `d IN (20240101100000, 1)`
+- **数の DATE_ADD と TIMESTAMP() の型**（段階 116。WordPress: いいえ）
+  - MySQL: DATE_ADD は日付、TIMESTAMP は DATETIME。HeimDB: DATETIME と数
+  - 再現: `DATE_ADD(20240101, INTERVAL 1 DAY); TIMESTAMP(20240101)`
+  - 補足: 後の 65d845f で TIMESTAMP(x) は DATETIME になったので、TIMESTAMP の側は直った可能性がある（不確か）
+- **MAKETIME と SEC_TO_TIME がない**（段階 116。WordPress: いいえ）
+  - HeimDB: 非対応
+  - 補足: engine.md 149 の行
+- **TIME が小数の桁を持たない（TIME(n) の列は作れず、TIME の値の小数は 6 桁で出る）**（段階 116。WordPress: いいえ）
+  - MySQL: `.5`。HeimDB: `.500000`
+  - 再現: `TIME('-01:00:00.5'); TIME('13:04:05.5'); IFNULL(TIME('10:00:00.5'), '')`
+  - 補足: CONCAT も同じ。engine.md 149、152、161、164 の行
+- **TIME(0) の列に入れた小数の付いた時刻を丸めない**（段階 116。WordPress: いいえ）
+  - MySQL: 13:04:06。HeimDB: 13:04:05
+  - 補足: '13:04:05.5' を入れた場合
+- **`EXTRACT(MICROSECOND FROM '13:04:05.5')` が 0**（段階 116。WordPress: いいえ）
+  - HeimDB: 0
+  - 再現: `EXTRACT(MICROSECOND FROM '13:04:05.5')`
+  - 補足: MySQL の値は記録にない
+- **TIME と間隔の + に今日の日付が付く**（段階 116。WordPress: いいえ）
+  - MySQL: TIME。HeimDB: 今日の日時
+  - 補足: engine.md 150、164 の行、65d845f の Left as records
+- **TIME の SUM と AVG が 0**（段階 116。WordPress: いいえ）
+  - HeimDB: 0
+  - 補足: MySQL の値は記されていない
+- **数の文脈の TIMESTAMP(...) が UNIX 時刻になる**（段階 116。WordPress: いいえ）
+  - MySQL: 日時の数（YYYYMMDDhhmmss）。HeimDB: UNIX 時刻
+  - 補足: MySQL の値は記されていない（推定）
+- **ゼロの日付の `-dd` が `-0` でなく 0**（段階 116。WordPress: いいえ）
+  - MySQL: -0。HeimDB: 0
+  - 再現: `-dd`
+- **文字列の定数と間隔の + に時刻が付き、秒未満は秒に丸める**（段階 116。WordPress: いいえ）
+  - MySQL: '2024-01-02'。HeimDB: 時刻が付く。'... 10:00:00.5' + INTERVAL 1 DAY は秒に丸める
+  - 再現: `'2024-01-01' + INTERVAL 1 DAY`
+  - 補足: 4 度目のレビューの前からの違い
+- **`INTERVAL 1.5 SECOND` を 2 秒に丸める**（段階 116。WordPress: いいえ）
+  - MySQL: 1.5 秒を足す。HeimDB: 2 秒に丸める
+  - 再現: `INTERVAL 1.5 SECOND`
+- **セッションの time_zone が UTC でないとき、TIMESTAMP の列をその時間帯に直さない**（段階 116。WordPress: いいえ）
+  - MySQL: セッションの時間帯で表す。HeimDB: 直さない（UNIX_TIMESTAMP(TIMESTAMP(ts)) などが時差の分ずれる）
+  - 再現: `UNIX_TIMESTAMP(TIMESTAMP(ts))`
+  - 補足: UNIX_TIMESTAMP(DATE_ADD(ts, ...)) と UNIX_TIMESTAMP(CAST(ts AS DATETIME)) は前から同じ。WordPress と WooCommerce は通らない
+- **CURDATE() の型が文字列（TIMESTAMP(CURDATE()) が DATETIME(6)、CURDATE() - INTERVAL が DATETIME）**（段階 116。WordPress: いいえ）
+  - MySQL: DATE（TIMESTAMP(CURDATE()) は DATETIME）。HeimDB: 文字列
+  - 再現: `TIMESTAMP(CURDATE()); CURDATE() - INTERVAL 7 DAY`
+  - 補足: WordPress と WooCommerce は通らないとされた
+- **日時の式の小数の桁が MySQL と違う形が残る**（段階 116。WordPress: いいえ）
+  - MySQL: FROM_UNIXTIME(FLOOR(dbl)) は DATETIME(6)、など。HeimDB: FROM_UNIXTIME(FLOOR(dbl)) が DATETIME(0)、DATETIME の式と DATETIME(3) の列の UNION が DATETIME(0)、TIMESTAMP(time_col) が DATETIME(6)
+  - 補足: 65d845f の直しによる違い。バイナリプロトコルの TIMESTAMP(?) と COALESCE(?, dt) の桁、IF(id = 1, d, dt) + 0 も。WordPress と WooCommerce は通らない
+- **整数の列の DATE_ADD と TIMESTAMP() が 1105**（段階 116。WordPress: いいえ）
+  - HeimDB: 1105
+  - 再現: `DATE_ADD(int_col, ...); TIMESTAMP(int_col)`
+  - 補足: MySQL の値は記されていない
+- **小数の付いた日時を DATE の列に入れると切り捨てる**（段階 116。WordPress: いいえ）
+  - MySQL: 丸める。HeimDB: 切り捨てる
+- **'0000-01-01' が真偽の文脈で偽**（段階 116。WordPress: いいえ）
+  - MySQL: 真。HeimDB: 偽（ゼロの日付として扱う）
+  - 補足: 段階 113 の記録と同じ根
+- **日時と数、DATE と TIME の IF、LEAST、GREATEST の型と値**（段階 116。WordPress: いいえ）
+  - MySQL: IF(id = 1, d, 0) + 0 は日時の数、IF(c, dd, t) は DATETIME。HeimDB: IF(...) + 0 は文字列の先頭の数
+  - 再現: `IF(id = 1, d, 0) + 0; LEAST(d, 1); GREATEST(d, '2024'); IF(c, dd, t)`
+  - 補足: LEAST と GREATEST の値は記されていない
+- **DATE と DATETIME の IFNULL が DATE**（段階 116。WordPress: いいえ）
+  - MySQL: DATETIME。HeimDB: 左の型（DATE）
+  - 再現: `IFNULL(dd, dt)`
+  - 補足: 後の 65d845f が IFNULL の日時の枝の桁を揃えた（TemporalBranchType）ので直った可能性がある（不確か）
+- **FROM_UNIXTIME の列で、MySQL が正しい値の行にも出す 1366 を出さない**（段階 118。WordPress: プラグインだけ）
+  - MySQL: LONGTEXT と VARCHAR の列の FROM_UNIXTIME(v) で、数でない値の行の 1292 の後に `1366 Incorrect DECIMAL value: '0' for column '' at row -1`。HeimDB: 1292 だけ
+  - 再現: `CREATE TABLE m (v LONGTEXT); INSERT INTO m VALUES ('1700000000'), ('1700000000:1'), ('abc'); SELECT FROM_UNIXTIME(v) FROM m; SHOW WARNINGS`
+  - 補足: MySQL の不具合と見て合わせない（値は同じ）。警告の細かな違いも残る: FROM_UNIXTIME(CONCAT('1', 'x')) は MySQL が警告なし、HeimDB は 1292。'1e20' の警告の文は MySQL が '100000000000000000000'、HeimDB は '1e20'
+- **時刻だけ 0 でないゼロの日付の文字列の TIME_TO_SEC が 1105、EXTRACT(WEEK) が NULL**（段階 118。WordPress: いいえ）
+  - MySQL: TIME_TO_SEC('0000-00-00 01:02:03') は 3723、EXTRACT(WEEK FROM '0000-00-00 01:02:03') は 613566757、CONVERT_TZ は NULL と警告 1292。HeimDB: 1105、NULL と警告、NULL で警告なし
+  - 再現: `TIME_TO_SEC('0000-00-00 01:02:03'); EXTRACT(WEEK FROM '0000-00-00 01:02:03')`
+  - 補足: 「時刻だけ 0 でないゼロの日付の STR_TO_DATE が NULL」と同じ根（この形の文字列を日時として読めない）。EXTRACT(HOUR FROM '0000-00-00 01:02:03') も NULL（MySQL 1）
+- **TO_SECONDS がない**（段階 118。WordPress: いいえ）
+  - MySQL: TO_SECONDS('2024-01-01') は 63871286400。HeimDB: 1105 function: 'to_seconds' not found
+- **日だけ 0 か月だけ 0 の日付の LAST_DAY と EXTRACT(WEEK)**（段階 118。WordPress: いいえ）
+  - MySQL: LAST_DAY('2024-02-00') は 2024-02-29、EXTRACT(WEEK FROM '0000-01-00') は 52、EXTRACT(WEEK FROM '2024-00-10') は 613566753。HeimDB: NULL と警告 1292（0 の日と月を日付として読めない）
+  - 補足: 0 の日を読む解析が要る。WordPress の sql_mode の NO_ZERO_IN_DATE では列に入らない
+- **ゼロの日付の列の DATEDIFF と `+ INTERVAL` が警告 1292 を出す**（段階 118。WordPress: いいえ）
+  - MySQL: 警告なしで NULL。HeimDB: NULL と警告 1292（`+ INTERVAL` は `'0000-01-01 00:00:00 +0000 UTC'` の文）
+  - 再現: `SELECT DATEDIFF(d, '2024-01-01'), d + INTERVAL 1 DAY FROM t`（d はゼロの日付の DATE の列）
+  - 補足: 値は同じ。段階 118 は DAYOFWEEK、WEEK、TO_DAYS などの日付の関数の警告だけ合わせた（列には出さず、文字列はその値）
+- **ゼロの日付の EXTRACT(DAY_HOUR) と EXTRACT(MICROSECOND) の警告**（段階 118。WordPress: いいえ）
+  - MySQL: 0 と警告 1292 `Truncated incorrect time value: '0000-00-00'`。HeimDB: 0 で警告なし
+- **文字列の CONVERT_TZ の結果の小数の桁**（段階 118。WordPress: いいえ）
+  - MySQL: CONVERT_TZ(s, '+00:00', '+09:00') は DATETIME(6)（'2024-02-10 19:00:00.000000'）。HeimDB: 小数の桁なし
+  - 再現: `CONVERT_TZ(varchar_col, '+00:00', '+09:00')`
+- **WEEK(d, 2)、WEEK(d, 3)、WEEK(d, 6)、WEEK(d, 7) が年の境で 0 か 53 になる**（段階 118 のレビュー。WordPress: いいえ）
+  - MySQL: WEEK('2024-12-30', 3) は 1、WEEK('2024-01-01', 2) は 53、WEEK('2021-01-01', 3) は 53、WEEK('2025-01-01', 7) は 53。HeimDB: 53、0、0、0
+  - 再現: `WEEK('2024-12-30', 3); WEEK('2024-01-01', 2)`
+  - 補足: 前からの違い（`time.go` の `Week.Eval` がいつも年の扱いを付けて計算し、年がずれたら 0 か 53 に丸める）。モード 0、1、4、5 と YEARWEEK、WEEKOFYEAR は 2021〜2027 の年の境の 24 日で同じ。WordPress 本体の `_wp_mysql_week()` はモード 0 と 1 だけを出す
+- **ゼロの日付の警告を、引数が列の参照かで決める**（段階 118 のレビュー。WordPress: いいえ）
+  - MySQL: 引数の型が日時なら出さない（TO_DAYS(DATE(c))、WEEK(DATE(c))、DAYOFWEEK(CAST(c AS DATE)) は警告なし。LAST_DAY は出す）。HeimDB: 列の参照でない式には関数ごとに `'0000-00-00'` の警告 1292
+  - 補足: 値は同じ。段階 118 より前は Go の時刻の形の文で出していた。`types.IsTime(e.Type())` で決めれば近づく
+- **ゼロの日付の SIGN が 1**（段階 119 の 2 回目のレビュー。WordPress: いいえ）
+  - MySQL: sql_mode='' で '0000-00-00 00:00:00' の post_date_gmt の SIGN は 0。HeimDB: 1（`math.go` の `Sign.Eval` が time.Time をいつも 1 にする。上流のまま）。POW(post_date_gmt, 1) と post_date_gmt + 0 は 0 で同じ
+  - 補足: 段階 119 で DoubleArg が日時を数の形で読むようになったので、その分岐を消せば直る
+- **型の違う日時が混ざる IF、CASE、IFNULL、COALESCE を数にするとき、式の型で読む**（段階 119 の 2 回目のレビュー。WordPress: いいえ）
+  - MySQL: 選んだ枝の型で読む（POW(IFNULL(d, dt), 1) は 20240102、SQRT(IF(id > 2, t, d)) の d の枝は 4498.9、SIGN(COALESCE(dt, t)) の t='00:00:00' は 1）。HeimDB: 20240102000000、0、0（`text_column_heimdb.go` の DoubleArg が式の型で `TemporalNumber` を呼ぶ）
+  - 補足: 段階 119 より前は 1105 で文全体が誤りだった。同じ型の枝どうし（`IF(post_date_gmt = '0000-00-00 00:00:00', post_date, post_date_gmt)`）は同じ
+- **型付きの日時のリテラルと日時を返す関数を数学の関数に渡すと文字列として読む**（段階 119 の 2 回目のレビュー。WordPress: いいえ）
+  - MySQL: POW(TIME '-01:00:00', 1) は -10000。HeimDB: -1（`TIME '...'`、`DATE_ADD(...)`、`CURDATE()` の結果が文字列の型）。YEAR の 0 の表示は MySQL '0000'、HeimDB '0'。警告 3156 の列の名前が式のとき、HeimDB は `convert('"5x"', json)`（MySQL は `cast_as_json`、`json_extract`）
+- **日時の文脈の IFNULL と COALESCE がゼロの日付を NULL として扱わない**（段階 118 のレビュー。WordPress: いいえ）
+  - MySQL: TO_DAYS(IFNULL(zero_col, NOW())) は第 2 引数を使う（740300）。HeimDB: NULL（段階 118 より前は 1）
+
+## 数
+
+- **CONV の空の文字列と負の小数**（段階 110。WordPress: いいえ）
+  - MySQL: CONV('', 10, 2) は NULL。CONV(-1.5, 10, 2) は 64 個の 1。CONV('-17.5', 10, 16) は FFFFFFFFFFFFFFEF。HeimDB: CONV('', 10, 2) は 1105（panic の回復）。CONV(-1.5, 10, 2) は 1。CONV('-17.5', 10, 16) は 11
+  - 再現: `CONV('', 10, 2)`
+  - 補足: 上流の #3020（段階 110 で見送った。WordPress が出さない文）
+- **ビット演算の結果が符号なしの 64 ビットにならない**（段階 110。WordPress: いいえ）
+  - MySQL: -1 | 0 は 18446744073709551615。1 << 63 は 9223372036854775808。HeimDB: どちらも 9223372036854775807
+  - 再現: `-1 | 0`
+  - 補足: 上流の #3208（段階 110 で見送った。WordPress が出さない文）
+- **整数の最小値の二重の否定が 1 小さいか 1105**（段階 110。WordPress: いいえ）
+  - MySQL: -(-128) は 128。-(-9223372036854775808) は 9223372036854775808。HeimDB: -(-128) は 127。-(-9223372036854775808) は 1105 BIGINT out of range
+  - 再現: `-(-128)`
+  - 補足: 上流の #3256（段階 110 で見送った。WordPress が出さない文）。INT と TINYINT の最小値の列の否定も 1 小さい
+- **DOUBLE のあふれた値を数の列に入れられ、後の比較が 1105**（段階 110。WordPress: いいえ）
+  - MySQL: 1690 DOUBLE value is out of range。HeimDB: INSERT が通って +Inf を保存し、後の WHERE d > 1.5 が 1105 Cannot create a Decimal from +Inf（panic の回復）
+  - 再現: `POW(10,308)*10`
+  - 補足: 上流の #3265（段階 110 で見送った。WordPress が出さない文）。段階 116 で DOUBLE のあふれを 1690 にした（数の残りの組）ので、直っている可能性がある。確かめていない
+- **行の値（タプル）の比較で値の型を広げない**（段階 110。WordPress: いいえ）
+  - MySQL: (1, 1) = (1.1, 1.1) は 0。WHERE (a, b) = (1.1, 1.1) は空。HeimDB: 1。主キー (a, b) の表で 1 行
+  - 再現: `(1, 1) = (1.1, 1.1)`
+  - 補足: 上流の #3658（段階 110 で見送った。WordPress が出さない文）
+- **FORMAT の第 3 引数と数でない引数**（段階 110。WordPress: いいえ）
+  - MySQL: FORMAT(123456, 3, 1) は '123,456.000'。FORMAT('notanumber', 2) は 0.00、FORMAT('12abc', 2) は 12.00。HeimDB: FORMAT(123456, 3, 1) は 1105（panic の回復）。数でない引数は NULL
+  - 再現: `FORMAT(123456, 3, 1)`
+  - 補足: 上流の #3702（段階 110 で見送った。WordPress が出さない文）。FORMAT(123.456, 'notanumber') も HeimDB NULL、MySQL 123
+- **文字列どうしの DIV を浮動小数点数で割る**（段階 110。WordPress: いいえ）
+  - MySQL: '1.2' DIV '0.2' は 6。HeimDB: 5
+  - 再現: `'1.2' DIV '0.2'`
+  - 補足: 上流の #3777（段階 110 で見送った。WordPress が出さない文）。'1.2' DIV '0.4' は HeimDB 2、MySQL 3。段階 116 の DIV の直しは日時の引数だけ
+- **BIGINT UNSIGNED の大きな値の算術が化け、あふれが折り返す**（段階 110。WordPress: いいえ）
+  - MySQL: u + 0 は 18446744073709551615。u + 1、s + 1 は 1690。HeimDB: u + 0 は 9223372036854775807。u + 1、s + 1 は -9223372036854775808（折り返し）
+  - 補足: 上流の #3823（段階 110 で見送った。WordPress が出さない文）。段階 116 の 1690 の直しは DOUBLE のあふれで、整数の記録は見つからない
+- **BIGINT UNSIGNED の CAST AS SIGNED が飽和する**（段階 110。WordPress: いいえ）
+  - MySQL: 18446744073709551615 は -1。9223372036854775808 は -9223372036854775808。HeimDB: どちらも 9223372036854775807
+  - 再現: `CAST(u AS SIGNED)`
+  - 補足: 上流の #3957（段階 110 で見送った。WordPress が出さない文）
+- **GREATEST、LEAST の数と文字列の混ざった引数**（段階 110。WordPress: いいえ）
+  - MySQL: GREATEST(1, 'a') は 'a'。LEAST(10, '9') は 10。GREATEST(1, 2.5, '3') は 3。HeimDB: GREATEST(1, 'a') は 1。LEAST(10, '9') は 9。GREATEST(1, 2.5, '3') は 1105
+  - 再現: `GREATEST(1, 'a')`
+  - 補足: 上流の #4047（段階 110 で見送った。WordPress が出さない文）。同じ PR の日付の形は段階 114（#3447 の組）で直った見込み。段階 116 も日時と数の LEAST(d, 1)、GREATEST('1e400', 1) を記録だけにした
+- **HAVING の MAX で 2^53 を超える BIGINT UNSIGNED と BIGINT を double で比べる**（段階 112。WordPress: いいえ）
+  - 再現: `NOT EXISTS (... HAVING MAX(v) > 0)`
+  - 補足: 段階 114 に回したが、後の段階で直した記録は見つからない
+- **SELECT の値で DECIMAL と double の定数を DECIMAL で比べる**（段階 115。WordPress: いいえ）
+  - MySQL: 1（SELECT の値では DOUBLE で比べる）。HeimDB: 0（WHERE と同じく DECIMAL で比べる）
+  - 再現: `d = 0.1e0`
+  - 補足: d が 0.1000000000000000055511151 のとき。WordPress が出すかは記されていない（推定）
+- **数でない文字列のキー（'10abc'）で索引を引くとき、先頭の数に切り詰めて引く**（段階 115。WordPress: いいえ）
+  - MySQL: 計画で変わる。HeimDB: 先頭の数で引く
+  - 補足: MySQL 自身も計画で結果が変わる
+- **WHERE のユーザー変数と DECIMAL の列の比較を DECIMAL で行う**（段階 115。WordPress: いいえ）
+  - MySQL: DOUBLE で比べる。HeimDB: DECIMAL で比べる（定数の畳み込みで変数がリテラルになる）
+  - 再現: `SET @v = '10.5000000000000000001'; ... WHERE n = @v`
+  - 補足: SELECT の列の `n = @v` は DOUBLE で MySQL と同じ
+- **PREPARE の `n IN (?, ?)` に文字列を渡すと DOUBLE で比べる**（段階 115。WordPress: いいえ）
+  - MySQL: 引数を n の型にして DECIMAL で比べる。HeimDB: DOUBLE で比べる
+  - 補足: WordPress の prepare はリテラルを作る
+- **`d < -0.005` を MySQL は書き換えるが HeimDB は書き換えない**（段階 115。WordPress: いいえ）
+  - MySQL: 書き換える
+  - 再現: `d < -0.005`
+  - 補足: 段階 115 の前からの違いの一覧に一言あるだけで、中身（何に書き換えるか、結果が変わるか）は記されていない。段階 116 で扱った記述も見つからない（不確か）
+- **JSON の中の範囲の外の DOUBLE が ±Inf**（段階 116。WordPress: いいえ）
+  - MySQL: [0.0]。HeimDB: [+Inf]
+  - 再現: `JSON_ARRAY(SUM(d))`
+- **FLOAT の列と小数の定数の比較を単精度で行う**（段階 117。WordPress: いいえ）
+  - MySQL: f = 0.1 は 0 行（f の 0.1 は倍精度で 0.10000000149011612 なので）、f > 0.1 は 0.1 の行を含む 4 行。HeimDB: f = 0.1 は 1 行、f > 0.1 は 3 行（定数を単精度に丸めて比べる）。f = '0.1' と f > '0.1' も同じ
+  - 再現: `CREATE TABLE ff (id INT PRIMARY KEY, f FLOAT, KEY kf (f)); INSERT INTO ff VALUES (1, 0.1), (2, 0), (3, 0.3), (4, 1.5), (5, 1e38); SELECT id FROM ff WHERE f = 0.1`
+  - 補足: 前からの違い。段階 117 で FLOAT の索引がエントリを持つようになったが、範囲の端を含む側に広げて Filter で絞り直すので、索引の有無で結果は変わらない（索引のない比較と同じ）。WooCommerce の在庫（stock_quantity）は DOUBLE
+- **PI() の列の情報の Decimals が 31**（段階 118。WordPress: いいえ）
+  - MySQL: 6。HeimDB: 31（段階 118 で FLOAT と DOUBLE の式を 31 にした）
+  - 補足: テキストプロトコルの値は MySQL と同じ 3.141593
+- **FLOAT(M,D) と DOUBLE(M,D) の比べで、MySQL の定数の畳み込みと差の許しをしない**（段階 120。WordPress: プラグインだけ）
+  - MySQL: WHERE では定数を列の型に入れ直して比べる（FLOAT(7,2) の 1.55、1.56、0.1、100、1.555 の行で `f BETWEEN 1.55 AND 1.56` は 1.56 の行だけ、`f = 1.555` と `f IN (1.55, 1.56, 1.555)` は Impossible WHERE で 0 行）。SELECT の値では `compare_real_fixed`（差が 5/10^(桁の最大+1) 未満なら等しい）で、DOUBLE(10,3) に 1.555 を入れた行（丸めの式で 1.5550000000000002）の `d = 1.555` は 1（WHERE では 0 行）。HeimDB: 値どうしで比べる（`f BETWEEN 1.55 AND 1.56` は 1.55 の 2 行も入る 3 行、`f IN (...)` は 1.55 と 1.56 の行、SELECT の `d = 1.555` は 0）
+  - 再現: `CREATE TABLE c1 (id INT PRIMARY KEY, f FLOAT(7,2), d DOUBLE(10,3)); INSERT INTO c1 VALUES (1, 1.55, 1.5), (2, 1.56, 1.555), (3, 0.1, 0.1), (4, 100, 100), (5, 1.555, 2.0005); SELECT id FROM c1 WHERE f BETWEEN 1.55 AND 1.56`
+  - 補足: D 桁の定数の `=`、`>`、`>=`、`<`、`<>`（`f = 1.55`、`f = 0.1`、`f > 1.55`、`d = 2.001` など）と、丸めで値の変わる端（`d > 1.2495`）は MySQL と同じ行で、索引の有無で変わらない（段階 120 のゴールデン）。段階 120 のレビューで、WHERE の FLOAT(M,D) の列と定数のリテラルの直接の比べ（`=`、`<>`、`<`、`>` など、1 つだけの値の `IN`）は、MySQL と同じく定数を列の単精度の値にして比べるようにした（`h = 35.6812363`、`h = 35.6812363e0` の FLOAT(10,7)、`k = 1234567.125` の FLOAT(11,4) が 1 行。前は 0 行）。BETWEEN、CASE、2 つ以上の値の `IN`、定数の式（CONCAT）は MySQL も畳み込まず、HeimDB も前と同じ。残る違い: SELECT の値の `IF(h = 35.6812363, ...)` は MySQL が `compare_real_fixed` で真、HeimDB は偽。プリペアドステートメントの `h = ?`（PREPARE と、エミュレーションなしの PDO、mysqli_stmt）は畳み込まない（WordPress はエミュレーションで値を文に埋めるので当たらない）。8.0.46 で確かめ直すと、この再現の `f BETWEEN 1.55 AND 1.56` は MySQL が 1.56 の行（id 2）だけ、HeimDB は 1.55 の 2 行も入る 3 行（BETWEEN は DECIMAL で比べる前からの経路）。MySQL 自身も、WHERE と SELECT の値で `d = 1.555` の結果が違う。FLOAT(10,7) に 0.1 を入れた行の `CASE h WHEN 0.1 THEN 1 ELSE 0 END` は MySQL が倍精度で比べて 0、HeimDB は DECIMAL で比べて（単精度の値を最短の字にする）1（前から。段階 120 の検証。桁のない FLOAT の `f = 0.1` の項と同じ経路）
+- **DOUBLE から DOUBLE(M,D) にする ALTER で値を丸める**（段階 120。WordPress: プラグインだけ）
+  - MySQL: (M,D) を変えるだけの ALTER（`DOUBLE` から `DOUBLE(7,2)`、`FLOAT` から `FLOAT(11,4)`）は INPLACE で、値を丸めず範囲も確かめない（123456.789 が DOUBLE(7,2) で 123456.79 と表示され、後で DOUBLE(8,3) にすると 123456.789 に戻る）。UNSIGNED を変えるなど表を写す ALTER は丸め、STRICT では 1264。HeimDB: 表を書き直す ALTER はいつも丸めて範囲を確かめる（STRICT では 1264 で ALTER を戻す）
+  - 再現: `CREATE TABLE ra (id INT PRIMARY KEY, x DOUBLE); INSERT INTO ra VALUES (1, 1.23456), (2, 123456.789); ALTER TABLE ra MODIFY x DOUBLE(7,2)`（MySQL は通り、HeimDB は 1264）
+  - 補足: 表示は D 桁で同じ。MainWP Child の dbDelta が 0.2.40 以前に作った `float` の `duration` を `float(11,4)` にする ALTER では、HeimDB は既存の値を 4 桁に丸める（MySQL は丸めずに残すので、`duration * 1000` などの式の値が違いうる）
+- **FLOAT(M,D) と DOUBLE(M,D) の式の残りの細部**（段階 120。WordPress: いいえ）
+  - MySQL: `CREATE TABLE ... SELECT` の型は SUM が `double(19,2)`、AVG が `double(23,6)`（FLOAT(7,2) の f）、DOUBLE(17,6) UNSIGNED と 1 の UNION が `double(17,6)`、FLOAT(7,2) と INT の UNION が `double(13,2)`（HeimDB は `double(22,6)` と `double(22,2)`。値と小数の桁は同じ）。GREATEST と LEAST の値は引数の小数の桁の最大で表示（`GREATEST(f, d)` は 99999.992）。ROUND、CAST、文字列にしたとき（CONCAT）の桁、information_schema の NUMERIC_PRECISION と NUMERIC_SCALE（M と D）、CREATE の警告 1681（非推奨）。HeimDB: `CREATE TABLE ... SELECT` はどれも `double(22,D)`、GREATEST と LEAST は桁の決まらない DOUBLE（99999.9921875）、ほかは段階 120 で変えていない
+  - 補足: 段階 120 の計画で範囲の外にした（式の桁は `+ - * % /` と符号、ABS、SUM、AVG、MAX、MIN、IF、CASE、COALESCE、IFNULL を MySQL に合わせた）
+- **FLOAT と整数の LEAST、GREATEST の値**（段階 120。WordPress: いいえ）
+  - MySQL: p FLOAT が 1.5 の行の `LEAST(p, 1)` は 1。HeimDB: 1.5（0.2.40 も同じ）
+  - 再現: `CREATE TABLE t (id INT PRIMARY KEY, p FLOAT); INSERT INTO t VALUES (1, 1.5); SELECT LEAST(p, 1)`
+  - 補足: 前からの違い。DOUBLE の `LEAST(q, 1)` も同じ
+- **桁のない FLOAT と整数の COALESCE の型が文字列**（段階 120。WordPress: いいえ）
+  - MySQL: `COALESCE(p, 0)` は FLOAT。HeimDB: LONGTEXT（値は同じ。0.2.40 も同じ）
+  - 補足: 前からの違い。FLOAT(M,D) と整数は段階 120 で MySQL と同じ FLOAT にした
+- **ON DUPLICATE KEY UPDATE の数の列の範囲の外が 1105**（段階 120。WordPress: いいえ）
+  - MySQL: STRICT では 1264、そうでなければ端の値と警告 1264。HeimDB: どちらも `1105 300 out of range for tinyint`（FLOAT(5,1) UNSIGNED の -3 も）
+  - 再現: `INSERT INTO tz VALUES (1, 1) ON DUPLICATE KEY UPDATE a = 300`（a は TINYINT）
+  - 補足: 前からの違い（整数の列も同じ）。丸め（`f = f + 1.004`）は MySQL と同じ
+- **小数の桁の決まった FLOAT と DOUBLE の値を、倍精度の桁を超えて表示する**（段階 120 の 1 回目のレビュー。WordPress: プラグインだけ）
+  - MySQL: DOUBLE(17,6) の 1763290000.123456 の `ctime * 1000` と `AVG(ctime)` は 1763290000123.456000（`my_fcvt` は往復できる最短の桁を出し、残りを 0 で埋める）。HeimDB: 1763290000123.456055（`number.go` の `SQLFloat64` が `strconv.AppendFloat` の `'f'` で桁まで出す）
+  - 補足: 値は同じで表示の最後の桁だけ。Wordfence の時刻（DOUBLE(17,6)）の式で当たる
+- **非 STRICT の BIT の列の範囲の外が 1105**（段階 120 の 1 回目のレビュー。WordPress: いいえ）
+  - MySQL: BIT(8) に 300 は 255 と警告 1264。HeimDB: 1105（`nonstrict.go` の `fixNumber` が BIT の端を知らない）
+  - 補足: 前からの違い
+- **FLOAT(10,7) の SHOW CREATE TABLE の DEFAULT が '0'**（段階 120 の 1 回目のレビュー。WordPress: いいえ）
+  - MySQL: `DEFAULT '0.0000000'`。HeimDB: `DEFAULT '0'`。DESCRIBE の Default は MySQL と同じ
+  - 補足: 前からの違い。dbDelta は引用符のない既定値を比べないので、ALTER は出ない
+- **FLOAT(7,2) ZEROFILL が UNSIGNED にならない**（段階 120 の 1 回目のレビュー。WordPress: いいえ）
+  - MySQL: `float(7,2) unsigned zerofill`。HeimDB: ZEROFILL と暗黙の UNSIGNED を落とす
+  - 補足: 前からの違い
+- **桁のない FLOAT と整数の UNION の型が文字列**（段階 120 の 1 回目のレビュー。WordPress: いいえ）
+  - MySQL: FLOAT と INT の UNION は DOUBLE。HeimDB: LONGTEXT（文字列の順に並ぶ。0.2.40 も同じ）
+  - 補足: 前からの違い。FLOAT と DOUBLE どうし（(M,D) と UNSIGNED を含む）と、FLOAT(M,D) か DOUBLE(M,D) と整数か DECIMAL の UNION は段階 120 で MySQL と同じ FLOAT か DOUBLE にした
+- **FLOAT(M,D) の列と DECIMAL か DOUBLE(M,D) の列の結合で、MySQL は差の許しで合わせる**（段階 120 の 2 回目のレビュー。WordPress: いいえ）
+  - MySQL: 35.6812363、0.1、1.55、-35.6812363、100 の行で、DECIMAL(12,7) と FLOAT(10,7) の `a.dec1 = b.h` は 5 組、FLOAT(10,7) と DOUBLE(10,3) の `a.h = b.dm` は 0.1、1.55、100 の 3 組。HeimDB: どちらも 100 の 1 組（索引の有無で同じ）
+  - 補足: 段階 120 の 2 回目のレビューで、結合の索引の lookup のキーを列の型にして値が変わるもの（DOUBLE のキーを FLOAT の列に、35.6812363 を DOUBLE(10,3) の列に）は空の範囲にし、索引のないときと同じにした（前は索引のあるときだけ 5 組で、MySQL とも違った）。DOUBLE と DECIMAL の列、整数のキーと DOUBLE の列（WooCommerce の wc_order_stats と wc_product_meta_lookup）は前と同じ
+- **FLOAT(M,D) の範囲の確かめを、式が返した単精度の値で単精度にする**（段階 120 の 2 回目のレビュー。WordPress: いいえ）
+  - MySQL: h が 1000（FLOAT(10,7) の端を単精度にした値）の行で、`UPDATE SET h2 = -h` と `IF(id = 1, h, 0)` を入れると 1264。HeimDB: 通る（入れる値が float32 のままの式は、ほかの FLOAT の列の値と同じく単精度で比べる）。逆に、MySQL が列どうしを写して通すのに HeimDB が 1264 にする形もある
+  - 補足: 段階 120 の 1 回目のレビューで、保存した端の値を写す `INSERT ... SELECT` と ALTER を通すために、単精度の値は単精度で比べるようにした。端の値だけが当たる
+- **FLOAT(10,7) と DECIMAL(12,7) の UNION DISTINCT が 35.6812363 を 2 行残し、3 つ以上の UNION が文字列になる**（段階 120 の 2 回目のレビュー。WordPress: いいえ）
+  - MySQL: DOUBLE にして 1 行。`lat UNION total UNION i` も DOUBLE。HeimDB: 2 行（FLOAT(M,D) と DECIMAL を DECIMAL にして比べる）、`lat UNION total UNION i` は LONGTEXT
+  - 補足: 2 つの FLOAT と DOUBLE、FLOAT(M,D) と整数か DECIMAL の UNION の型は段階 120 で MySQL と同じにした
+- **索引のある FLOAT の列と DECIMAL か DOUBLE の定数の `<` と NOT BETWEEN が、端の行を落とす**（段階 120 の 2 回目のレビュー。WordPress: いいえ）
+  - MySQL: `f < 35.6812363`（35.6812363 を入れた桁のない FLOAT）はその行を含む。HeimDB: 索引で引くと落とす（索引のないときは含む）。FLOAT(10,7) の `h NOT BETWEEN 35.6812363 AND 36` も同じ（MySQL と索引のない HeimDB は 35.6812363 の行を含む）
+  - 補足: 前からの違い（a78d94e も同じ）。範囲の端を単精度にしたキーの開いた側を、比べる側（倍精度）より狭く読む（`internal/backend/rows.go` の FLOAT の範囲を広げるのは閉じた端だけ）
+- **TEXT の列の大きすぎる値の DIV が 1690 にならない**（段階 118。WordPress: いいえ）
+  - MySQL: '1.0e400' DIV 1 は 1690 BIGINT value is out of range。HeimDB: 9223372036854775807
+  - 再現: `SELECT v DIV 1 FROM t`（v は '1.0e400' の LONGTEXT）
+  - 補足: DIV の TEXT の列の警告も MySQL（1366 `Incorrect DECIMAL value: '0' for column '' at row -1` を 2 つ）と違う（HeimDB は値ごとに 1292）。% の警告は段階 119 で直した
+- **BLOB の列の値を数にすると値が違う**（段階 118。WordPress: いいえ）
+  - MySQL: 文字列として読む（'1700000000' + 0 は 1700000000、'abc' + 0 は 0）。HeimDB: 0 と 6382179（バイト列を数として読む）と、`'[49 55 48 ...]'` の形の警告 1292
+  - 補足: WordPress 本体と WooCommerce の表に BLOB の列はない
+- **FLOAT と DOUBLE の式の列の情報の型**（段階 118 のレビュー。WordPress: いいえ）
+  - MySQL: -f、STDDEV(f)、ABS(f) は DOUBLE、FLOOR(f) と CEIL(d) は DOUBLE（Decimals 31）、LEAST(f, 1) は FLOAT、f > 1 は LONGLONG。HeimDB: FLOAT、FLOAT、FLOAT、LONG（Decimals 0）、DOUBLE、TINY
+  - 補足: 前からの違い。Decimals は FLOAT と DOUBLE の型の 62 の列と式で MySQL と同じ（PI() は記録済み。FLOAT(M,D) と DOUBLE(M,D) は段階 120 で D にした）
+- **ビット演算の数でない文字列の値が DOUBLE になる**（段階 119。WordPress: いいえ）
+  - MySQL: '1700000000:1' の TEXT の列の `t | 0` は 1700000000、`mt << 1` は 3400000000、`v ^ 1` は 1700000001、'-3.5x' の `tt >> 1` は 9223372036854775806。HeimDB: 1.7e+09、3.4e+09、1.700000001e+09、9.223372036854776e+18（DOUBLE の値で返す）
+  - 再現: `SELECT t | 0, mt << 1, v ^ 1, tt >> 1 FROM t`
+  - 補足: 前からの違い。'abc' と '12abc' は同じ値
+- **数学の関数の値の最後の桁が MySQL と違う**（段階 119。WordPress: いいえ）
+  - MySQL: TAN(12) は -0.6358599286615808、ATAN(4) は 1.3258176636680326、ACOS(0.5) は 1.0471975511965979、LOG(2, 12) は 3.5849625007211565、COT(12) は -1.5726734063976893。HeimDB: -0.6358599286615807、1.3258176636680323、1.0471975511965976、3.584962500721156、-1.5726734063976895
+  - 補足: 前からの違い。Go の math と C の libm の丸めの違い（SIN、RADIANS も一部の値で）。段階 119 のゴールデンは ROUND(..., 12) で比べる
+- **POW と EXP の DOUBLE を超える結果が NULL**（段階 119。WordPress: いいえ）
+  - MySQL: POW(10, 400) と EXP(1000) は 1690 DOUBLE value is out of range。HeimDB: NULL
+  - 補足: 前からの違い
+- **整数と小数の文字列の IN が丸めて一致する**（段階 119 のレビュー。WordPress: いいえ）
+  - MySQL: `1 IN ('0.5'), 1 IN ('1.4'), 2 IN ('1.5'), 13 IN ('12.6abc')` はすべて 0。INT の列 n と LONGTEXT の列 v（'0.5x'）の `n IN (v)` も 0。HeimDB: すべて 1（右の文字列を左の整数の型に丸めて比べる。in.go の `convertOrTruncateQuiet`）
+  - 補足: 前からの違い。`n = v` は正しい。WordPress は `ID IN ('5', '6')` の形（整数の文字列）だけを出す
+- **日付と TIME の CEIL と FLOOR**（段階 119 のレビュー。WordPress: いいえ）
+  - MySQL: CEIL(DATE '2024-01-02') は 20240102、CEIL(TIME '01:02:03') は 10203。HeimDB: 2024、1
+  - 補足: 前からの違い
+- **DECIMAL と 0 の IF の値を数にしたときの桁**（段階 119 のレビュー。WordPress: いいえ）
+  - MySQL: d が DECIMAL(6,2) の `IF(n > 1, d, 0) + 0` は 0 の枝で 0.00。HeimDB: 0
+  - 補足: 前からの違い
+- **NULL の行の `-IFNULL(vc, 0)` の符号**（段階 119 のレビュー。WordPress: いいえ）
+  - MySQL: -0。HeimDB: 0
+  - 補足: 前からの違い
+- **DECIMAL の割り算の値を次の関数に渡すとき、表示の桁に丸める**（段階 119 のレビュー。WordPress: いいえ）
+  - MySQL: EXP(30405/100000) は 1.3553368212365906（0.30405 で計算）。HeimDB: 1.3554045897718519（0.3041 で計算）。TIME の列の `EXP(t / 100000)` も同じ。`EXP(TIME'03:04:05' / 100000)` は MySQL 1.3553368212365906、HeimDB 1.0000300004500045
+  - 補足: 前からの違い
+
+## 文字列と照合順序
+
+- **CHAR の列が末尾の空白を落とさない**（段階 110。WordPress: いいえ）
+  - MySQL: CHAR(3) の 'a ' は LENGTH 1。GROUP BY c は 2 組。HeimDB: LENGTH 2。GROUP BY c は 3 組。DISTINCT、WHERE c = 'a'、PARTITION BY c も違う
+  - 補足: 上流の #3845（段階 110 で見送った。WordPress が出さない文）。段階 110 で PR と関係なく見つけた違いとしても挙がった。WordPress の表は CHAR の列をほとんど使わない（推定）
+- **照合順序のない JSON_TABLE の TEXT の列の LIKE が一致しない**（段階 110。WordPress: いいえ）
+  - MySQL: foo。HeimDB: 空
+  - 補足: 上流の #3023（段階 110 で見送った。WordPress が出さない文）。JSON_TABLE は WordPress が使わない
+- **不正な UTF-8 のバイナリへのハッシュの関数が 1105**（段階 110。WordPress: いいえ）
+  - MySQL: 00594fd4...、85e53271...、'/w=='。HeimDB: STRICT でも WordPress の sql_mode でも 1105 invalid string for charset utf8mb4
+  - 再現: `MD5(UNHEX('FF'))`
+  - 補足: 上流の #3161（段階 110 で見送った。WordPress が出さない文）。SHA1、TO_BASE64 も同じ。段階 116 は MD5 などの ENUM と日時の引数を直したが、バイナリの引数の記録は見つからない
+- **数を引数にした BIT_LENGTH が 1105**（段階 110。WordPress: いいえ）
+  - MySQL: BIT_LENGTH(123), BIT_LENGTH(1.5) は 24, 24。HeimDB: 1105 Invalid argument to bit_length
+  - 再現: `BIT_LENGTH(1.5)`
+  - 補足: 上流の #3209（段階 110 で見送った。WordPress が出さない文）。同じ PR の BIT_LENGTH(DATE(...))（MySQL 80）は、段階 116 で日時の引数を値の文字列にしたので直っている見込み。数の引数は後の記録に見つからない
+- **HEX(CHAR(0)) が空**（段階 110。WordPress: いいえ）
+  - MySQL: '00'。HeimDB: ''
+  - 再現: `HEX(CHAR(0))`
+  - 補足: 上流の #3228（段階 110 で見送った。WordPress が出さない文）。CHAR(NULL, 65) と CHAR(256) も同じ
+- **CONCAT の結果の照合順序（強さ）がバイナリと明示の COLLATE を見ない**（段階 110。WordPress: いいえ）
+  - MySQL: COLLATION(CONCAT(a, b)) は binary。CONCAT(a, 'x' COLLATE utf8mb4_bin) は utf8mb4_bin。HeimDB: どちらも utf8mb4_unicode_520_ci
+  - 補足: 上流の #3824（段階 110 で見送った。WordPress が出さない文）。比較の結果（CONCAT(a, b) = 'aA'）は同じ 1
+- **CONVERT ... USING utf8mb4 が不正な UTF-8 をそのまま返す**（段階 110。WordPress: いいえ）
+  - MySQL: NULL と警告 1300。HeimDB: 壊れた文字列
+  - 再現: `CONVERT(0xC328 USING utf8mb4)`
+  - 補足: 上流の #3958（段階 110 で見送った。WordPress が出さない文）。HEX(CONVERT(0x61FF62 USING utf8mb4)) は HeimDB 61FF62、MySQL NULL
+- **空の文字列を文字列の長さ + 1 の位置から LOCATE すると 0**（段階 110。WordPress: いいえ）
+  - MySQL: 4。HeimDB: 0
+  - 再現: `locate('', 'abc', 4)`
+  - 補足: 上流の #4020（段階 110 で見送った。WordPress が出さない文）。段階 114 で LOCATE を文字で数えるように直したが、この形が直ったかは記録にない
+- **UPDATE で文字列の列にバイナリの値をつなぐと、切り詰めて警告 1366**（段階 114。WordPress: いいえ）
+  - MySQL: 3854（Cannot convert string。WordPress の sql_mode でも）。HeimDB: 切り詰めて警告 1366
+  - 再現: `UPDATE ... SET s = CONCAT(s, UNHEX('FF'))`
+  - 補足: concat.go。WordPress が出すかは記されていない（推定）
+- **列の側に COLLATE を付けた ENUM と後ろに空白のある文字列が合わない**（段階 116。WordPress: いいえ）
+  - MySQL: 合う。HeimDB: 合わない（PAD SPACE の後ろの空白、文字列の既知の違い）
+  - 再現: `e COLLATE utf8mb4_bin = 'a '`
+- **FIELD が大文字と小文字だけを無視し、PAD SPACE の後ろの空白を除かない**（段階 116。WordPress: いいえ）
+  - MySQL: FIELD(st, 'publish ') は 1。HeimDB: 0（strings.EqualFold で比べる）
+  - 再現: `FIELD(st, 'publish ')`
+- **数と文字列の混ざった FIELD を文字列で比べる**（段階 116。WordPress: いいえ）
+  - MySQL: DOUBLE で比べる（空の値の FIELD(st, 2, 'x') は 2）。HeimDB: 文字列で比べる
+  - 再現: `FIELD(st, 2, 'x')`
+- **GREATEST が照合順序で比べない**（段階 116。WordPress: いいえ）
+  - MySQL: 'Dd'。HeimDB: 'b'
+  - 再現: `GREATEST('Dd', 'b')`
+- **SOUNDEX('') が '0000'**（段階 116。WordPress: いいえ）
+  - MySQL: ''。HeimDB: '0000'
+  - 再現: `SOUNDEX('')`
+- **MAKE_SET、INSERT()、INTERVAL()、OCT、WEIGHT_STRING が非対応**（段階 116。WordPress: いいえ）
+  - HeimDB: 非対応のエラー
+  - 補足: 前から非対応
+
+## ENUM と SET
+
+- **SET の列と文字列の大小を番号で比べ、数との比べが 1105**（段階 120。WordPress: いいえ）
+  - MySQL: `s >= 'b'`（'a'、'a,c'、''、'b,c'、NULL、'a'、'c' の行）は文字列で比べて 'b,c' と 'c' の 2 行。`s = 16`（定義の外の番号）は 0 行。HeimDB: 番号で比べて 'a,c'、'b,c'、'c' の 3 行。`s = 16` と `s = -1` は `1105 value 16 is not valid for this set`（0.2.40 も同じ）
+  - 補足: 前からの違い。段階 120 で SET の索引がエントリを持つようになったが、MySQL と同じく `=` と `IN` だけを範囲で引き、大小の比べは NULL でない行を読んで比べる側で決めるので、索引の有無で結果は変わらない
+- **BIT の列の文字列と小数との比べ（MySQL は索引の有無で違う）**（段階 120。WordPress: いいえ）
+  - MySQL: BIT(8) の 5、255、0、16、NULL、6、53 の行で、索引があると `b = '5'` は 53 の行（0x35）、`b > '5'` は 255 と 53、`b = 'A'` は 0 行、`b = 5.4` は 5 の行。索引がないと `b = '5'` は 5 の行、`b > '5'` は 255、16、6、53、`b = 'A'` は 0 の行、`b = 5.4` は 0 行。HeimDB: 索引の有無によらず、MySQL の索引のないときと同じ
+  - 補足: 段階 120 の計画のレビューで、索引のある表だけ文全体の誤り（1265、1105）になっていたのを直し、比べる側で決める形にした
+- **BIT(64) の 2^63 以上の値の数が飽和し、`b64 > 9223372036854775807` が 1 行落ちる**（段階 120。WordPress: いいえ）
+  - MySQL: `b64 + 0` は 18446744073709551615 と 9223372036854775808、`b64 > 9223372036854775807` は 2 行。HeimDB: どちらも 9223372036854775807、1 行（2^63 の行が落ちる。0.2.40 も同じ）
+  - 補足: 前からの違い。索引のエントリは符号なしの数の順で、`b64 >= 9223372036854775808` と索引の順の読み出しは MySQL と同じ
+- **SET の列と、並びの違う同じ要素の文字列の比較**（段階 110。WordPress: いいえ）
+  - MySQL: s = 'b,a' は 0。HeimDB: 1
+  - 再現: `s = 'b,a'`
+  - 補足: 上流の #3111（段階 110 で見送った。WordPress が出さない文）。同じ PR の、定義の違う ENUM どうしの e1 = e2 は段階 116 で直った。SET の部分は後の記録に見つからない（段階 116 の SET の比べの直しは定義にない文字列だけ）。直っているかは確かめていない
+- **ENUM と文字列の大小、定義の違う ENUM どうしの < を番号で比べる**（段階 116。WordPress: いいえ）
+  - MySQL: 文字列で比べる。HeimDB: 値がどちらも定義にあれば番号で比べる
+  - 補足: `enum('b','a')` や COLLATE utf8mb4_bin の 'Dd' と 'a' の順が違う。= は段階 116 で直した
+- **ENUM と番号の文字列、真偽、<=> の比較**（段階 116。WordPress: いいえ）
+  - MySQL: e = '1' と e = 1.5 は合わない、e = true と e <=> 'a' は合う。HeimDB: e = '1' と e = 1.5 は番号として合う、e = true と e <=> 'a' は合わない
+  - 再現: `e = '1'; e = 1.5; e = true; e <=> 'a'`
+  - 補足: WordPress は出さない
+- **後ろに空白のある値を含む IN 副問い合わせで ENUM の行が返らない**（段階 116。WordPress: いいえ）
+  - MySQL: 'c' の行。HeimDB: 返さない
+  - 再現: `e IN (SELECT 'a ' UNION SELECT 'c')`
+- **索引のある ENUM の列で、MySQL が索引を使うときだけ合う比較（BINARY、定義にない値、COLLATE utf8mb4_bin）**（段階 116。WordPress: いいえ）
+  - MySQL: 索引を使うと合う（e = BINARY 'a ' と 'A' は 'a' の行、e = 'zz' は空の値の行、e = 'A' COLLATE utf8mb4_bin は 'a' の行）。使わないと合わない。HeimDB: 索引を使わないときの MySQL と同じく返さない
+  - 再現: `e = BINARY 'a '; e = BINARY 'A'; e = 'zz'; e = 'A' COLLATE utf8mb4_bin`
+  - 補足: PAD SPACE の照合順序の索引のある ENUM の列。MySQL は ref の読み方でキーを Field::store で作って比べ直さない
+- **SET に要素の後ろに空白のある値を入れると空白を除いて入れる**（段階 116。WordPress: いいえ）
+  - MySQL: STRICT で 1265。HeimDB: 要素ごとに空白を除いて 'x,y'
+  - 補足: 上流と同じ
+- **照合順序の違う ENUM と VARCHAR の列の比較が通る**（段階 116。WordPress: いいえ）
+  - MySQL: 1267。HeimDB: 行を返す
+  - 補足: utf8mb4_0900_ai_ci と utf8mb4_unicode_520_ci
+- **ENUM の BIN と CONV が番号を使う**（段階 116。WordPress: いいえ）
+  - MySQL: 値の文字列を数として読む（'a' は 0 と 10）。HeimDB: 番号
+  - 再現: `BIN(e); CONV(e, 16, 10)`
+- **ENUM の JSON_ARRAY、JSON_OBJECT、JSON_QUOTE が 1105**（段階 116。WordPress: いいえ）
+  - MySQL: 値の文字列。HeimDB: 1105（invalid type）
+  - 再現: `JSON_ARRAY(e); JSON_OBJECT('k', e); JSON_QUOTE(e)`
+- **ENUM と数の IF に + 0 をすると番号にならない**（段階 116。WordPress: いいえ）
+  - MySQL: ENUM の番号
+  - 再現: `IF(id = 1, e, 1) + 0`
+  - 補足: HeimDB の値は記されていない
+
+## 集計とウィンドウ関数
+
+- **選択の項目の相関副問い合わせの別名で GROUP BY すると値が NULL**（段階 110。WordPress: いいえ）
+  - MySQL: (2,1),(3,2)。HeimDB: (2,NULL),(3,NULL)
+  - 補足: 上流の #3172（段階 110 で見送った。WordPress が出さない文）。v0.20.0 のフォークでも起きる
+- **副問い合わせの中の外の列の集計（相関の集計）が 1105 か 1146**（段階 110。WordPress: いいえ）
+  - MySQL: (1,'a|b'),(2,'c')。HeimDB: 1105 unable to find field with index 2 in row of 1 columns。HAVING の形は 1146 table not found: a
+  - 再現: `SELECT grp, (SELECT GROUP_CONCAT(a.val ...) FROM concat_probe p) FROM concat_scope a GROUP BY grp`
+  - 補足: 上流の #3797（段階 110 で見送った。WordPress が出さない文）。MAX(a.val)、COUNT(a.val) でも同じ。段階 115 は HAVING の GROUP_CONCAT の 1146（同じ文の列）を直したが、外の列の集計の形は直した記録がない
+- **GROUP BY のある結合の相関副問い合わせの値が違う**（段階 110。WordPress: いいえ）
+  - MySQL: ('second row', 2)。HeimDB: ('second row', 3)
+  - 再現: `select mt.s, (select count(*) from othertable where i2 <= mt.i) from mytable mt left join othertable ot on mt.i = ot.i2 where mt.i = 2 group by mt.i, mt.s`
+  - 補足: 上流の #3950（段階 110 で見送った。WordPress が出さない文）
+- **COUNT(1) と COUNT(*) をこの順で並べると 1105**（段階 110。WordPress: いいえ）
+  - MySQL: (3,3)。HeimDB: 1105 column "COUNT(*)" does not exist in scope
+  - 再現: `SELECT COUNT(1), COUNT(*) FROM count_t`
+  - 補足: 上流の #4070（段階 110 で見送った。WordPress が出さない文）。GROUP BY の形も 1105。順が COUNT(*), COUNT(1) なら通る
+- **外の集計の別名を副問い合わせの集計で読むと、外の行の値で集計する**（段階 115。WordPress: いいえ）
+  - MySQL: 1247。HeimDB: 外の行の値で集計する
+  - 再現: `(SELECT SUM(cnt) ...)`
+  - 補足: planbuilder の HAVING の解決
+- **HAVING の `GROUP_CONCAT(x ORDER BY 1)` が 1105**（段階 115。WordPress: いいえ）
+  - HeimDB: 1105
+  - 再現: `HAVING GROUP_CONCAT(x ORDER BY 1)`
+  - 補足: 前からの違い
+- **ウィンドウ関数の枠の違いが残る（RANGE の同順位の行など）**（段階 116。WordPress: いいえ）
+  - 補足: RANGE の枠の同順位の行、DESC か複数の列の ORDER BY の RANGE の枠、前からの和が ±1e308 の隣の小さい値を吸い込む、ORDER BY のある MAX と LAST_VALUE、STD と VARIANCE の OVER が 1690
+- **WITH ROLLUP が構文エラー**（段階 116。WordPress: いいえ）
+  - MySQL: 集計の小計の行。HeimDB: 構文エラー
+- **ウィンドウの VARIANCE と STDDEV の値の最後の桁が違う**（段階 119。WordPress: いいえ）
+  - MySQL: 'abc'、'12abc'、''、'4'、NULL、'0.5x' の `VARIANCE(v) OVER ()` は 21.16、`VAR_SAMP(w) OVER ()` は 26.45。HeimDB: 21.159999999999997、26.449999999999996
+  - 補足: 前からの違い（段階 119 で数でない文字列を先頭の数の部分で読むようにして見えた）。HeimDB は前からの和で平均を出してから偏差を足す。集計の VARIANCE（GROUP BY）は MySQL と同じ値
+- **VARIANCE と STDDEV の仲間の型が、整数と DECIMAL の引数で引数の型**（段階 119 のレビュー。WordPress: いいえ）
+  - MySQL: DOUBLE。n INT（1、12、1、1000）と d DECIMAL(6,2) の `VARIANCE(n), STDDEV_SAMP(n), STDDEV(d)` は 185774.25、497.6936808921729、467.7302365880893。HeimDB: 185774、498、467.73（`unary_aggs.og.go` の Type が引数の型。上流のまま）。LONGTEXT の列の `VARIANCE(v) OVER ()` は文字列の型で返す（値は正しい）
+  - 補足: 前からの違い。段階 119 のレビューで、日付、日時、TIME の引数だけを DOUBLE にした（TIME の値にならない分散が 1105 になるのを防ぐため。`VarianceType`）。JSON の引数も型が JSON のまま（MySQL は集計では誤り 3156。HeimDB は DOUBLE の値を JSON の形で返す）
+- **ウィンドウの VARIANCE と STDDEV の TIME、日付、JSON の引数**（段階 119 の 2 回目のレビュー。WordPress: いいえ）
+  - MySQL: `VARIANCE(t) OVER ()`（TIME）は 4974831076112.828、日付は数の形（20240102）で計算。HeimDB: TIME は NULL、日付は UNIX 時刻で計算、JSON は警告 1292 と違う値（`window_functions.go` の `floatPrefixSumVals` と `computeStd2` が `types.Float64.Convert` のまま）
+  - 補足: 前からの違い。集計（OVER なし）は段階 119 で MySQL と同じにした
+
+## SQL の形
+
+- **CTE の ORDER BY (i) の括弧の付いた列で並べない**（段階 110。WordPress: いいえ）
+  - MySQL: 0,2,4,9。HeimDB: 並べずに 2,0,9,4
+  - 再現: `WITH cte(i) AS (SELECT i FROM t) SELECT * FROM cte ORDER BY (i)`
+  - 補足: 上流の #3131（段階 110 で見送った。WordPress が出さない文）。派生表の ORDER BY ((i)) と式の ORDER BY (i*10+j) は同じ。CTE は WordPress が使わない
+- **結合と副問い合わせを含む UNION が panic の回復で 1105**（段階 110。WordPress: いいえ）
+  - MySQL: 0,1,2。HeimDB: 1105 slice bounds out of range（接続は保たれる）
+  - 再現: `SELECT * FROM t1 UNION (SELECT j FROM t2 WHERE (j > 10 OR j IN (SELECT j FROM t1 JOIN t2)))`
+  - 補足: 上流の #3145（段階 110 で見送った。WordPress が出さない文）
+- **空の派生テーブルとの ON TRUE の LEFT JOIN と RIGHT JOIN が交差結合になり空**（段階 110。WordPress: いいえ）
+  - MySQL: 1。HeimDB: 空
+  - 再現: `t LEFT JOIN (SELECT ... WHERE FALSE) AS subq ON TRUE`
+  - 補足: 上流の #3193（段階 110 で見送った。WordPress が出さない文）
+- **BLOB の列と NULL の UNION ALL で、左の行の値まで NULL になる**（段階 110。WordPress: いいえ）
+  - MySQL: 0xDEADBEEF。HeimDB: NULL
+  - 再現: `SELECT name, data FROM a UNION ALL SELECT name, NULL FROM b`
+  - 補足: 上流の #3219（段階 110 で見送った。WordPress が出さない文）。data は BLOB。v0.20.0 のフォークでも起きる
+- **結合の条件の列どうしの BETWEEN が行を落とす**（段階 110。WordPress: いいえ）
+  - MySQL: (0, NULL, NULL, NULL, 'KZ')。HeimDB: 空
+  - 再現: `t1 INNER JOIN t0 ON (t1.c0 BETWEEN t0.c2 AND t0.c2)`
+  - 補足: 上流の #3388、#3415（段階 110 で見送った。WordPress が出さない文）。2 つの PR は同じ文
+- **主キーのない表を含む本当の交差結合の COUNT(*) が多い**（段階 110。WordPress: いいえ）
+  - MySQL: 4。HeimDB: 12
+  - 補足: 上流の #3417（段階 110 で見送った。WordPress が出さない文）。FROM t6, t1 JOIN t0 ON ... で t6 とつなぐ条件がない形。つなぐ条件があれば正しい。WordPress の結合はどれも条件でつなぐ
+- **2 段の JOIN LATERAL が panic の回復で 1105**（段階 110。WordPress: いいえ）
+  - MySQL: 8 行。HeimDB: 1105 slice bounds out of range [8:7]
+  - 補足: 上流の #3433（段階 110 で見送った。WordPress が出さない文）。LATERAL を使わない入れ子は MySQL と同じ
+- **NULL を含む行の値（タプル）の <=> と > が 1105**（段階 110。WordPress: いいえ）
+  - MySQL: (1, NULL) <=> (1, 2) は 0。(CAST(NULL AS DATETIME), 5) <=> (1, 5) は 0。HeimDB: <=> と > の形は 1105（value not nil、Incorrect datetime value）
+  - 再現: `SELECT (1, NULL) <=> (1, 2)`
+  - 補足: 上流の #3651、#3789、#4032（段階 110 で見送った。WordPress が出さない文）。行の値の = と値の並びの IN の NULL は段階 116 で直した（484901a）。<=> と > が直ったかは記録にない
+- **入れ子の派生テーブルの中から外の列を見ると 1105**（段階 110。WordPress: いいえ）
+  - MySQL: (1,1),(2,2)。HeimDB: 1105 unable to find field with index 1 in row of 0 columns
+  - 再現: `SELECT a, (SELECT colid FROM (SELECT x AS colid FROM (SELECT outer_t.a AS x FROM inner_t) inner1) outer1) FROM outer_t`
+  - 補足: 上流の #3717（段階 110 で見送った。WordPress が出さない文）。3 段の形も同じ
+- **型のない NULL の列の CREATE TABLE ... SELECT が 1105**（段階 110。WordPress: いいえ）
+  - MySQL: a binary(0) で作る。HeimDB: 1105 column t.a: parse type "null"
+  - 再現: `CREATE TABLE t AS SELECT NULL AS a, 1 AS b`
+  - 補足: 上流の #3923（段階 110 で見送った。WordPress が出さない文）。保存層が型 null を読めない
+- **NOT IN を 2 つ並べ、片方が UNION の副問い合わせだと NOT が落ちる**（段階 110。WordPress: いいえ）
+  - MySQL: b。HeimDB: leaf, root
+  - 再現: `id NOT IN (SELECT ... tags) AND id NOT IN (SELECT ... UNION SELECT ...)`
+  - 補足: 上流の #3956（段階 110 で見送った。WordPress が出さない文）。UNION 側の NOT が落ちて IN になる
+- **括弧の付いた GROUP BY の列を HAVING で使うと 1105**（段階 110。WordPress: いいえ）
+  - MySQL: 0 行。HeimDB: 1105 column "col1" could not be found in any table in scope
+  - 再現: `SELECT COUNT(*) FROM tab0 GROUP BY (col1), col2 HAVING col1 >= COUNT(*)`
+  - 補足: 上流の #4002（段階 110 で見送った。WordPress が出さない文）
+- **EXISTS (... LIMIT 0) が真**（段階 112。WordPress: いいえ）
+  - MySQL: 偽。HeimDB: 真
+  - 再現: `EXISTS (... LIMIT 0)`
+  - 補足: 上流も同じ。段階 112 の #3780 で集計だけの副問い合わせの LIMIT 0 の形は MySQL と同じになったが、この形は段階 114 に回し、後の段階で直した記録は見つからない
+- **主キーのない表を LEFT JOIN の右から消す DELETE が、本物のすべて NULL の行を消さない**（段階 112。WordPress: いいえ）
+  - MySQL: 消す。HeimDB: 消さない
+  - 補足: 結合が埋めた NULL と見分けられない。段階 115 で受け入れた違いにした（WordPress とプラグインの表は主キーを持つ）
+- **括弧のない入れ子の ON が構文エラー**（段階 112。WordPress: いいえ）
+  - HeimDB: 構文エラー
+  - 再現: `t3 JOIN t1 LEFT JOIN t2 ON ... ON ...`
+  - 補足: 解析器（vitess）の違い。vitess はバージョンを固定していて範囲の外（推定）
+- **修飾のない存在しない列の名前がシステム変数を返す（timestamp、version）**（段階 115。WordPress: いいえ）
+  - MySQL: 1054。HeimDB: @@timestamp、@@version の値
+  - 再現: `SELECT timestamp FROM A; SELECT version FROM A`
+  - 補足: 上流も同じ。段階 116 でも記録（engine.md 132、156 の行）
+- **主キーのない表の明示の UPDATE JOIN が 1105**（段階 115。WordPress: いいえ）
+  - MySQL: 実行する。HeimDB: 1105（keyless tables unsupported for UPDATE JOIN）
+  - 補足: 段階 116 でも記録。WordPress とプラグインの表は主キーを持つ
+- **HAVING で、同じ名前の式の別名と列の別名があると先の別名を選ぶ**（段階 115。WordPress: いいえ）
+  - MySQL: 式の別名（z + 0）。HeimDB: 先の別名
+  - 再現: `SELECT y AS q, z + 0 AS Q ... HAVING q > 0`
+  - 補足: 段階 116 の 6d398b7 が「表の列でない SELECT の項を列の項より先に足す」ようにしたので直った可能性がある（不確か。直ったという記述はない）
+- **SELECT の列の副問い合わせの集計の中で外の別名を使うと 1054**（段階 115。WordPress: いいえ）
+  - MySQL: 行を返す。HeimDB: 1054
+  - 再現: `SELECT y AS w, (SELECT SUM(w) FROM xy2)`
+- **CREATE TABLE ... SELECT の IFNULL と COALESCE の列が NULL を許す LONGTEXT**（段階 116。WordPress: いいえ）
+  - MySQL: NOT NULL の VARCHAR(n)。HeimDB: NULL を許す LONGTEXT
+  - 再現: `CREATE TABLE ... SELECT IFNULL(...)`
+- **`IN (SELECT ... LIMIT n)` が通る**（段階 116。WordPress: いいえ）
+  - MySQL: 1235。HeimDB: 実行する
+  - 再現: `IN (SELECT ... LIMIT n)`
+  - 補足: 段階 115 で見つかり、段階 116 の計画のレビューで記録だけにした
+- **HAVING の副問い合わせで外の列を集計する形**（段階 116。WordPress: いいえ）
+  - MySQL: 外で集計する（段階 115 の記録では 1242）。HeimDB: 副問い合わせの中で集計する
+  - 再現: `SELECT SUM(x) FROM t6 ... HAVING ...`
+  - 補足: 段階 115 で見つかった前からの違い
+- **HAVING の集計の引数の別名が外の表の列でもあると 1105**（段階 116。WordPress: いいえ）
+  - MySQL: 別名。HeimDB: 1105（段階 116 の前は外の列）
+  - 再現: `EXISTS (SELECT k, v AS x FROM t6 GROUP BY k HAVING SUM(x) > 25)`
+  - 補足: 段階 115 で見つかった前からの違い
+- **行の値の IN 副問い合わせで NULL が一致する**（段階 116。WordPress: いいえ）
+  - MySQL: NULL。HeimDB: 一致する
+  - 補足: 段階 116 の 484901a で行の = と値の並びの IN は直した。副問い合わせの形が記録に残る（不確か）
+- **`> ALL` と `> ANY` の違い**（段階 116。WordPress: いいえ）
+  - 補足: 中身は記されていない（不確か）
+- **知らない表の修飾子の列の誤りの番号**（段階 116。WordPress: いいえ）
+  - MySQL: 1054。HeimDB: 1146
+  - 再現: `SELECT nope.x ...; HAVING t6.v`
+  - 補足: 上流のテストの多くが ErrTableNotFound を期待する
+- **SELECT DISTINCT で SELECT にない列の ORDER BY が通る**（段階 116。WordPress: いいえ）
+  - MySQL: 3065。HeimDB: 実行する
+  - 再現: `SELECT DISTINCT -i FROM t ORDER BY id`
+- **ALTER TABLE t FORCE と ALTER TABLE t ENGINE=InnoDB が表を作り直さない**（段階 117。WordPress: いいえ）
+  - MySQL: 表と索引を作り直す。HeimDB: 何もしない（定義も行も変えない）
+  - 補足: 段階 117 より前に作った DECIMAL などの索引のエントリは、FORCE ではなく `CALL heimdb_rebuild_indexes()` で作る（表を書き直すほかの ALTER TABLE でも作られる）
+- **単項の `~` が 1105**（段階 119 のレビュー。WordPress: いいえ）
+  - MySQL: ビットの反転。HeimDB: `unsupported feature: unary operator: ~`
+  - 再現: `SELECT ~v FROM t`
+
+## 誤りの番号と警告
+
+- **選ぶ列の SLEEP を KILL QUERY で止めると、1317 でなく 1105 context canceled になる**（段階 124。WordPress: いいえ（推定））
+  - HeimDB: `SELECT i, SLEEP(0.01) FROM r` を KILL QUERY で止めると `1105 context canceled`（実行時間の上限なら 3024、ロックの待ちの KILL QUERY は 1317）
+  - 補足: 段階 123 のバージョンも同じ（前からの違い）。SLEEP が context の取り消しをそのまま返し、選ぶ列の式の評価のエラーは取り消しの理由に置き換えない。MySQL の番号は確かめていない
+- **FLOAT(7,2) UNSIGNED の DEFAULT -1 が 1105**（段階 120 の 1 回目のレビュー。WordPress: いいえ）
+  - MySQL: 1067 Invalid default value for 'f'。HeimDB: 1105
+- **非 STRICT で DOUBLE(17,6) に '' を入れると警告 1265 を出さない**（段階 120 の 1 回目のレビュー。WordPress: いいえ）
+  - MySQL: 0 と警告 1265。HeimDB: 0 で警告なし
+  - 補足: 前からの違い（桁のない DOUBLE も同じ）
+- **latin1 の表の接頭辞の索引が、utf8mb4 への変換の案内でなく索引の誤りで拒否される**（段階 110。WordPress: いいえ）
+  - 補足: 段階 110 で PR と関係なく見つけた違い。後の段階で直した記録は見つからない。WordPress は utf8mb4 の表を作るので当たらない（推定）
+- **存在しない時間帯の SET time_zone を受け付ける**（段階 110。WordPress: いいえ）
+  - MySQL: SET の時点で 1298 Unknown or incorrect time zone。HeimDB: 受け付け、後の SELECT NOW() が 1105 invalid time zone
+  - 再現: `SET time_zone = 'Not/AZone'`
+  - 補足: 上流の #3118（段階 110 で見送った。WordPress が出さない文）
+- **GLOBAL だけの変数を @@SESSION で読める**（段階 110。WordPress: いいえ）
+  - MySQL: 1238。HeimDB: 2
+  - 再現: `SELECT @@SESSION.innodb_autoinc_lock_mode`
+  - 補足: 上流の #3618（段階 110 で見送った。WordPress が出さない文）
+- **型の違う列の組の行の値の IN 副問い合わせが 1366**（段階 112。WordPress: いいえ）
+  - HeimDB: 1366
+  - 再現: `(i, s) IN (SELECT s, i ...)`
+  - 補足: 段階 114 に回したが、後の段階で直した記録は見つからない
+- **日時の区切りの記号と空白についての注意 4095、4096 を出さない**（段階 114。WordPress: いいえ）
+  - MySQL: 注意 4095、4096。HeimDB: 出さない
+  - 補足: 推定: 結果の値は同じ
+- **日時の列と日時として読めない文字列の = の誤りの番号**（段階 114。WordPress: いいえ）
+  - MySQL: 1525。HeimDB: 索引があれば 1105、なければゼロの日時として比べる
+  - 再現: `d = 'garbage'`
+  - 補足: 段階 116 で IN の値は直した（`d IN ('garbage', ...)`）が、1 つの値の = は記録のまま（engine.md 147、156 の行、484901a）
+- **STRICT で整数の列に '5abc' を入れると 1366**（段階 114。WordPress: いいえ）
+  - MySQL: 1265。HeimDB: 1366
+  - 補足: 段階 116 の誤りの番号の直し（484901a）に '5abc' は出てこないので残っていると見た（不確か）。WordPress は STRICT を使わない（推定）
+- **1054 の SQLSTATE と文言が MySQL と違う**（段階 115。WordPress: いいえ）
+  - HeimDB: SQLSTATE HY000、文言も違う
+  - 補足: 段階 116 で直したという記述は見つからない。MySQL の値は記録にない
+- **`d > '123.45x'` の警告 1292 が行ごとに出る**（段階 115。WordPress: いいえ）
+  - HeimDB: 行ごとに出る
+  - 再現: `d > '123.45x'`
+  - 補足: MySQL の出し方は記されていない（推定で 1 回）
+- **日付の値を真偽や数にすると警告 1292 が出る**（段階 116。WordPress: いいえ）
+  - MySQL: 出さない。HeimDB: 出す（DATE の値が文字列のため）
+  - 再現: `IF(DATE('2024-01-01'), 1, 0)`
+  - 補足: 答えは合う。`IFNULL(dd, 0) + 0` は段階 119 で MySQL と同じく出さなくなった（IFNULL と COALESCE の値は警告なしで数にする）
+- **'1e400' の GREATEST の値**（段階 116。段階 119 で確かめ直した。WordPress: いいえ）
+  - MySQL: GREATEST('1e400', 1) は '1e400'（警告なし）。HeimDB: 1
+  - 再現: `GREATEST('1e400', 1)`
+  - 補足: 「GREATEST、LEAST の数と文字列の混ざった引数」（数）と同じ違い。SQRT('1e400') は段階 119 で MySQL と同じ 1.3407807929942596e154 と警告 1292 になった（前は 1366）
+- **'1e400' を DECIMAL と DOUBLE の列に入れたときの誤りの番号が逆**（段階 116。WordPress: いいえ）
+  - MySQL: DECIMAL は 1366、DOUBLE は 1264。HeimDB: DECIMAL は 1264、DOUBLE は 1366
+  - 補足: 段階 114 から回した「DECIMAL への '1e400'」を含む
+- **HAVING と GROUP BY の名前が曖昧なときの警告 1052 を出さない**（段階 116。WordPress: いいえ）
+  - MySQL: 警告 1052。HeimDB: 出さない
+- **VARCHAR の列の値を数にするときの警告 1292 の規則が MySQL と違う**（段階 118。WordPress: いいえ）
+  - MySQL: '1700000000:1'、'12:1'、'1 2'、'1,5'、'5 x' では出さず、'abc'、'12abc'、'1.0e400' では出す。HeimDB: 数として読めなければいつも出す
+  - 再現: `SELECT vc + 0 FROM t; SHOW WARNINGS`（vc は VARCHAR）
+  - 補足: 値は同じ。WordPress の meta_value と option_value は LONGTEXT（推定）
+- **集計とウィンドウ関数を混ぜた文の 1140 と、その文言**（段階 118。WordPress: いいえ）
+  - MySQL: `SELECT STDDEV(v), SUM(v) OVER () FROM t` と `SELECT id, SUM(v + 0) OVER (), MAX(v + 0) FROM t GROUP BY id` は値（前者は WordPress の sql_mode で、後者は ONLY_FULL_GROUP_BY のある既定の sql_mode で確かめた）。HeimDB: 1140 で、文言が `expression #%!d(MISSING) ... '%!s(MISSING)'`
+  - 補足: VARIANCE の警告の文（`%!s(float64=0)`）は段階 119 で直した
+- **TEXT の列と文字列の定数を枝に持つ IF と CASE の値を数にすると、TEXT の列の枝でも警告 1292 を出す**（段階 119。WordPress: いいえ）
+  - MySQL: 選んだ枝で決める（`IF(id > 1, v, 'x') + 0` は 'x' を選んだ行だけ出す。`IF(id > 1, v, vc) + 0` は vc を選んだ行だけ）。HeimDB: 枝のどれかが TEXT の列でない文字列なら、どの行でも出す
+  - 補足: 値は同じ。段階 119 は、結果になりうる文字列の枝がすべて TEXT の列（か IFNULL などの警告を出さない式）の IF、CASE、NULLIF だけを出さないようにした（`IsTextColumn`。枝を選ぶ前に決める）
+- **TEXT の列の副問い合わせ `(SELECT v) + 0` で警告 1292 を出す**（段階 119。WordPress: いいえ）
+  - MySQL: 出さない。HeimDB: 出す
+  - 補足: 値は同じ。`IsTextColumn` は副問い合わせを見ない
+- **派生表と UNION の文字列の定数の列を、TEXT の列として警告 1292 を出さない**（段階 119。WordPress: いいえ）
+  - MySQL: `SELECT VARIANCE(x) FROM (SELECT 'abc' x UNION ALL SELECT '12abc' UNION ALL SELECT '') q` は 'abc' と '12abc' で 4 つ出す（列は VARCHAR）。HeimDB: 出さない（列の型が LONGTEXT）
+  - 補足: 値は同じ（32）
+- **定数の IFNULL と COALESCE の値を数にするときの警告**（段階 119。WordPress: いいえ）
+  - MySQL: `IFNULL('12x', 0) + 0` は出す（`COALESCE('abc') + 0` と `IFNULL(NULL, 'abc') + 0` は出さない）。HeimDB: どれも出さない
+  - 補足: 値は同じ。段階 119 で、列を引数にした IFNULL と COALESCE は MySQL と同じく引数によらず出さないようにした。定数だけの形は MySQL が前もって畳むかで違うと見られる（確かめていない）
+- **VARCHAR の列と定数のビット演算の警告の型の名前**（段階 119。WordPress: いいえ）
+  - MySQL: `'x' | 0` は `Truncated incorrect INTEGER value: 'x'`。HeimDB: `Truncated incorrect DOUBLE value: 'x'`
+  - 補足: TEXT の列の警告は段階 119 で MySQL と同じく出さなくなった
+- **動く枠のウィンドウ関数の VARCHAR の列の警告の数**（段階 119。WordPress: いいえ）
+  - MySQL: `VAR_SAMP(vc) OVER (ORDER BY id)` は枠ごとに値を読み直し、行ごとに同じ警告を重ねて出す（4 行で 7 つ）。HeimDB: 値ごとに 1 回（2 つ）
+  - 補足: 値は同じ。`OVER ()` は MySQL も 1 回
+- **ゼロの日付と FROM_UNIXTIME の警告の文の細部**（段階 118 のレビュー。WordPress: いいえ）
+  - MySQL: TO_DAYS(0.0) は `'0.0'`、TO_DAYS(false) は `'0'`。FROM_UNIXTIME('9223372036854775807') と '18446744073709551616' は 1292 DECIMAL、'1e1000' と '-1e1000' は 2 つ（'1' と '999…'）。FROM_UNIXTIME(x'31') は 1970-01-01 00:00:49。HeimDB: `'0'`、`'false'`、警告なし、1 つ、00:00:01.000000
+  - 補足: 値は FROM_UNIXTIME(x'31') のほかは同じ
+- **JSON の値を DOUBLE にするときの警告 3156 の文に行の番号がない**（段階 119 のレビュー。WordPress: いいえ）
+  - MySQL: `Invalid JSON value for CAST to DOUBLE from column j at row 2`。HeimDB: `Invalid JSON value for CAST to DOUBLE from column j`
+  - 補足: 段階 119 のレビューで、SIGN、POW、SQRT などの JSON の引数を値で読み、警告 3156 を出すようにした（数と順は MySQL と同じ）。HeimDB は行の番号を持たない
+
+## そのほか
+
+- **最初の 128 行を送った後に行のエラーが起きると、接続が閉じる**（段階 124。WordPress: いいえ（推定））
+  - MySQL: 送った行の後にエラーのパケットを返し、接続は使える。HeimDB: vitess が「Error in the middle of a stream」をログに出して接続を閉じる（go-sql-driver は `invalid connection`）。最初の組を送る前のエラーは、エラーを返して接続を保つ
+  - 再現: 500 行目の値が JSON でない表で `SELECT i, JSON_EXTRACT(v, '$.a') FROM r ORDER BY i`
+  - 補足: 段階 123 のバージョンも同じ（前からの違い。vitess の結果の送り方）。WordPress は実行中に行のエラーになる文をほとんど出さない
+- **INET_NTOA が 2^31 以上の値を誤る**（段階 110。WordPress: いいえ）
+  - MySQL: 192.168.1.1、255.255.255.255、203.0.113.9。HeimDB: すべて 127.255.255.255
+  - 再現: `INET_NTOA(3232235777)`
+  - 補足: 上流の #3770（段階 110 で見送った。WordPress が出さない文）
+- **段階 111 より前に作るのに失敗した、' を含む ENUM の表を DROP できない**（段階 111。WordPress: いいえ）
+  - 補足: 段階 111（#2995）で新しくは作られなくなったので、残った表を消せるようにすることは範囲の外にした
+- **wp_postmeta の post_id IN (SELECT ID FROM wp_posts ...) が wp_postmeta 全体を読むハッシュ結合になる**（段階 112。WordPress: いいえ）
+  - HeimDB: 記事 3,000 件で 14 ms
+  - 補足: 性能だけで、結果は同じ。段階 118 で「いいえ」に直した: WordPress 本体のソースにこの形はない。WooCommerce の近い形 `post_id IN (SELECT post_id FROM wp_postmeta WHERE meta_key = ... AND post_id IN (...))` は meta_key の索引で引かれ 0.5 ms
+- **重複を持つ水準 0 の一意の索引を含む時点への heimdb_restore が 1105 で拒まれる**（段階 117。WordPress: いいえ）
+  - HeimDB: `1105 HeimDB: restore old_udup: duplicate unique key given: [1.5]`
+  - 補足: 0.2.38 以前の CREATE UNIQUE INDEX が既存の行の重複を確かめなかった索引だけが当たる。段階 116 の HeimDB も同じ
+- **0.2.38 以前に作った DECIMAL、FLOAT、DOUBLE、ENUM の列の索引と、0.2.40 以前に作った SET と BIT の列の索引は、作り直すまでエントリを持たず、引くと表をすべて読む**（段階 117。段階 120 で SET と BIT を足した。WordPress: はい）
+  - MySQL: 索引で引く。HeimDB: 全走査して絞る。結合は LookupJoin で行の数の 2 乗の時間（4,000 行どうしで約 7 秒。作り直すと 9 ms）
+  - 補足: 結果は同じで性能の違い。WooCommerce の wc_product_meta_lookup の min_max_price と stock_quantity に当たる。新しい表と索引は段階 117 からエントリを持つ。前からの索引は、段階 121 から、本番が起動の後に main のものを裏で 1 つずつ作り直す（`-rebuild-indexes`。docs/operations.md の「古いインデックスの作り直し」）。ブランチのものと、裏の処理が飛ばしたもの（重複のある一意索引、500 万行（一意は 100 万行）を超えるもの、書き込みのロックを 5 秒で取れなかったもの）は、利用者が `CALL heimdb_rebuild_indexes()` で作り直す（起動時にログで知らせる。docs/procedures.md）。作り直すまでの一意索引は、0.2.38 以前の `CREATE UNIQUE INDEX` が重複を確かめずに作ったので、重複した行を持ちうる（作り直しが 1062 で止まる）
+- **過去の時点からのブランチの作成で、その時点がインデックスの作成の途中なら、ブランチは作りかけのエントリを見る**（段階 121。WordPress: いいえ）
+  - HeimDB: `heimdb_branch_create('b', 'main', '<時刻>')` の時刻が、何回かに分けてコミットするインデックスの作成（`CREATE INDEX`、表を書き直す ALTER、`heimdb_rebuild_indexes`、起動の後の作り直し）の途中だと、ブランチは前の定義のまま親の作りかけのエントリを見る。そのブランチで作り直すと、ブランチで消した行の親のエントリが残る
+  - 補足: 前からの問題。段階 121 で、今の時点からの作成は親の書き込みのロックを取るようにした（作成の途中に分かれない）。過去の時点はロックでは防げない。ホスティング側は今の時点から作る。過去の時点の作成の途中かを、作成の途中の印の時刻で確かめて拒否するのは、次の段階の候補
+- **ブランチの作成が、親の書き込み中のトランザクションを待つ**（段階 121。WordPress: いいえ）
+  - HeimDB: 親の書き込みのロックを取ってから作るので、親で長いトランザクションが開いていれば `-lock-wait-timeout` まで待ち、過ぎると 1205
+  - 補足: 設計どおり（上の作りかけのエントリを見ないため）。呼んだ接続のトランザクションが親のロックを持っていれば待たない。作成は親のロックを持ったままブランチの操作の排他（`branchOpMu`）を取るので、別のブランチの `heimdb_branch_drop` がそのブランチのトランザクションを待つ間（最大 2 秒、過ぎると drop が拒否される）は、作成とともに親への書き込みも待つ（段階 121 の実装のレビュー。デッドロックにはならない）
+- **上げた後、Wordfence と MainWP Child が FLOAT と DOUBLE の列を (M,D) の型にする ALTER を 1 回出す**（段階 120。WordPress: プラグインだけ）
+  - HeimDB: 0.2.40 以前に作った表の FLOAT(10,7)、DOUBLE(17,6) UNSIGNED、FLOAT(11,4) の列は、上げた後も `float` と `double` のまま（バージョン 7 の定義のまま読む）。MainWP Child の dbDelta や Wordfence のバージョンアップの処理が DESCRIBE の型と定義の違いを見て `ALTER TABLE ... CHANGE COLUMN` を 1 回出し、表を書き直す（`wfHits` などの大きな表では時間がかかる）。その後は MySQL と同じく ALTER を出さない
+  - 補足: 運用の注意（設計どおり）。その ALTER の後、ALTER より前に分かれたブランチへの `heimdb_branch_sync` は表の定義の違いで拒否される（`sync.go` の definitions differ。前からの仕様）。マージは列の型の変更の経路（coldiff）に乗る

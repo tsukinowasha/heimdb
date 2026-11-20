@@ -1,0 +1,3044 @@
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE wp_termmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	term_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY term_id (term_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_terms (
+ term_id bigint(20) unsigned NOT NULL auto_increment,
+ name varchar(200) NOT NULL default '',
+ slug varchar(200) NOT NULL default '',
+ term_group bigint(10) NOT NULL default 0,
+ PRIMARY KEY  (term_id),
+ KEY slug (slug(191)),
+ KEY name (name(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_term_taxonomy (
+ term_taxonomy_id bigint(20) unsigned NOT NULL auto_increment,
+ term_id bigint(20) unsigned NOT NULL default 0,
+ taxonomy varchar(32) NOT NULL default '',
+ description longtext NOT NULL,
+ parent bigint(20) unsigned NOT NULL default 0,
+ count bigint(20) NOT NULL default 0,
+ PRIMARY KEY  (term_taxonomy_id),
+ UNIQUE KEY term_id_taxonomy (term_id,taxonomy),
+ KEY taxonomy (taxonomy)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_term_relationships (
+ object_id bigint(20) unsigned NOT NULL default 0,
+ term_taxonomy_id bigint(20) unsigned NOT NULL default 0,
+ term_order int(11) NOT NULL default 0,
+ PRIMARY KEY  (object_id,term_taxonomy_id),
+ KEY term_taxonomy_id (term_taxonomy_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_commentmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	comment_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY comment_id (comment_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_comments (
+	comment_ID bigint(20) unsigned NOT NULL auto_increment,
+	comment_post_ID bigint(20) unsigned NOT NULL default '0',
+	comment_author tinytext NOT NULL,
+	comment_author_email varchar(100) NOT NULL default '',
+	comment_author_url varchar(200) NOT NULL default '',
+	comment_author_IP varchar(100) NOT NULL default '',
+	comment_date datetime NOT NULL default '0000-00-00 00:00:00',
+	comment_date_gmt datetime NOT NULL default '0000-00-00 00:00:00',
+	comment_content text NOT NULL,
+	comment_karma int(11) NOT NULL default '0',
+	comment_approved varchar(20) NOT NULL default '1',
+	comment_agent varchar(255) NOT NULL default '',
+	comment_type varchar(20) NOT NULL default 'comment',
+	comment_parent bigint(20) unsigned NOT NULL default '0',
+	user_id bigint(20) unsigned NOT NULL default '0',
+	PRIMARY KEY  (comment_ID),
+	KEY comment_post_ID (comment_post_ID),
+	KEY comment_approved_date_gmt (comment_approved,comment_date_gmt),
+	KEY comment_date_gmt (comment_date_gmt),
+	KEY comment_parent (comment_parent),
+	KEY comment_author_email (comment_author_email(10))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_links (
+	link_id bigint(20) unsigned NOT NULL auto_increment,
+	link_url varchar(255) NOT NULL default '',
+	link_name varchar(255) NOT NULL default '',
+	link_image varchar(255) NOT NULL default '',
+	link_target varchar(25) NOT NULL default '',
+	link_description varchar(255) NOT NULL default '',
+	link_visible varchar(20) NOT NULL default 'Y',
+	link_owner bigint(20) unsigned NOT NULL default '1',
+	link_rating int(11) NOT NULL default '0',
+	link_updated datetime NOT NULL default '0000-00-00 00:00:00',
+	link_rel varchar(255) NOT NULL default '',
+	link_notes mediumtext NOT NULL,
+	link_rss varchar(255) NOT NULL default '',
+	PRIMARY KEY  (link_id),
+	KEY link_visible (link_visible)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_options (
+	option_id bigint(20) unsigned NOT NULL auto_increment,
+	option_name varchar(191) NOT NULL default '',
+	option_value longtext NOT NULL,
+	autoload varchar(20) NOT NULL default 'yes',
+	PRIMARY KEY  (option_id),
+	UNIQUE KEY option_name (option_name),
+	KEY autoload (autoload)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_postmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	post_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY post_id (post_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_posts (
+	ID bigint(20) unsigned NOT NULL auto_increment,
+	post_author bigint(20) unsigned NOT NULL default '0',
+	post_date datetime NOT NULL default '0000-00-00 00:00:00',
+	post_date_gmt datetime NOT NULL default '0000-00-00 00:00:00',
+	post_content longtext NOT NULL,
+	post_title text NOT NULL,
+	post_excerpt text NOT NULL,
+	post_status varchar(20) NOT NULL default 'publish',
+	comment_status varchar(20) NOT NULL default 'open',
+	ping_status varchar(20) NOT NULL default 'open',
+	post_password varchar(255) NOT NULL default '',
+	post_name varchar(200) NOT NULL default '',
+	to_ping text NOT NULL,
+	pinged text NOT NULL,
+	post_modified datetime NOT NULL default '0000-00-00 00:00:00',
+	post_modified_gmt datetime NOT NULL default '0000-00-00 00:00:00',
+	post_content_filtered longtext NOT NULL,
+	post_parent bigint(20) unsigned NOT NULL default '0',
+	guid varchar(255) NOT NULL default '',
+	menu_order int(11) NOT NULL default '0',
+	post_type varchar(20) NOT NULL default 'post',
+	post_mime_type varchar(100) NOT NULL default '',
+	comment_count bigint(20) NOT NULL default '0',
+	PRIMARY KEY  (ID),
+	KEY post_name (post_name(191)),
+	KEY type_status_date (post_type,post_status,post_date,ID),
+	KEY post_parent (post_parent),
+	KEY post_author (post_author),
+	KEY type_status_author (post_type,post_status,post_author)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_users (
+	ID bigint(20) unsigned NOT NULL auto_increment,
+	user_login varchar(60) NOT NULL default '',
+	user_pass varchar(255) NOT NULL default '',
+	user_nicename varchar(50) NOT NULL default '',
+	user_email varchar(100) NOT NULL default '',
+	user_url varchar(100) NOT NULL default '',
+	user_registered datetime NOT NULL default '0000-00-00 00:00:00',
+	user_activation_key varchar(255) NOT NULL default '',
+	user_status int(11) NOT NULL default '0',
+	display_name varchar(250) NOT NULL default '',
+	PRIMARY KEY  (ID),
+	KEY user_login_key (user_login),
+	KEY user_nicename (user_nicename),
+	KEY user_email (user_email)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_usermeta (
+	umeta_id bigint(20) unsigned NOT NULL auto_increment,
+	user_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (umeta_id),
+	KEY user_id (user_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_blogs (
+	blog_id bigint(20) unsigned NOT NULL auto_increment,
+	site_id bigint(20) unsigned NOT NULL default '0',
+	domain varchar(200) NOT NULL default '',
+	path varchar(100) NOT NULL default '',
+	registered datetime NOT NULL default '0000-00-00 00:00:00',
+	last_updated datetime NOT NULL default '0000-00-00 00:00:00',
+	public tinyint(2) NOT NULL default '1',
+	archived tinyint(2) NOT NULL default '0',
+	mature tinyint(2) NOT NULL default '0',
+	spam tinyint(2) NOT NULL default '0',
+	deleted tinyint(2) NOT NULL default '0',
+	lang_id int(11) NOT NULL default '0',
+	PRIMARY KEY  (blog_id),
+	KEY domain (domain(50),path(5)),
+	KEY lang_id (lang_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_blogmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	blog_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY meta_key (meta_key(191)),
+	KEY blog_id (blog_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_registration_log (
+	ID bigint(20) unsigned NOT NULL auto_increment,
+	email varchar(255) NOT NULL default '',
+	IP varchar(30) NOT NULL default '',
+	blog_id bigint(20) unsigned NOT NULL default '0',
+	date_registered datetime NOT NULL default '0000-00-00 00:00:00',
+	PRIMARY KEY  (ID),
+	KEY IP (IP)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_site (
+	id bigint(20) unsigned NOT NULL auto_increment,
+	domain varchar(200) NOT NULL default '',
+	path varchar(100) NOT NULL default '',
+	PRIMARY KEY  (id),
+	KEY domain (domain(140),path(51))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_sitemeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	site_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY meta_key (meta_key(191)),
+	KEY site_id (site_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_signups (
+	signup_id bigint(20) unsigned NOT NULL auto_increment,
+	domain varchar(200) NOT NULL default '',
+	path varchar(100) NOT NULL default '',
+	title longtext NOT NULL,
+	user_login varchar(60) NOT NULL default '',
+	user_email varchar(100) NOT NULL default '',
+	registered datetime NOT NULL default '0000-00-00 00:00:00',
+	activated datetime NOT NULL default '0000-00-00 00:00:00',
+	active tinyint(1) NOT NULL default '0',
+	activation_key varchar(50) NOT NULL default '',
+	meta longtext,
+	PRIMARY KEY  (signup_id),
+	KEY activation_key (activation_key),
+	KEY user_email (user_email),
+	KEY user_login_email (user_login,user_email),
+	KEY domain_path (domain(140),path(51))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- INSERT INTO wp_posts (post_author, post_date, post_content, post_title, post_excerpt, post_status, post_name, to_ping, pinged, post_content_filtered, post_type) WITH RECURSIVE n (i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 600) SELECT 1, '2024-01-01 00:00:00' + INTERVAL i * 7 MINUTE, 'c', CONCAT('News ', i), '', 'publish', CONCAT('news-', i), '', '', '', 'news' FROM n ORDER BY i
+ok affected=600 insert_id=1
+-- INSERT INTO wp_postmeta (post_id, meta_key, meta_value) WITH RECURSIVE n (i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 600), k (j) AS (SELECT 0 UNION ALL SELECT j + 1 FROM k WHERE j < 15) SELECT i, ELT(j + 1, 'category', '_category', 'priority', '_priority', 'event_date', '_event_date', 'featured', '_featured', 'summary', '_summary', 'source', '_source', '_edit_lock', '_edit_last', '_thumbnail_id', '_wp_old_slug'), ELT(j + 1, CONCAT('cat', (i * 7) % 10), 'field_category', (i * 37) % 1000, 'field_priority', DATE_FORMAT('2024-01-01' + INTERVAL (i * 13) % 730 DAY, '%Y%m%d'), 'field_event_date', IF(i % 9 = 0, '1', '0'), 'field_featured', CONCAT('Summary ', i), 'field_summary', 'wire', 'field_source', '1700000000:1', '1', '0', CONCAT('news-old-', i)) FROM n, k ORDER BY i, j
+ok affected=9600 insert_id=1
+-- ANALYZE TABLE wp_posts, wp_postmeta
+ok affected=0 insert_id=0
+-- INSERT INTO wp_posts (ID, post_author, post_date, post_content, post_title, post_excerpt, post_status, post_name, to_ping, pinged, post_content_filtered, post_type) VALUES (601, 1, '2024-01-01 01:10:00', 'c', 'Same 601', '', 'publish', 'same-601', '', '', '', 'news')
+ok affected=1 insert_id=601
+-- INSERT INTO wp_posts (ID, post_author, post_date, post_content, post_title, post_excerpt, post_status, post_name, to_ping, pinged, post_content_filtered, post_type) VALUES (602, 1, '2024-01-01 01:10:00', 'c', 'Same 602', '', 'publish', 'same-602', '', '', '', 'news')
+ok affected=1 insert_id=602
+-- INSERT INTO wp_posts (ID, post_author, post_date, post_content, post_title, post_excerpt, post_status, post_name, to_ping, pinged, post_content_filtered, post_type) VALUES (603, 1, '2024-01-01 01:10:00', 'c', 'Same 603', '', 'publish', 'same-603', '', '', '', 'news')
+ok affected=1 insert_id=603
+-- INSERT INTO wp_posts (ID, post_author, post_date, post_content, post_title, post_excerpt, post_status, post_name, to_ping, pinged, post_content_filtered, post_type) VALUES (604, 1, '2024-01-01 01:10:00', 'c', 'Same 604', '', 'publish', 'same-604', '', '', '', 'news')
+ok affected=1 insert_id=604
+-- INSERT INTO wp_posts (ID, post_author, post_date, post_content, post_title, post_excerpt, post_status, post_name, to_ping, pinged, post_content_filtered, post_type) VALUES (605, 1, '2024-01-01 01:10:00', 'c', 'Same 605', '', 'publish', 'same-605', '', '', '', 'news')
+ok affected=1 insert_id=605
+-- INSERT INTO wp_postmeta (meta_id, post_id, meta_key, meta_value) VALUES (20001, 601, 'event_date', '')
+ok affected=1 insert_id=20001
+-- INSERT INTO wp_postmeta (meta_id, post_id, meta_key, meta_value) VALUES (20002, 602, 'event_date', '20250101 ')
+ok affected=1 insert_id=20002
+-- INSERT INTO wp_postmeta (meta_id, post_id, meta_key, meta_value) VALUES (20003, 603, 'event_date', NULL)
+ok affected=1 insert_id=20003
+-- INSERT INTO wp_postmeta (meta_id, post_id, meta_key, meta_value) VALUES (20004, 604, 'event_date', '２０２５０２０１')
+ok affected=1 insert_id=20004
+-- INSERT INTO wp_postmeta (meta_id, post_id, meta_key, meta_value) VALUES (20005, 605, 'event_date', '20250331zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz')
+ok affected=1 insert_id=20005
+-- INSERT INTO wp_postmeta (meta_id, post_id, meta_key, meta_value) VALUES (20006, 601, 'event_date', '20250201zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz')
+ok affected=1 insert_id=20006
+-- INSERT INTO wp_postmeta (meta_id, post_id, meta_key, meta_value) VALUES (20007, 602, 'event_date', '20250331')
+ok affected=1 insert_id=20007
+-- INSERT INTO wp_postmeta (meta_id, post_id, meta_key, meta_value) VALUES (20008, 601, 'category', 'Cat3')
+ok affected=1 insert_id=20008
+-- INSERT INTO wp_postmeta (meta_id, post_id, meta_key, meta_value) VALUES (20009, 602, 'category', 'cat3 ')
+ok affected=1 insert_id=20009
+-- INSERT INTO wp_postmeta (meta_id, post_id, meta_key, meta_value) VALUES (20010, 603, 'category', 'cat3')
+ok affected=1 insert_id=20010
+-- INSERT INTO wp_postmeta (meta_id, post_id, meta_key, meta_value) VALUES (20011, 604, 'featured', '1')
+ok affected=1 insert_id=20011
+-- INSERT INTO wp_postmeta (meta_id, post_id, meta_key, meta_value) VALUES (20012, 603, 'featured', '1')
+ok affected=1 insert_id=20012
+-- ANALYZE TABLE wp_posts, wp_postmeta
+ok affected=0 insert_id=0
+-- SELECT wp_posts.ID, wp_posts.post_date FROM wp_posts WHERE 1=1 AND wp_posts.ID IN (5,10,601,602,603,300,200,100,50,9999) AND wp_posts.post_type = 'news' AND ((wp_posts.post_status = 'publish')) ORDER BY wp_posts.post_date DESC
+300 | 2024-01-02 11:00:00
+200 | 2024-01-01 23:20:00
+100 | 2024-01-01 11:40:00
+50 | 2024-01-01 05:50:00
+10 | 2024-01-01 01:10:00
+601 | 2024-01-01 01:10:00
+602 | 2024-01-01 01:10:00
+603 | 2024-01-01 01:10:00
+5 | 2024-01-01 00:35:00
+
+-- SELECT SQL_CALC_FOUND_ROWS wp_posts.ID FROM wp_posts WHERE 1=1 AND wp_posts.ID IN (5,10,601,602,603,300,200,100,50) AND wp_posts.post_type = 'news' AND ((wp_posts.post_status = 'publish')) ORDER BY wp_posts.post_date DESC LIMIT 0, 5
+300
+200
+100
+50
+10
+
+-- SELECT FOUND_ROWS()
+9
+
+-- SELECT wp_posts.ID FROM wp_posts WHERE 1=1 AND wp_posts.ID IN (5,10,601,602,603) AND wp_posts.post_type = 'news' AND ((wp_posts.post_status = 'publish' OR wp_posts.post_status = 'private')) ORDER BY wp_posts.post_date DESC
+10
+601
+602
+603
+5
+
+-- SELECT SQL_CALC_FOUND_ROWS wp_posts.ID FROM wp_posts INNER JOIN wp_postmeta ON ( wp_posts.ID = wp_postmeta.post_id ) WHERE 1=1 AND ( ( wp_postmeta.meta_key = 'event_date' AND wp_postmeta.meta_value BETWEEN '20250101' AND '20250331' ) ) AND wp_posts.post_type = 'news' AND ((wp_posts.post_status = 'publish')) GROUP BY wp_posts.ID ORDER BY CAST(wp_postmeta.meta_value AS CHAR) ASC, wp_posts.ID DESC LIMIT 0, 20
+602
+309
+253
+590
+197
+534
+141
+478
+85
+422
+29
+366
+310
+254
+591
+198
+535
+142
+479
+86
+
+-- SELECT FOUND_ROWS()
+79
+
+-- SELECT post_id, meta_value FROM wp_postmeta WHERE meta_key = 'event_date' AND meta_value BETWEEN '20250101' AND '20250331' AND post_id > 590 ORDER BY meta_id
+591 | 20250118
+592 | 20250131
+593 | 20250213
+594 | 20250226
+595 | 20250311
+596 | 20250324
+602 | 20250101 
+604 | ２０２５０２０１
+601 | 20250201zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+602 | 20250331
+
+-- SELECT COUNT(*) FROM wp_postmeta WHERE meta_key = 'event_date' AND meta_value BETWEEN '20250101' AND '20250331'
+80
+
+-- SELECT post_id, meta_value FROM wp_postmeta WHERE meta_key = 'event_date' AND meta_value >= '20250331' ORDER BY meta_id
+35 | 20250331
+36 | 20250413
+37 | 20250426
+38 | 20250509
+39 | 20250522
+40 | 20250604
+41 | 20250617
+42 | 20250630
+43 | 20250713
+44 | 20250726
+45 | 20250808
+46 | 20250821
+47 | 20250903
+48 | 20250916
+49 | 20250929
+50 | 20251012
+51 | 20251025
+52 | 20251107
+53 | 20251120
+54 | 20251203
+55 | 20251216
+56 | 20251229
+92 | 20250411
+93 | 20250424
+94 | 20250507
+95 | 20250520
+96 | 20250602
+97 | 20250615
+98 | 20250628
+99 | 20250711
+100 | 20250724
+101 | 20250806
+102 | 20250819
+103 | 20250901
+104 | 20250914
+105 | 20250927
+106 | 20251010
+107 | 20251023
+108 | 20251105
+109 | 20251118
+110 | 20251201
+111 | 20251214
+112 | 20251227
+148 | 20250409
+149 | 20250422
+150 | 20250505
+151 | 20250518
+152 | 20250531
+153 | 20250613
+154 | 20250626
+155 | 20250709
+156 | 20250722
+157 | 20250804
+158 | 20250817
+159 | 20250830
+160 | 20250912
+161 | 20250925
+162 | 20251008
+163 | 20251021
+164 | 20251103
+165 | 20251116
+166 | 20251129
+167 | 20251212
+168 | 20251225
+204 | 20250407
+205 | 20250420
+206 | 20250503
+207 | 20250516
+208 | 20250529
+209 | 20250611
+210 | 20250624
+211 | 20250707
+212 | 20250720
+213 | 20250802
+214 | 20250815
+215 | 20250828
+216 | 20250910
+217 | 20250923
+218 | 20251006
+219 | 20251019
+220 | 20251101
+221 | 20251114
+222 | 20251127
+223 | 20251210
+224 | 20251223
+260 | 20250405
+261 | 20250418
+262 | 20250501
+263 | 20250514
+264 | 20250527
+265 | 20250609
+266 | 20250622
+267 | 20250705
+268 | 20250718
+269 | 20250731
+270 | 20250813
+271 | 20250826
+272 | 20250908
+273 | 20250921
+274 | 20251004
+275 | 20251017
+276 | 20251030
+277 | 20251112
+278 | 20251125
+279 | 20251208
+280 | 20251221
+316 | 20250403
+317 | 20250416
+318 | 20250429
+319 | 20250512
+320 | 20250525
+321 | 20250607
+322 | 20250620
+323 | 20250703
+324 | 20250716
+325 | 20250729
+326 | 20250811
+327 | 20250824
+328 | 20250906
+329 | 20250919
+330 | 20251002
+331 | 20251015
+332 | 20251028
+333 | 20251110
+334 | 20251123
+335 | 20251206
+336 | 20251219
+372 | 20250401
+373 | 20250414
+374 | 20250427
+375 | 20250510
+376 | 20250523
+377 | 20250605
+378 | 20250618
+379 | 20250701
+380 | 20250714
+381 | 20250727
+382 | 20250809
+383 | 20250822
+384 | 20250904
+385 | 20250917
+386 | 20250930
+387 | 20251013
+388 | 20251026
+389 | 20251108
+390 | 20251121
+391 | 20251204
+392 | 20251217
+393 | 20251230
+429 | 20250412
+430 | 20250425
+431 | 20250508
+432 | 20250521
+433 | 20250603
+434 | 20250616
+435 | 20250629
+436 | 20250712
+437 | 20250725
+438 | 20250807
+439 | 20250820
+440 | 20250902
+441 | 20250915
+442 | 20250928
+443 | 20251011
+444 | 20251024
+445 | 20251106
+446 | 20251119
+447 | 20251202
+448 | 20251215
+449 | 20251228
+485 | 20250410
+486 | 20250423
+487 | 20250506
+488 | 20250519
+489 | 20250601
+490 | 20250614
+491 | 20250627
+492 | 20250710
+493 | 20250723
+494 | 20250805
+495 | 20250818
+496 | 20250831
+497 | 20250913
+498 | 20250926
+499 | 20251009
+500 | 20251022
+501 | 20251104
+502 | 20251117
+503 | 20251130
+504 | 20251213
+505 | 20251226
+541 | 20250408
+542 | 20250421
+543 | 20250504
+544 | 20250517
+545 | 20250530
+546 | 20250612
+547 | 20250625
+548 | 20250708
+549 | 20250721
+550 | 20250803
+551 | 20250816
+552 | 20250829
+553 | 20250911
+554 | 20250924
+555 | 20251007
+556 | 20251020
+557 | 20251102
+558 | 20251115
+559 | 20251128
+560 | 20251211
+561 | 20251224
+597 | 20250406
+598 | 20250419
+599 | 20250502
+600 | 20250515
+605 | 20250331zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+602 | 20250331
+
+-- SELECT post_id FROM wp_postmeta WHERE meta_key = 'event_date' AND meta_value > '20250331zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz' ORDER BY meta_id
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+148
+149
+150
+151
+152
+153
+154
+155
+156
+157
+158
+159
+160
+161
+162
+163
+164
+165
+166
+167
+168
+204
+205
+206
+207
+208
+209
+210
+211
+212
+213
+214
+215
+216
+217
+218
+219
+220
+221
+222
+223
+224
+260
+261
+262
+263
+264
+265
+266
+267
+268
+269
+270
+271
+272
+273
+274
+275
+276
+277
+278
+279
+280
+316
+317
+318
+319
+320
+321
+322
+323
+324
+325
+326
+327
+328
+329
+330
+331
+332
+333
+334
+335
+336
+372
+373
+374
+375
+376
+377
+378
+379
+380
+381
+382
+383
+384
+385
+386
+387
+388
+389
+390
+391
+392
+393
+429
+430
+431
+432
+433
+434
+435
+436
+437
+438
+439
+440
+441
+442
+443
+444
+445
+446
+447
+448
+449
+485
+486
+487
+488
+489
+490
+491
+492
+493
+494
+495
+496
+497
+498
+499
+500
+501
+502
+503
+504
+505
+541
+542
+543
+544
+545
+546
+547
+548
+549
+550
+551
+552
+553
+554
+555
+556
+557
+558
+559
+560
+561
+597
+598
+599
+600
+605
+
+-- SELECT post_id FROM wp_postmeta WHERE meta_key = 'event_date' AND meta_value >= '20250331zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz' ORDER BY meta_id
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+148
+149
+150
+151
+152
+153
+154
+155
+156
+157
+158
+159
+160
+161
+162
+163
+164
+165
+166
+167
+168
+204
+205
+206
+207
+208
+209
+210
+211
+212
+213
+214
+215
+216
+217
+218
+219
+220
+221
+222
+223
+224
+260
+261
+262
+263
+264
+265
+266
+267
+268
+269
+270
+271
+272
+273
+274
+275
+276
+277
+278
+279
+280
+316
+317
+318
+319
+320
+321
+322
+323
+324
+325
+326
+327
+328
+329
+330
+331
+332
+333
+334
+335
+336
+372
+373
+374
+375
+376
+377
+378
+379
+380
+381
+382
+383
+384
+385
+386
+387
+388
+389
+390
+391
+392
+393
+429
+430
+431
+432
+433
+434
+435
+436
+437
+438
+439
+440
+441
+442
+443
+444
+445
+446
+447
+448
+449
+485
+486
+487
+488
+489
+490
+491
+492
+493
+494
+495
+496
+497
+498
+499
+500
+501
+502
+503
+504
+505
+541
+542
+543
+544
+545
+546
+547
+548
+549
+550
+551
+552
+553
+554
+555
+556
+557
+558
+559
+560
+561
+597
+598
+599
+600
+605
+
+-- SELECT post_id, meta_value FROM wp_postmeta WHERE meta_key = 'event_date' AND meta_value < '2' ORDER BY meta_id
+601 | 
+
+-- SELECT post_id FROM wp_postmeta WHERE meta_key = 'event_date' AND meta_value > '２' ORDER BY meta_id
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+113
+114
+115
+116
+117
+118
+119
+120
+121
+122
+123
+124
+125
+126
+127
+128
+129
+130
+131
+132
+133
+134
+135
+136
+137
+138
+139
+140
+141
+142
+143
+144
+145
+146
+147
+148
+149
+150
+151
+152
+153
+154
+155
+156
+157
+158
+159
+160
+161
+162
+163
+164
+165
+166
+167
+168
+169
+170
+171
+172
+173
+174
+175
+176
+177
+178
+179
+180
+181
+182
+183
+184
+185
+186
+187
+188
+189
+190
+191
+192
+193
+194
+195
+196
+197
+198
+199
+200
+201
+202
+203
+204
+205
+206
+207
+208
+209
+210
+211
+212
+213
+214
+215
+216
+217
+218
+219
+220
+221
+222
+223
+224
+225
+226
+227
+228
+229
+230
+231
+232
+233
+234
+235
+236
+237
+238
+239
+240
+241
+242
+243
+244
+245
+246
+247
+248
+249
+250
+251
+252
+253
+254
+255
+256
+257
+258
+259
+260
+261
+262
+263
+264
+265
+266
+267
+268
+269
+270
+271
+272
+273
+274
+275
+276
+277
+278
+279
+280
+281
+282
+283
+284
+285
+286
+287
+288
+289
+290
+291
+292
+293
+294
+295
+296
+297
+298
+299
+300
+301
+302
+303
+304
+305
+306
+307
+308
+309
+310
+311
+312
+313
+314
+315
+316
+317
+318
+319
+320
+321
+322
+323
+324
+325
+326
+327
+328
+329
+330
+331
+332
+333
+334
+335
+336
+337
+338
+339
+340
+341
+342
+343
+344
+345
+346
+347
+348
+349
+350
+351
+352
+353
+354
+355
+356
+357
+358
+359
+360
+361
+362
+363
+364
+365
+366
+367
+368
+369
+370
+371
+372
+373
+374
+375
+376
+377
+378
+379
+380
+381
+382
+383
+384
+385
+386
+387
+388
+389
+390
+391
+392
+393
+394
+395
+396
+397
+398
+399
+400
+401
+402
+403
+404
+405
+406
+407
+408
+409
+410
+411
+412
+413
+414
+415
+416
+417
+418
+419
+420
+421
+422
+423
+424
+425
+426
+427
+428
+429
+430
+431
+432
+433
+434
+435
+436
+437
+438
+439
+440
+441
+442
+443
+444
+445
+446
+447
+448
+449
+450
+451
+452
+453
+454
+455
+456
+457
+458
+459
+460
+461
+462
+463
+464
+465
+466
+467
+468
+469
+470
+471
+472
+473
+474
+475
+476
+477
+478
+479
+480
+481
+482
+483
+484
+485
+486
+487
+488
+489
+490
+491
+492
+493
+494
+495
+496
+497
+498
+499
+500
+501
+502
+503
+504
+505
+506
+507
+508
+509
+510
+511
+512
+513
+514
+515
+516
+517
+518
+519
+520
+521
+522
+523
+524
+525
+526
+527
+528
+529
+530
+531
+532
+533
+534
+535
+536
+537
+538
+539
+540
+541
+542
+543
+544
+545
+546
+547
+548
+549
+550
+551
+552
+553
+554
+555
+556
+557
+558
+559
+560
+561
+562
+563
+564
+565
+566
+567
+568
+569
+570
+571
+572
+573
+574
+575
+576
+577
+578
+579
+580
+581
+582
+583
+584
+585
+586
+587
+588
+589
+590
+591
+592
+593
+594
+595
+596
+597
+598
+599
+600
+602
+604
+605
+601
+602
+
+-- SELECT post_id, meta_value FROM wp_postmeta WHERE meta_key = 'category' AND meta_value >= 'CAT3' AND meta_value < 'cat4' ORDER BY meta_id LIMIT 10
+9 | cat3
+19 | cat3
+29 | cat3
+39 | cat3
+49 | cat3
+59 | cat3
+69 | cat3
+79 | cat3
+89 | cat3
+99 | cat3
+
+-- SELECT COUNT(*) FROM wp_postmeta WHERE meta_key = 'category' AND meta_value >= 'CAT3' AND meta_value < 'cat4'
+63
+
+-- SELECT post_id, meta_value FROM wp_postmeta WHERE meta_key = 'category' AND meta_value >= 'CAT3' AND meta_value <= 'cat3' AND post_id IN (601, 603) ORDER BY meta_id
+601 | Cat3
+603 | cat3
+
+-- SELECT COUNT(*) FROM wp_postmeta WHERE meta_key = 'priority' AND meta_value > 990
+9
+
+-- SELECT COUNT(*) FROM wp_postmeta WHERE meta_key = 'priority' AND meta_value > '990'
+9
+
+-- SELECT COUNT(*) FROM wp_postmeta WHERE meta_key = 'event_date' AND meta_value BETWEEN 20250101 AND 20250331 AND post_id <= 600
+76
+
+-- SELECT SQL_CALC_FOUND_ROWS wp_posts.ID FROM wp_posts INNER JOIN wp_postmeta ON ( wp_posts.ID = wp_postmeta.post_id ) INNER JOIN wp_postmeta AS mt1 ON ( wp_posts.ID = mt1.post_id ) INNER JOIN wp_postmeta AS mt2 ON ( wp_posts.ID = mt2.post_id ) WHERE 1=1 AND ( ( wp_postmeta.meta_key = 'category' AND wp_postmeta.meta_value = 'cat3' ) AND ( mt1.meta_key = 'featured' AND mt1.meta_value = '1' ) AND mt2.meta_key = 'event_date' ) AND wp_posts.post_type = 'news' AND ((wp_posts.post_status = 'publish')) GROUP BY wp_posts.ID ORDER BY CAST(mt2.meta_value AS CHAR) DESC, wp_posts.ID DESC LIMIT 0, 20
+279
+549
+99
+369
+189
+459
+9
+603
+
+-- SELECT FOUND_ROWS()
+8
+
+-- ALTER TABLE wp_postmeta ADD INDEX key_value (meta_key(191), meta_value(64)), ADD INDEX post_key (post_id, meta_key(191))
+ok
+-- ANALYZE TABLE wp_postmeta
+ok affected=0 insert_id=0
+-- SELECT wp_posts.ID, wp_posts.post_date FROM wp_posts WHERE 1=1 AND wp_posts.ID IN (5,10,601,602,603,300,200,100,50,9999) AND wp_posts.post_type = 'news' AND ((wp_posts.post_status = 'publish')) ORDER BY wp_posts.post_date DESC
+300 | 2024-01-02 11:00:00
+200 | 2024-01-01 23:20:00
+100 | 2024-01-01 11:40:00
+50 | 2024-01-01 05:50:00
+10 | 2024-01-01 01:10:00
+601 | 2024-01-01 01:10:00
+602 | 2024-01-01 01:10:00
+603 | 2024-01-01 01:10:00
+5 | 2024-01-01 00:35:00
+
+-- SELECT SQL_CALC_FOUND_ROWS wp_posts.ID FROM wp_posts WHERE 1=1 AND wp_posts.ID IN (5,10,601,602,603,300,200,100,50) AND wp_posts.post_type = 'news' AND ((wp_posts.post_status = 'publish')) ORDER BY wp_posts.post_date DESC LIMIT 0, 5
+300
+200
+100
+50
+10
+
+-- SELECT FOUND_ROWS()
+9
+
+-- SELECT wp_posts.ID FROM wp_posts WHERE 1=1 AND wp_posts.ID IN (5,10,601,602,603) AND wp_posts.post_type = 'news' AND ((wp_posts.post_status = 'publish' OR wp_posts.post_status = 'private')) ORDER BY wp_posts.post_date DESC
+10
+601
+602
+603
+5
+
+-- SELECT SQL_CALC_FOUND_ROWS wp_posts.ID FROM wp_posts INNER JOIN wp_postmeta ON ( wp_posts.ID = wp_postmeta.post_id ) WHERE 1=1 AND ( ( wp_postmeta.meta_key = 'event_date' AND wp_postmeta.meta_value BETWEEN '20250101' AND '20250331' ) ) AND wp_posts.post_type = 'news' AND ((wp_posts.post_status = 'publish')) GROUP BY wp_posts.ID ORDER BY CAST(wp_postmeta.meta_value AS CHAR) ASC, wp_posts.ID DESC LIMIT 0, 20
+602
+309
+253
+590
+197
+534
+141
+478
+85
+422
+29
+366
+310
+254
+591
+198
+535
+142
+479
+86
+
+-- SELECT FOUND_ROWS()
+79
+
+-- SELECT post_id, meta_value FROM wp_postmeta WHERE meta_key = 'event_date' AND meta_value BETWEEN '20250101' AND '20250331' AND post_id > 590 ORDER BY meta_id
+591 | 20250118
+592 | 20250131
+593 | 20250213
+594 | 20250226
+595 | 20250311
+596 | 20250324
+602 | 20250101 
+604 | ２０２５０２０１
+601 | 20250201zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+602 | 20250331
+
+-- SELECT COUNT(*) FROM wp_postmeta WHERE meta_key = 'event_date' AND meta_value BETWEEN '20250101' AND '20250331'
+80
+
+-- SELECT post_id, meta_value FROM wp_postmeta WHERE meta_key = 'event_date' AND meta_value >= '20250331' ORDER BY meta_id
+35 | 20250331
+36 | 20250413
+37 | 20250426
+38 | 20250509
+39 | 20250522
+40 | 20250604
+41 | 20250617
+42 | 20250630
+43 | 20250713
+44 | 20250726
+45 | 20250808
+46 | 20250821
+47 | 20250903
+48 | 20250916
+49 | 20250929
+50 | 20251012
+51 | 20251025
+52 | 20251107
+53 | 20251120
+54 | 20251203
+55 | 20251216
+56 | 20251229
+92 | 20250411
+93 | 20250424
+94 | 20250507
+95 | 20250520
+96 | 20250602
+97 | 20250615
+98 | 20250628
+99 | 20250711
+100 | 20250724
+101 | 20250806
+102 | 20250819
+103 | 20250901
+104 | 20250914
+105 | 20250927
+106 | 20251010
+107 | 20251023
+108 | 20251105
+109 | 20251118
+110 | 20251201
+111 | 20251214
+112 | 20251227
+148 | 20250409
+149 | 20250422
+150 | 20250505
+151 | 20250518
+152 | 20250531
+153 | 20250613
+154 | 20250626
+155 | 20250709
+156 | 20250722
+157 | 20250804
+158 | 20250817
+159 | 20250830
+160 | 20250912
+161 | 20250925
+162 | 20251008
+163 | 20251021
+164 | 20251103
+165 | 20251116
+166 | 20251129
+167 | 20251212
+168 | 20251225
+204 | 20250407
+205 | 20250420
+206 | 20250503
+207 | 20250516
+208 | 20250529
+209 | 20250611
+210 | 20250624
+211 | 20250707
+212 | 20250720
+213 | 20250802
+214 | 20250815
+215 | 20250828
+216 | 20250910
+217 | 20250923
+218 | 20251006
+219 | 20251019
+220 | 20251101
+221 | 20251114
+222 | 20251127
+223 | 20251210
+224 | 20251223
+260 | 20250405
+261 | 20250418
+262 | 20250501
+263 | 20250514
+264 | 20250527
+265 | 20250609
+266 | 20250622
+267 | 20250705
+268 | 20250718
+269 | 20250731
+270 | 20250813
+271 | 20250826
+272 | 20250908
+273 | 20250921
+274 | 20251004
+275 | 20251017
+276 | 20251030
+277 | 20251112
+278 | 20251125
+279 | 20251208
+280 | 20251221
+316 | 20250403
+317 | 20250416
+318 | 20250429
+319 | 20250512
+320 | 20250525
+321 | 20250607
+322 | 20250620
+323 | 20250703
+324 | 20250716
+325 | 20250729
+326 | 20250811
+327 | 20250824
+328 | 20250906
+329 | 20250919
+330 | 20251002
+331 | 20251015
+332 | 20251028
+333 | 20251110
+334 | 20251123
+335 | 20251206
+336 | 20251219
+372 | 20250401
+373 | 20250414
+374 | 20250427
+375 | 20250510
+376 | 20250523
+377 | 20250605
+378 | 20250618
+379 | 20250701
+380 | 20250714
+381 | 20250727
+382 | 20250809
+383 | 20250822
+384 | 20250904
+385 | 20250917
+386 | 20250930
+387 | 20251013
+388 | 20251026
+389 | 20251108
+390 | 20251121
+391 | 20251204
+392 | 20251217
+393 | 20251230
+429 | 20250412
+430 | 20250425
+431 | 20250508
+432 | 20250521
+433 | 20250603
+434 | 20250616
+435 | 20250629
+436 | 20250712
+437 | 20250725
+438 | 20250807
+439 | 20250820
+440 | 20250902
+441 | 20250915
+442 | 20250928
+443 | 20251011
+444 | 20251024
+445 | 20251106
+446 | 20251119
+447 | 20251202
+448 | 20251215
+449 | 20251228
+485 | 20250410
+486 | 20250423
+487 | 20250506
+488 | 20250519
+489 | 20250601
+490 | 20250614
+491 | 20250627
+492 | 20250710
+493 | 20250723
+494 | 20250805
+495 | 20250818
+496 | 20250831
+497 | 20250913
+498 | 20250926
+499 | 20251009
+500 | 20251022
+501 | 20251104
+502 | 20251117
+503 | 20251130
+504 | 20251213
+505 | 20251226
+541 | 20250408
+542 | 20250421
+543 | 20250504
+544 | 20250517
+545 | 20250530
+546 | 20250612
+547 | 20250625
+548 | 20250708
+549 | 20250721
+550 | 20250803
+551 | 20250816
+552 | 20250829
+553 | 20250911
+554 | 20250924
+555 | 20251007
+556 | 20251020
+557 | 20251102
+558 | 20251115
+559 | 20251128
+560 | 20251211
+561 | 20251224
+597 | 20250406
+598 | 20250419
+599 | 20250502
+600 | 20250515
+605 | 20250331zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+602 | 20250331
+
+-- SELECT post_id FROM wp_postmeta WHERE meta_key = 'event_date' AND meta_value > '20250331zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz' ORDER BY meta_id
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+148
+149
+150
+151
+152
+153
+154
+155
+156
+157
+158
+159
+160
+161
+162
+163
+164
+165
+166
+167
+168
+204
+205
+206
+207
+208
+209
+210
+211
+212
+213
+214
+215
+216
+217
+218
+219
+220
+221
+222
+223
+224
+260
+261
+262
+263
+264
+265
+266
+267
+268
+269
+270
+271
+272
+273
+274
+275
+276
+277
+278
+279
+280
+316
+317
+318
+319
+320
+321
+322
+323
+324
+325
+326
+327
+328
+329
+330
+331
+332
+333
+334
+335
+336
+372
+373
+374
+375
+376
+377
+378
+379
+380
+381
+382
+383
+384
+385
+386
+387
+388
+389
+390
+391
+392
+393
+429
+430
+431
+432
+433
+434
+435
+436
+437
+438
+439
+440
+441
+442
+443
+444
+445
+446
+447
+448
+449
+485
+486
+487
+488
+489
+490
+491
+492
+493
+494
+495
+496
+497
+498
+499
+500
+501
+502
+503
+504
+505
+541
+542
+543
+544
+545
+546
+547
+548
+549
+550
+551
+552
+553
+554
+555
+556
+557
+558
+559
+560
+561
+597
+598
+599
+600
+605
+
+-- SELECT post_id FROM wp_postmeta WHERE meta_key = 'event_date' AND meta_value >= '20250331zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz' ORDER BY meta_id
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+148
+149
+150
+151
+152
+153
+154
+155
+156
+157
+158
+159
+160
+161
+162
+163
+164
+165
+166
+167
+168
+204
+205
+206
+207
+208
+209
+210
+211
+212
+213
+214
+215
+216
+217
+218
+219
+220
+221
+222
+223
+224
+260
+261
+262
+263
+264
+265
+266
+267
+268
+269
+270
+271
+272
+273
+274
+275
+276
+277
+278
+279
+280
+316
+317
+318
+319
+320
+321
+322
+323
+324
+325
+326
+327
+328
+329
+330
+331
+332
+333
+334
+335
+336
+372
+373
+374
+375
+376
+377
+378
+379
+380
+381
+382
+383
+384
+385
+386
+387
+388
+389
+390
+391
+392
+393
+429
+430
+431
+432
+433
+434
+435
+436
+437
+438
+439
+440
+441
+442
+443
+444
+445
+446
+447
+448
+449
+485
+486
+487
+488
+489
+490
+491
+492
+493
+494
+495
+496
+497
+498
+499
+500
+501
+502
+503
+504
+505
+541
+542
+543
+544
+545
+546
+547
+548
+549
+550
+551
+552
+553
+554
+555
+556
+557
+558
+559
+560
+561
+597
+598
+599
+600
+605
+
+-- SELECT post_id, meta_value FROM wp_postmeta WHERE meta_key = 'event_date' AND meta_value < '2' ORDER BY meta_id
+601 | 
+
+-- SELECT post_id FROM wp_postmeta WHERE meta_key = 'event_date' AND meta_value > '２' ORDER BY meta_id
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+113
+114
+115
+116
+117
+118
+119
+120
+121
+122
+123
+124
+125
+126
+127
+128
+129
+130
+131
+132
+133
+134
+135
+136
+137
+138
+139
+140
+141
+142
+143
+144
+145
+146
+147
+148
+149
+150
+151
+152
+153
+154
+155
+156
+157
+158
+159
+160
+161
+162
+163
+164
+165
+166
+167
+168
+169
+170
+171
+172
+173
+174
+175
+176
+177
+178
+179
+180
+181
+182
+183
+184
+185
+186
+187
+188
+189
+190
+191
+192
+193
+194
+195
+196
+197
+198
+199
+200
+201
+202
+203
+204
+205
+206
+207
+208
+209
+210
+211
+212
+213
+214
+215
+216
+217
+218
+219
+220
+221
+222
+223
+224
+225
+226
+227
+228
+229
+230
+231
+232
+233
+234
+235
+236
+237
+238
+239
+240
+241
+242
+243
+244
+245
+246
+247
+248
+249
+250
+251
+252
+253
+254
+255
+256
+257
+258
+259
+260
+261
+262
+263
+264
+265
+266
+267
+268
+269
+270
+271
+272
+273
+274
+275
+276
+277
+278
+279
+280
+281
+282
+283
+284
+285
+286
+287
+288
+289
+290
+291
+292
+293
+294
+295
+296
+297
+298
+299
+300
+301
+302
+303
+304
+305
+306
+307
+308
+309
+310
+311
+312
+313
+314
+315
+316
+317
+318
+319
+320
+321
+322
+323
+324
+325
+326
+327
+328
+329
+330
+331
+332
+333
+334
+335
+336
+337
+338
+339
+340
+341
+342
+343
+344
+345
+346
+347
+348
+349
+350
+351
+352
+353
+354
+355
+356
+357
+358
+359
+360
+361
+362
+363
+364
+365
+366
+367
+368
+369
+370
+371
+372
+373
+374
+375
+376
+377
+378
+379
+380
+381
+382
+383
+384
+385
+386
+387
+388
+389
+390
+391
+392
+393
+394
+395
+396
+397
+398
+399
+400
+401
+402
+403
+404
+405
+406
+407
+408
+409
+410
+411
+412
+413
+414
+415
+416
+417
+418
+419
+420
+421
+422
+423
+424
+425
+426
+427
+428
+429
+430
+431
+432
+433
+434
+435
+436
+437
+438
+439
+440
+441
+442
+443
+444
+445
+446
+447
+448
+449
+450
+451
+452
+453
+454
+455
+456
+457
+458
+459
+460
+461
+462
+463
+464
+465
+466
+467
+468
+469
+470
+471
+472
+473
+474
+475
+476
+477
+478
+479
+480
+481
+482
+483
+484
+485
+486
+487
+488
+489
+490
+491
+492
+493
+494
+495
+496
+497
+498
+499
+500
+501
+502
+503
+504
+505
+506
+507
+508
+509
+510
+511
+512
+513
+514
+515
+516
+517
+518
+519
+520
+521
+522
+523
+524
+525
+526
+527
+528
+529
+530
+531
+532
+533
+534
+535
+536
+537
+538
+539
+540
+541
+542
+543
+544
+545
+546
+547
+548
+549
+550
+551
+552
+553
+554
+555
+556
+557
+558
+559
+560
+561
+562
+563
+564
+565
+566
+567
+568
+569
+570
+571
+572
+573
+574
+575
+576
+577
+578
+579
+580
+581
+582
+583
+584
+585
+586
+587
+588
+589
+590
+591
+592
+593
+594
+595
+596
+597
+598
+599
+600
+602
+604
+605
+601
+602
+
+-- SELECT post_id, meta_value FROM wp_postmeta WHERE meta_key = 'category' AND meta_value >= 'CAT3' AND meta_value < 'cat4' ORDER BY meta_id LIMIT 10
+9 | cat3
+19 | cat3
+29 | cat3
+39 | cat3
+49 | cat3
+59 | cat3
+69 | cat3
+79 | cat3
+89 | cat3
+99 | cat3
+
+-- SELECT COUNT(*) FROM wp_postmeta WHERE meta_key = 'category' AND meta_value >= 'CAT3' AND meta_value < 'cat4'
+63
+
+-- SELECT post_id, meta_value FROM wp_postmeta WHERE meta_key = 'category' AND meta_value >= 'CAT3' AND meta_value <= 'cat3' AND post_id IN (601, 603) ORDER BY meta_id
+601 | Cat3
+603 | cat3
+
+-- SELECT COUNT(*) FROM wp_postmeta WHERE meta_key = 'priority' AND meta_value > 990
+9
+
+-- SELECT COUNT(*) FROM wp_postmeta WHERE meta_key = 'priority' AND meta_value > '990'
+9
+
+-- SELECT COUNT(*) FROM wp_postmeta WHERE meta_key = 'event_date' AND meta_value BETWEEN 20250101 AND 20250331 AND post_id <= 600
+76
+
+-- SELECT SQL_CALC_FOUND_ROWS wp_posts.ID FROM wp_posts INNER JOIN wp_postmeta ON ( wp_posts.ID = wp_postmeta.post_id ) INNER JOIN wp_postmeta AS mt1 ON ( wp_posts.ID = mt1.post_id ) INNER JOIN wp_postmeta AS mt2 ON ( wp_posts.ID = mt2.post_id ) WHERE 1=1 AND ( ( wp_postmeta.meta_key = 'category' AND wp_postmeta.meta_value = 'cat3' ) AND ( mt1.meta_key = 'featured' AND mt1.meta_value = '1' ) AND mt2.meta_key = 'event_date' ) AND wp_posts.post_type = 'news' AND ((wp_posts.post_status = 'publish')) GROUP BY wp_posts.ID ORDER BY CAST(mt2.meta_value AS CHAR) DESC, wp_posts.ID DESC LIMIT 0, 20
+279
+549
+99
+369
+189
+459
+9
+603
+
+-- SELECT FOUND_ROWS()
+8
+

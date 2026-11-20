@@ -1,0 +1,964 @@
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t (i INT PRIMARY KEY)
+ok affected=0 insert_id=0
+-- INSERT INTO t VALUES (1),(2)
+ok affected=2 insert_id=0
+-- EXPLAIN SELECT COUNT(*) FROM t
+ok affected=0 insert_id=0
+-- EXPLAIN SELECT * FROM t WHERE i = 1
+ok affected=0 insert_id=0
+-- SELECT COUNT(*) FROM t
+2
+
+-- DROP TABLE IF EXISTS t
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t (s VARCHAR(10) COLLATE utf8mb4_0900_ai_ci)
+ok affected=0 insert_id=0
+-- INSERT INTO t VALUES ('a'),('A')
+ok affected=2 insert_id=0
+-- SELECT DISTINCT s FROM t
+a
+
+-- DROP TABLE IF EXISTS t
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- SELECT IFNULL(NULL, 1.5) + 0, IF(1, 1, 'a'), CASE WHEN 1 THEN 1 ELSE 2.5 END
+1.5 | 1 | 1
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE complex_test (id INT PRIMARY KEY, category VARCHAR(10), name VARCHAR(20), value INT)
+ok affected=0 insert_id=0
+-- INSERT INTO complex_test VALUES (1,'X','Alpha',10),(2,'Y','Beta',90),(3,'X','Gamma',50),(4,'Z','Delta',70),(5,'Y','Epsilon',30)
+ok affected=5 insert_id=0
+-- SELECT category, GROUP_CONCAT(name ORDER BY (SELECT CASE WHEN complex_test.value > 80 THEN NULL ELSE complex_test.value END), name) FROM complex_test GROUP BY category ORDER BY category
+X | Alpha,Gamma
+Y | Beta,Epsilon
+Z | Delta
+
+-- DROP TABLE IF EXISTS complex_test
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t (i INT PRIMARY KEY, e ENUM('abc','def') NULL)
+ok affected=0 insert_id=0
+-- INSERT INTO t(i) VALUES (1)
+ok affected=1 insert_id=0
+-- SELECT * FROM t
+1 | NULL
+
+-- DROP TABLE IF EXISTS t
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- SELECT DATE_ADD('9999-12-31', INTERVAL 1 DAY), DATE_SUB('1000-01-01', INTERVAL 1 DAY), DATE_ADD('2024-02-29', INTERVAL 1 YEAR), DATE_ADD('2024-01-31', INTERVAL 1 MONTH)
+NULL | 0999-12-31 | 2025-02-28 | 2024-02-29
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- SET time_zone = '+09:00'
+ok
+-- SELECT TIMESTAMPDIFF(MINUTE, UTC_TIMESTAMP(6), NOW(6))
+540
+
+-- SELECT CONVERT_TZ('2025-07-23 16:43:21', '+00:00', '-05:00')
+2025-07-23 11:43:21
+
+-- SET time_zone = '-05:00'
+ok
+-- SELECT TIMESTAMPDIFF(MINUTE, UTC_TIMESTAMP(6), NOW(6))
+-300
+
+-- SELECT FROM_UNIXTIME(0)
+1969-12-31 19:00:00
+
+-- SET time_zone = '+00:00'
+ok
+-- SELECT TIMESTAMPDIFF(MINUTE, UTC_TIMESTAMP(6), NOW(6))
+0
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- SET time_zone = 'SYSTEM'
+ok
+-- SELECT @@time_zone
+SYSTEM
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE a (id INT PRIMARY KEY, name VARCHAR(20), n INT)
+ok affected=0 insert_id=0
+-- CREATE TABLE b (id INT PRIMARY KEY, name VARCHAR(20))
+ok affected=0 insert_id=0
+-- CREATE TABLE c (id INT PRIMARY KEY, name VARCHAR(20), d VARCHAR(20))
+ok affected=0 insert_id=0
+-- INSERT INTO a VALUES (2,'Card 2',1002),(3,'Card 3',1003)
+ok affected=2 insert_id=0
+-- INSERT INTO b VALUES (2,'Collection 2'),(3,'Collection 3')
+ok affected=2 insert_id=0
+-- INSERT INTO c VALUES (1,'Dashboard 1','desc1'),(2,'Dashboard 2','desc2')
+ok affected=2 insert_id=0
+-- SELECT 5 AS r, x.id, x.name, NULL AS d, x.n, 'card' AS m FROM a x UNION SELECT 7 AS r, id, name, name AS d, id AS n, 'collection' AS m FROM b UNION SELECT 1 AS r, y.id, y.name, y.d, NULL AS n, 'dashboard' AS m FROM c y
+5 | 2 | Card 2 | NULL | 1002 | card
+5 | 3 | Card 3 | NULL | 1003 | card
+7 | 2 | Collection 2 | Collection 2 | 2 | collection
+7 | 3 | Collection 3 | Collection 3 | 3 | collection
+1 | 1 | Dashboard 1 | desc1 | NULL | dashboard
+1 | 2 | Dashboard 2 | desc2 | NULL | dashboard
+
+-- DROP TABLE IF EXISTS c
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS b
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS a
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE report_card (id INT PRIMARY KEY, archived BIT(1))
+ok affected=0 insert_id=0
+-- INSERT INTO report_card VALUES (1, 0)
+ok affected=1 insert_id=0
+-- SELECT archived FROM report_card WHERE id = 1 UNION ALL SELECT 48 FROM report_card WHERE id = 1
+0
+48
+
+-- DROP TABLE IF EXISTS report_card
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- SELECT CAST('12abc' AS SIGNED), CAST('1e3' AS SIGNED), CAST('12.345x' AS DECIMAL(10,2)), CAST('7abc' AS DECIMAL(10,2))
+12 | 1 | 12.35 | 7.00
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect INTEGER value: '12abc'
+Warning | 1292 | Truncated incorrect INTEGER value: '1e3'
+Warning | 1292 | Truncated incorrect DECIMAL value: '12.345x'
+Warning | 1292 | Truncated incorrect DECIMAL value: '7abc'
+
+-- CREATE TABLE m (v LONGTEXT)
+ok affected=0 insert_id=0
+-- INSERT INTO m VALUES ('3.5'),('10'),('12abc')
+ok affected=3 insert_id=0
+-- SELECT v FROM m ORDER BY CAST(v AS SIGNED), v
+3.5
+10
+12abc
+
+-- DROP TABLE IF EXISTS m
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- SELECT ('A') = (0), ('A') IN (0), ('A') != (0), ('A') < (0), ('A') <= (0)
+1 | 1 | 0 | 0 | 1
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t1 (i INT PRIMARY KEY)
+ok affected=0 insert_id=0
+-- CREATE TABLE t2 (j INT)
+ok affected=0 insert_id=0
+-- CREATE TABLE t3 (k INT)
+ok affected=0 insert_id=0
+-- INSERT INTO t1 VALUES (1),(2)
+ok affected=2 insert_id=0
+-- INSERT INTO t2 VALUES (1),(2)
+ok affected=2 insert_id=0
+-- INSERT INTO t3 VALUES (3)
+ok affected=1 insert_id=0
+-- SELECT * FROM t1 CROSS JOIN t2 JOIN (SELECT * FROM t3) v3 ON v3.k = t2.j
+
+-- SELECT * FROM t1 CROSS JOIN t2 JOIN (SELECT * FROM t3) v3 ON v3.k >= t2.j ORDER BY i, j, k
+1 | 1 | 3
+1 | 2 | 3
+2 | 1 | 3
+2 | 2 | 3
+
+-- DROP TABLE IF EXISTS t3
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS t2
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS t1
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- SELECT CAST(-1 AS UNSIGNED)
+18446744073709551615
+
+-- SHOW WARNINGS
+
+-- SELECT CAST('1.5abc' AS DECIMAL(5,2))
+1.50
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect DECIMAL value: '1.5abc'
+
+-- CREATE TABLE t (i INT PRIMARY KEY)
+ok affected=0 insert_id=0
+-- INSERT INTO t VALUES (1),(2)
+ok affected=2 insert_id=0
+-- SELECT * FROM t WHERE i = '1abc'
+1
+
+-- DROP TABLE IF EXISTS t
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- SELECT '123abc' IN ('string', 1, 2, 123), 123 IN ('string', 1, 2, '123abc'), 123.45 IN (123.4), '123.45a' IN (123.5)
+1 | 1 | 0 | 0
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- SELECT COLUMN_NAME COLLATE utf8mb3_general_ci FROM information_schema.COLUMNS WHERE TABLE_NAME = 'x'
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t0(c0 INT)
+ok affected=0 insert_id=0
+-- INSERT INTO t0 VALUES (1)
+ok affected=1 insert_id=0
+-- SELECT * FROM t0 WHERE (! (1 || (EXISTS (SELECT 1))))
+
+-- SELECT * FROM t0 WHERE (! (0 && (EXISTS (SELECT 1))))
+1
+
+-- SELECT * FROM t0 WHERE (! (0 || (EXISTS (SELECT 1 FROM t0 WHERE c0 = 2))))
+1
+
+-- DROP TABLE IF EXISTS t0
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t0(c0 VARCHAR(500), KEY i0 (c0))
+ok affected=0 insert_id=0
+-- INSERT INTO t0 VALUES (77367106)
+ok affected=1 insert_id=0
+-- SELECT c0 FROM t0 WHERE 1630944823 >= t0.c0
+77367106
+
+-- SELECT c0 FROM t0 WHERE 1630944823 <= t0.c0
+
+-- SELECT c0 FROM t0 WHERE '1630944823' >= t0.c0
+
+-- SELECT c0 FROM t0 WHERE 1630944823.2 >= t0.c0
+77367106
+
+-- DROP TABLE IF EXISTS t0
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- SELECT CAST('2020-01-01 12:34:56.123456' AS DATETIME(6)) > CAST('2020-01-01 12:34:56' AS DATETIME)
+1
+
+-- SELECT CAST('2020-01-01 12:34:56.6' AS DATETIME)
+2020-01-01 12:34:57
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t1(c0 INT, c1 VARCHAR(500))
+ok affected=0 insert_id=0
+-- INSERT INTO t1(c1, c0) VALUES ('-1',1),('-2',2)
+ok affected=2 insert_id=0
+-- SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM (SELECT NULL WHERE FALSE) AS sub0 WHERE (t1.c0)*(t1.c0)) UNION ALL SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM (SELECT NULL WHERE FALSE) AS sub0 WHERE (t1.c0)*(t1.c0))
+1 | -1
+2 | -2
+1 | -1
+2 | -2
+
+-- SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM (SELECT NULL WHERE FALSE) AS sub0) UNION ALL SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM (SELECT NULL WHERE FALSE) AS sub0)
+1 | -1
+2 | -2
+1 | -1
+2 | -2
+
+-- DROP TABLE IF EXISTS t1
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE ti8 (i TINYINT PRIMARY KEY)
+ok affected=0 insert_id=0
+-- INSERT INTO ti8 VALUES (-128), (-1), (0), (1), (127)
+ok affected=5 insert_id=0
+-- SELECT * FROM ti8 WHERE i = 999
+
+-- SELECT * FROM ti8 WHERE i >= -999 ORDER BY i
+-128
+-1
+0
+1
+127
+
+-- SELECT * FROM ti8 WHERE i IN (0, 999)
+0
+
+-- CREATE TABLE tu (id BIGINT UNSIGNED PRIMARY KEY)
+ok affected=0 insert_id=0
+-- INSERT INTO tu VALUES (0), (1), (5)
+ok affected=3 insert_id=0
+-- SELECT * FROM tu WHERE id > -1 ORDER BY id
+0
+1
+5
+
+-- SELECT * FROM tu WHERE id = -1
+
+-- SELECT * FROM tu WHERE id <> -1 ORDER BY id
+0
+1
+5
+
+-- SELECT * FROM tu WHERE id < -1
+
+-- DROP TABLE IF EXISTS tu
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS ti8
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t0(c1 BOOLEAN)
+ok affected=0 insert_id=0
+-- INSERT INTO t0 VALUES (true)
+ok affected=1 insert_id=0
+-- CREATE TABLE t1(c1 INT)
+ok affected=0 insert_id=0
+-- INSERT INTO t1 VALUES (2)
+ok affected=1 insert_id=0
+-- SELECT 1 FROM t0 WHERE (19 OR 's') != (7 != t0.c1)
+
+-- SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM t0 WHERE ((19 OR 's') != (7 != t0.c1)))
+2
+
+-- DROP TABLE IF EXISTS t1
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS t0
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t1(c0 BOOLEAN, c1 BOOLEAN)
+ok affected=0 insert_id=0
+-- INSERT INTO t1(c0) VALUES (true), (false)
+ok affected=2 insert_id=0
+-- SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM (SELECT true AS c0 HAVING false) v0 WHERE (CASE t1.c1 WHEN false THEN v0.c0 ELSE t1.c0 END)) ORDER BY c0
+0 | NULL
+1 | NULL
+
+-- SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM (SELECT NULL WHERE FALSE) AS sub0) ORDER BY c0
+0 | NULL
+1 | NULL
+
+-- DROP TABLE IF EXISTS t1
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t4(c1 BOOLEAN, PRIMARY KEY(c1))
+ok affected=0 insert_id=0
+-- CREATE TABLE t0(c0 INT)
+ok affected=0 insert_id=0
+-- CREATE TABLE t1 AS SELECT 1
+ok affected=1 insert_id=0
+-- INSERT INTO t0(c0) VALUES (1)
+ok affected=1 insert_id=0
+-- INSERT INTO t4(c1) VALUES (false)
+ok affected=1 insert_id=0
+-- SELECT * FROM t1, t0 LEFT JOIN t4 ON FALSE
+1 | 1 | NULL
+
+-- DROP TABLE IF EXISTS t1
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS t0
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS t4
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- SELECT COALESCE(@@session.time_zone, 'x')
++00:00
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- SELECT CASE WHEN @@autocommit = 1 THEN @@max_connections ELSE @@max_allowed_packet END
+151
+
+-- SELECT GREATEST(@@max_connections, 1)
+151
+
+-- CREATE TABLE t (i INT PRIMARY KEY)
+ok affected=0 insert_id=0
+-- INSERT INTO t VALUES (1), (151)
+ok affected=2 insert_id=0
+-- SELECT * FROM t WHERE i = @@max_connections
+151
+
+-- DROP TABLE IF EXISTS t
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE a (id INT PRIMARY KEY, k INT)
+ok affected=0 insert_id=0
+-- CREATE TABLE b (id INT PRIMARY KEY, k INT)
+ok affected=0 insert_id=0
+-- INSERT INTO a VALUES (1,1),(2,2),(3,3)
+ok affected=3 insert_id=0
+-- INSERT INTO b VALUES (1,1),(2,1),(3,2)
+ok affected=3 insert_id=0
+-- SELECT a.id, c.n FROM a LEFT JOIN (SELECT k, COUNT(*) AS n FROM b GROUP BY k) c ON a.k = c.k ORDER BY a.id
+1 | 2
+2 | 1
+3 | NULL
+
+-- DROP TABLE IF EXISTS b
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS a
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE a (id INT PRIMARY KEY, k INT)
+ok affected=0 insert_id=0
+-- CREATE TABLE b (id INT PRIMARY KEY, k INT)
+ok affected=0 insert_id=0
+-- INSERT INTO a VALUES (1,1),(2,2),(3,3)
+ok affected=3 insert_id=0
+-- INSERT INTO b VALUES (1,1),(2,1),(3,2)
+ok affected=3 insert_id=0
+-- SELECT a.id FROM a WHERE EXISTS (SELECT 1 FROM (SELECT k FROM b GROUP BY k) c WHERE c.k = a.k) ORDER BY a.id
+1
+2
+
+-- SELECT a.id, c.n FROM a JOIN (SELECT k, COUNT(*) n FROM b GROUP BY k) c ON a.k = c.k ORDER BY a.id LIMIT 1
+1 | 2
+
+-- DROP TABLE IF EXISTS b
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS a
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t (pk INT PRIMARY KEY, v1 INT, v2 INT, INDEX v1v2 (v1, v2))
+ok affected=0 insert_id=0
+-- INSERT INTO t VALUES (1, 0, 2), (2, 0, 3), (3, 0, 1)
+ok affected=3 insert_id=0
+-- SELECT c.pk, b.pk, a.pk FROM t c JOIN t b JOIN t a ON a.v2 = b.pk AND b.v2 = c.pk AND c.v2 = 1 ORDER BY c.pk
+3 | 2 | 1
+
+-- SELECT c.pk, b.pk, a.pk FROM t c JOIN t b ON b.v2 = c.pk JOIN t a ON a.v2 = b.pk WHERE c.v2 = 1 ORDER BY c.pk
+3 | 2 | 1
+
+-- DROP TABLE IF EXISTS t
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t (id INT PRIMARY KEY, v INT)
+ok affected=0 insert_id=0
+-- INSERT INTO t VALUES (1, 1)
+ok affected=1 insert_id=0
+-- SELECT * FROM no_such_table
+error 1146
+-- UPDATE t SET v = 2 WHERE id = 1
+ok affected=1 insert_id=0
+-- SELECT v FROM t WHERE id = 1
+2
+
+-- DROP TABLE IF EXISTS t
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t (a VARCHAR(10), b VARCHAR(10))
+ok affected=0 insert_id=0
+-- INSERT INTO t VALUES ('a,b','c'),('a','b,c')
+ok affected=2 insert_id=0
+-- SELECT COUNT(DISTINCT a, b) FROM t
+2
+
+-- DROP TABLE IF EXISTS t
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- SELECT LPAD('日本', 5, 'あ'), RPAD('日本', 3, 'abc'), LPAD('abc', -1, 'x'), COLLATION(LPAD(_utf8mb4'a' COLLATE utf8mb4_bin, 3, 'x'))
+あああ日本 | 日本a | NULL | utf8mb4_bin
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE a (id INT PRIMARY KEY)
+ok affected=0 insert_id=0
+-- CREATE TABLE b (a_id INT, c_id INT)
+ok affected=0 insert_id=0
+-- CREATE TABLE c (id INT PRIMARY KEY)
+ok affected=0 insert_id=0
+-- INSERT INTO a VALUES (1), (2)
+ok affected=2 insert_id=0
+-- INSERT INTO c VALUES (9)
+ok affected=1 insert_id=0
+-- INSERT INTO b VALUES (1, 9)
+ok affected=1 insert_id=0
+-- SELECT a.id FROM a WHERE EXISTS (SELECT 1 FROM b JOIN c ON c.id = b.c_id WHERE b.a_id = a.id)
+1
+
+-- SELECT a.id FROM a WHERE EXISTS (SELECT 1 FROM b JOIN c ON c.id = b.c_id AND b.a_id = a.id)
+1
+
+-- SELECT a.id FROM a WHERE NOT EXISTS (SELECT 1 FROM b JOIN c ON c.id = b.c_id AND b.a_id = a.id)
+2
+
+-- SELECT a.id FROM a WHERE EXISTS (SELECT 1 FROM b LEFT JOIN c ON c.id = b.c_id AND b.a_id = a.id) ORDER BY a.id
+1
+2
+
+-- SELECT a.id FROM a WHERE EXISTS (SELECT 1 FROM b JOIN c ON b.a_id = a.id) ORDER BY a.id
+1
+
+-- DROP TABLE IF EXISTS c
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS b
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS a
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- create table deps (id int primary key, type varchar(16), col_a varchar(32), col_b varchar(32), key k_type (type), key k_a (col_a))
+ok affected=0 insert_id=0
+-- insert into deps values (1, 'keep', 'X', null), (2, 'drop', 'X', null)
+ok affected=2 insert_id=0
+-- create table r (id varchar(32) primary key)
+ok affected=0 insert_id=0
+-- insert into r values ('X')
+ok affected=1 insert_id=0
+-- create table deps_sep (id int primary key, type varchar(16), col_a varchar(32), col_b varchar(32), key k_type (type), key k_a (col_a), key k_b (col_b))
+ok affected=0 insert_id=0
+-- insert into deps_sep values (1, 'keep', 'X', null), (2, 'drop', 'X', null), (3, 'keep', null, 'X'), (4, 'drop', null, 'X')
+ok affected=4 insert_id=0
+-- select d.id, d.type from r join deps d on d.type = 'keep' and (d.col_a = r.id or d.col_b = r.id) order by d.id
+1 | keep
+
+-- select d.id, d.type from r join deps_sep d on d.type = 'keep' and (d.col_a = r.id or d.col_b = r.id) order by d.id
+1 | keep
+3 | keep
+
+-- select d.id, d.type from r join deps_sep d on (d.col_a = r.id or d.col_b = r.id) where d.type = 'keep' order by d.id
+1 | keep
+3 | keep
+
+-- DROP TABLE IF EXISTS deps_sep
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS r
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS deps
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- select length('a\_b'), 'a\_b'
+4 | a\_b
+
+-- select 'a_b' like 'a\_b', 'axb' like 'a\_b', 'a%b' like 'a\%b', 'axyb' like 'a\%b'
+1 | 0 | 1 | 0
+
+-- CREATE TABLE t (id INT PRIMARY KEY, s VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, KEY (s))
+ok affected=0 insert_id=0
+-- INSERT INTO t VALUES (1, '100%'), (2, '100_'), (3, '100x'), (4, 'wp_foo'), (5, 'wpXfoo')
+ok affected=5 insert_id=0
+-- SELECT id FROM t WHERE s LIKE '100\%' ORDER BY id
+1
+
+-- SELECT id FROM t WHERE s LIKE 'wp\_%' ORDER BY id
+4
+
+-- DROP TABLE IF EXISTS t
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t (v INT)
+ok affected=0 insert_id=0
+-- INSERT INTO t VALUES (0), (9)
+ok affected=2 insert_id=0
+-- SELECT v, v IN (9, 0.49) AS in_result FROM t ORDER BY v
+0 | 0
+9 | 1
+
+-- SELECT v FROM t WHERE v IN (9, 0.49) ORDER BY v
+9
+
+-- SELECT v FROM t WHERE v NOT IN (9, 0.49) ORDER BY v
+0
+
+-- DROP TABLE IF EXISTS t
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE defaults_rewrite (pk INT PRIMARY KEY, dt DATETIME NOT NULL DEFAULT '2020-04-01 16:16:16', ts TIMESTAMP NULL DEFAULT '2008-04-22 16:16:16', s VARCHAR(4) DEFAULT 'ln', n INT DEFAULT (1 + 2), v INT)
+ok affected=0 insert_id=0
+-- ALTER TABLE defaults_rewrite MODIFY v BIGINT
+ok
+-- SELECT column_name, column_default FROM information_schema.columns WHERE table_name = 'defaults_rewrite' ORDER BY ordinal_position
+pk | NULL
+dt | 2020-04-01 16:16:16
+ts | 2008-04-22 16:16:16
+s | ln
+n | (1 + 2)
+v | NULL
+
+-- SHOW COLUMNS FROM defaults_rewrite
+pk | int | NO | PRI | NULL | 
+dt | datetime | NO |  | 2020-04-01 16:16:16 | 
+ts | timestamp | YES |  | 2008-04-22 16:16:16 | 
+s | varchar(4) | YES |  | ln | 
+n | int | YES |  | (1 + 2) | DEFAULT_GENERATED
+v | bigint | YES |  | NULL | 
+
+-- ALTER TABLE defaults_rewrite MODIFY s VARCHAR(8)
+ok
+-- SELECT column_name, column_default FROM information_schema.columns WHERE table_name = 'defaults_rewrite' ORDER BY ordinal_position
+pk | NULL
+dt | 2020-04-01 16:16:16
+ts | 2008-04-22 16:16:16
+s | NULL
+n | (1 + 2)
+v | NULL
+
+-- INSERT INTO defaults_rewrite (pk) VALUES (1)
+ok affected=1 insert_id=0
+-- SELECT CAST(dt AS CHAR), CAST(ts AS CHAR), s, n, v FROM defaults_rewrite
+2020-04-01 16:16:16 | 2008-04-22 16:16:16 | NULL | 3 | NULL
+
+-- DROP TABLE IF EXISTS defaults_rewrite
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- create table tab0 (col0 int, col1 int, col2 int)
+ok affected=0 insert_id=0
+-- insert into tab0 values (1, 0, 10)
+ok affected=1 insert_id=0
+-- select sum(col1) from tab0 group by col1, col2 having col1 >= count(*)
+
+-- select sum(t.col1) from tab0 t group by t.col1, t.col2 having t.col1 >= count(*)
+
+-- select sum(col1) from tab0 group by col1, col2 having col1 < count(*)
+0
+
+-- DROP TABLE IF EXISTS tab0
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- create table pruned_t1 (a int primary key, b int, c int)
+ok affected=0 insert_id=0
+-- create table pruned_t2 (x int primary key)
+ok affected=0 insert_id=0
+-- insert into pruned_t1 values (1, 10, 100), (2, 20, 200)
+ok affected=2 insert_id=0
+-- insert into pruned_t2 values (10), (100)
+ok affected=2 insert_id=0
+-- select * from (select s0.b from (select b from pruned_t1) s0 where s0.b in (select x from pruned_t2)) o
+10
+
+-- select (select s0.b from (select b from pruned_t1) s0 where s0.b in (select x from pruned_t2) limit 1)
+10
+
+-- select * from (select s0.c from (select c from pruned_t1) s0 where exists (select 1 from pruned_t2 where x = s0.c)) o
+100
+
+-- select * from (select s0.c from (select c from pruned_t1) s0 where s0.c not in (select x from pruned_t2)) o
+200
+
+-- select * from (select s0.c from (select c from pruned_t1) s0 where not exists (select 1 from pruned_t2 where x = s0.c)) o
+200
+
+-- DROP TABLE IF EXISTS pruned_t2
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS pruned_t1
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t (id INT PRIMARY KEY, v BIT(8))
+ok affected=0 insert_id=0
+-- INSERT INTO t VALUES (1, 3), (2, 5)
+ok affected=2 insert_id=0
+-- SELECT HEX(GROUP_CONCAT(v ORDER BY id SEPARATOR '')) FROM t
+3335
+
+-- DROP TABLE IF EXISTS t
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- SELECT -5 MOD 5, 5 MOD 5, -5.0 % 5
+0 | 0 | 0.0
+
+-- SELECT COUNT(DISTINCT m) FROM (SELECT -5 MOD 5 AS m UNION ALL SELECT 5 MOD 5) t
+1
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- create table t10 (a10 int primary key, b10 int, x10 varchar(40))
+ok affected=0 insert_id=0
+-- insert into t10 values (1,8,'table t10 row 1'), (2,10,'table t10 row 2'), (3,7,'table t10 row 3'), (4,1,'table t10 row 4'), (5,5,'table t10 row 5'), (6,4,'table t10 row 6'), (7,3,'table t10 row 7'), (8,9,'table t10 row 8'), (9,6,'table t10 row 9'), (10,2,'table t10 row 10')
+ok affected=10 insert_id=0
+-- create table t23 (a23 int primary key, b23 int, x23 varchar(40))
+ok affected=0 insert_id=0
+-- insert into t23 values (1,9,'table t23 row 1'), (2,4,'table t23 row 2'), (3,2,'table t23 row 3'), (4,8,'table t23 row 4'), (5,3,'table t23 row 5'), (6,6,'table t23 row 6'), (7,7,'table t23 row 7'), (8,5,'table t23 row 8'), (9,10,'table t23 row 9'), (10,1,'table t23 row 10')
+ok affected=10 insert_id=0
+-- create table t24 (a24 int primary key, b24 int, x24 varchar(40))
+ok affected=0 insert_id=0
+-- insert into t24 values (1,10,'table t24 row 1'), (2,3,'table t24 row 2'), (3,8,'table t24 row 3'), (4,2,'table t24 row 4'), (5,5,'table t24 row 5'), (6,4,'table t24 row 6'), (7,6,'table t24 row 7'), (8,9,'table t24 row 8'), (9,1,'table t24 row 9'), (10,7,'table t24 row 10')
+ok affected=10 insert_id=0
+-- create table t29 (a29 int primary key, b29 int, x29 varchar(40))
+ok affected=0 insert_id=0
+-- insert into t29 values (1,4,'table t29 row 1'), (2,2,'table t29 row 2'), (3,9,'table t29 row 3'), (4,8,'table t29 row 4'), (5,10,'table t29 row 5'), (6,3,'table t29 row 6'), (7,7,'table t29 row 7'), (8,6,'table t29 row 8'), (9,5,'table t29 row 9'), (10,1,'table t29 row 10')
+ok affected=10 insert_id=0
+-- create table t30 (a30 int primary key, b30 int, x30 varchar(40))
+ok affected=0 insert_id=0
+-- insert into t30 values (1,5,'table t30 row 1'), (2,6,'table t30 row 2'), (3,10,'table t30 row 3'), (4,3,'table t30 row 4'), (5,7,'table t30 row 5'), (6,4,'table t30 row 6'), (7,9,'table t30 row 7'), (8,8,'table t30 row 8'), (9,2,'table t30 row 9'), (10,1,'table t30 row 10')
+ok affected=10 insert_id=0
+-- create table t38 (a38 int primary key, b38 int, x38 varchar(40))
+ok affected=0 insert_id=0
+-- insert into t38 values (1,2,'table t38 row 1'), (2,10,'table t38 row 2'), (3,5,'table t38 row 3'), (4,6,'table t38 row 4'), (5,4,'table t38 row 5'), (6,1,'table t38 row 6'), (7,7,'table t38 row 7'), (8,8,'table t38 row 8'), (9,9,'table t38 row 9'), (10,3,'table t38 row 10')
+ok affected=10 insert_id=0
+-- create table t43 (a43 int primary key, b43 int, x43 varchar(40))
+ok affected=0 insert_id=0
+-- insert into t43 values (1,2,'table t43 row 1'), (2,3,'table t43 row 2'), (3,8,'table t43 row 3'), (4,5,'table t43 row 4'), (5,10,'table t43 row 5'), (6,6,'table t43 row 6'), (7,4,'table t43 row 7'), (8,1,'table t43 row 8'), (9,9,'table t43 row 9'), (10,7,'table t43 row 10')
+ok affected=10 insert_id=0
+-- create table t46 (a46 int primary key, b46 int, x46 varchar(40))
+ok affected=0 insert_id=0
+-- insert into t46 values (1,1,'table t46 row 1'), (2,8,'table t46 row 2'), (3,7,'table t46 row 3'), (4,5,'table t46 row 4'), (5,9,'table t46 row 5'), (6,4,'table t46 row 6'), (7,2,'table t46 row 7'), (8,10,'table t46 row 8'), (9,6,'table t46 row 9'), (10,3,'table t46 row 10')
+ok affected=10 insert_id=0
+-- create table t50 (a50 int primary key, b50 int, x50 varchar(40))
+ok affected=0 insert_id=0
+-- insert into t50 values (1,8,'table t50 row 1'), (2,4,'table t50 row 2'), (3,6,'table t50 row 3'), (4,9,'table t50 row 4'), (5,2,'table t50 row 5'), (6,7,'table t50 row 6'), (7,1,'table t50 row 7'), (8,3,'table t50 row 8'), (9,5,'table t50 row 9'), (10,10,'table t50 row 10')
+ok affected=10 insert_id=0
+-- create table t61 (a61 int primary key, b61 int, x61 varchar(40))
+ok affected=0 insert_id=0
+-- insert into t61 values (1,9,'table t61 row 1'), (2,1,'table t61 row 2'), (3,7,'table t61 row 3'), (4,4,'table t61 row 4'), (5,2,'table t61 row 5'), (6,5,'table t61 row 6'), (7,8,'table t61 row 7'), (8,10,'table t61 row 8'), (9,3,'table t61 row 9'), (10,6,'table t61 row 10')
+ok affected=10 insert_id=0
+-- create table k10 (a10 int, b10 int, x10 varchar(40))
+ok affected=0 insert_id=0
+-- insert into k10 select * from t10
+ok affected=10 insert_id=0
+-- SELECT x24,x30,x38,x29,x46,x23,x50,x43,x61,x10 FROM t23,t43,t10,t38,t50,t61,t46,t29,t24,t30 WHERE a29=b50 AND b29=a61 AND a24=b38 AND a30=b43 AND b61=a43 AND a46=b30 AND b46=a38 AND a23=7 AND b10=a50 AND a23=b24
+table t24 row 10 | table t30 row 5 | table t38 row 2 | table t29 row 1 | table t46 row 7 | table t23 row 7 | table t50 row 7 | table t43 row 4 | table t61 row 4 | table t10 row 3
+
+-- SELECT count(*) FROM t23,t43,t10,t38,t50,t61,t46,t29,t24,t30 WHERE a29=b50 AND b29=a61 AND a24=b38 AND a30=b43 AND b61=a43 AND a46=b30 AND b46=a38 AND a23=7 AND b10=a50 AND a23=b24
+1
+
+-- SELECT count(*) FROM t23,t43,k10,t38,t50,t61,t46,t29,t24,t30 WHERE a29=b50 AND b29=a61 AND a24=b38 AND a30=b43 AND b61=a43 AND a46=b30 AND b46=a38 AND a23=7 AND b10=a50 AND a23=b24
+1
+
+-- DROP TABLE IF EXISTS k10
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS t61
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS t50
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS t46
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS t43
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS t38
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS t30
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS t29
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS t24
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS t23
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS t10
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t (id INT PRIMARY KEY, k INT)
+ok affected=0 insert_id=0
+-- INSERT INTO t VALUES (1, 10), (2, 20)
+ok affected=2 insert_id=0
+-- SELECT o.id FROM t AS o WHERE EXISTS (SELECT 1 FROM (SELECT id FROM t ORDER BY id LIMIT 1) AS w WHERE w.id = o.id) ORDER BY o.id
+1
+
+-- SELECT o.id FROM t AS o WHERE EXISTS (SELECT 1 FROM (SELECT id FROM t ORDER BY id LIMIT 1 OFFSET 1) AS w WHERE w.id = o.id) ORDER BY o.id
+2
+
+-- SELECT o.id FROM t AS o WHERE NOT EXISTS (SELECT 1 FROM (SELECT id, ROW_NUMBER() OVER (ORDER BY k, id) AS rn FROM t) AS w WHERE w.id = o.id AND w.rn <= 1) ORDER BY o.id
+2
+
+-- DROP TABLE IF EXISTS t
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE v (b VARCHAR(4))
+ok affected=0 insert_id=0
+-- INSERT IGNORE INTO v VALUES ('éééééé')
+ok affected=1 insert_id=0
+-- INSERT IGNORE INTO v VALUES ('aéééé')
+ok affected=1 insert_id=0
+-- INSERT IGNORE INTO v VALUES ('あいうえお')
+ok affected=1 insert_id=0
+-- INSERT IGNORE INTO v VALUES (123456)
+ok affected=1 insert_id=0
+-- INSERT IGNORE INTO v VALUES (CAST('2020-01-01' AS DATETIME))
+ok affected=1 insert_id=0
+-- INSERT IGNORE INTO v VALUES (X'616263646566')
+ok affected=1 insert_id=0
+-- SHOW WARNINGS
+Warning | 1265 | Data truncated for column 'b' at row 1
+
+-- SELECT b, HEX(b), CHAR_LENGTH(b) FROM v ORDER BY HEX(b)
+1234 | 31323334 | 4
+2020 | 32303230 | 4
+abcd | 61626364 | 4
+aééé | 61C3A9C3A9C3A9 | 4
+éééé | C3A9C3A9C3A9C3A9 | 4
+あいうえ | E38182E38184E38186E38188 | 4
+
+-- CREATE TABLE u (id INT PRIMARY KEY, b VARCHAR(4))
+ok affected=0 insert_id=0
+-- INSERT INTO u VALUES (1, 'x')
+ok affected=1 insert_id=0
+-- UPDATE IGNORE u SET b = 'あいうえお' WHERE id = 1
+ok affected=1 insert_id=0
+-- SELECT b, HEX(b) FROM u
+あいうえ | E38182E38184E38186E38188
+
+-- DROP TABLE IF EXISTS u
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS v
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t (a VARCHAR(10) COLLATE utf8mb4_unicode_520_ci, b ENUM('x','y') COLLATE utf8mb4_bin, c TEXT, d VARBINARY(10))
+ok affected=0 insert_id=0
+-- SHOW FULL COLUMNS FROM t
+a | varchar(10) | utf8mb4_unicode_520_ci | YES |  | NULL |  | select,insert,update,references | 
+b | enum('x','y') | utf8mb4_bin | YES |  | NULL |  | select,insert,update,references | 
+c | text | utf8mb4_0900_ai_ci | YES |  | NULL |  | select,insert,update,references | 
+d | varbinary(10) | NULL | YES |  | NULL |  | select,insert,update,references | 
+
+-- DROP TABLE IF EXISTS t
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE a (id INT PRIMARY KEY AUTO_INCREMENT, v INT)
+ok affected=0 insert_id=0
+-- CREATE TABLE b (id INT PRIMARY KEY, v INT)
+ok affected=0 insert_id=0
+-- INSERT INTO a (v) VALUES (1), (2)
+ok affected=2 insert_id=1
+-- INSERT INTO b VALUES (1, 10), (2, 20)
+ok affected=2 insert_id=0
+-- UPDATE a JOIN b ON a.id = b.id SET a.v = b.v, b.v = a.v
+ok affected=2 insert_id=0
+-- EXPLAIN UPDATE a JOIN b ON a.id = b.id SET a.v = 1
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS b
+ok affected=0 insert_id=0
+-- DROP TABLE IF EXISTS a
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t (id INT PRIMARY KEY, v INT)
+ok affected=0 insert_id=0
+-- INSERT INTO t VALUES (1, 1)
+ok affected=1 insert_id=0
+-- INSERT INTO t VALUES (2, 2), (1, 9)
+error 1062
+-- SELECT * FROM t ORDER BY id
+1 | 1
+
+-- INSERT INTO t SELECT id + 10, v FROM t WHERE id IN (SELECT id FROM t GROUP BY id) UNION ALL SELECT 1, 0
+error 1062
+-- SELECT * FROM t ORDER BY id
+1 | 1
+
+-- DROP TABLE IF EXISTS t
+ok affected=0 insert_id=0

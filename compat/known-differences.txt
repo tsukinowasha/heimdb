@@ -1,0 +1,13 @@
+# MySQL 互換のテスト集（compat/README.md）で、HeimDB 0.2.31 と本物の MySQL 8.0 の違いのうち、知っているもの。
+# 1 行に「キー<タブ>理由」。cmd/compatdiff は、ここにない違いを知らせ、ここにあって違わなくなったものも知らせる。
+# 直したら、その行を消す。段階 91（2026-10-31）に、HeimDB 0.2.31 で見つけたもの（段階 92 と 93 で直したものは消した）。
+
+# 照合順序
+CollationTest::test_literals::compare	unicode_520_ci で、MySQL は末尾の空白を無視し（PAD SPACE、'a ' = 'a'）、'ß' = 'ss' とする。HeimDB はどちらも違うとする。PAD SPACE はデータ形式のバージョンを上げる設計が要る（段階 91 の記録）
+
+# SHOW WARNINGS
+DmlTest::test_insert_id_and_affected::odku_update	ON DUPLICATE KEY UPDATE の VALUES() に、MySQL は非推奨の警告 1287 を出す。HeimDB は出さない
+NumbersTest::test_division_and_zero_dates::zero_in_date	月や日が 0 の日付の警告 1292 の文が違う（MySQL は Incorrect datetime value: '2025-00-10'、HeimDB は Incorrect date value: 2025-00-10）。値（NULL）は同じ
+
+# strict でない書き込み（WordPress の sql_mode）
+DmlTest::test_write_fit::update	UPDATE の警告の行の番号が違う。MySQL は読んだ行の番号（索引で絞らなければ表の何行目か）、HeimDB は書き換えた行の何番目か（段階 21 から。段階 92 の記録）。値と警告の種類は同じ

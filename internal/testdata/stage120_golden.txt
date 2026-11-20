@@ -1,0 +1,1527 @@
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE fm (id INT PRIMARY KEY, f FLOAT(7,2), d DOUBLE(10,3), u FLOAT(5,1) UNSIGNED, p FLOAT, q DOUBLE, fu FLOAT UNSIGNED, du DOUBLE UNSIGNED, f30 FLOAT(30,5), r REAL(8,3), dp DOUBLE PRECISION(6,2), f25 FLOAT(25), f24 FLOAT(24), f0 FLOAT(7,0), f25u FLOAT(25) UNSIGNED)
+ok affected=0
+-- INSERT INTO fm VALUES (1, 1.55, 2.001, 1.2, 1.5, 1.5, 1, 1, 1234567.125, 1.234, 1.23, 1.5, 1.5, 2, 1), (2, 12345.68, 1234567.891, 0, 2, 2, 2, 2, 1, 1, 1, 1, 1, -3, 2), (3, 99999.99, 0, 3.4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 0, 3), (4, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL), (5, 0.1, -0.001, 99.9, 0.5, 0.25, 0, 0, -1.5, -2.5, 0.01, 0.1, 0.1, 7, 0)
+ok affected=5
+-- SHOW CREATE TABLE fm
+fm | CREATE TABLE `fm` (
+  `id` int NOT NULL,
+  `f` float(7,2) DEFAULT NULL,
+  `d` double(10,3) DEFAULT NULL,
+  `u` float(5,1) unsigned DEFAULT NULL,
+  `p` float DEFAULT NULL,
+  `q` double DEFAULT NULL,
+  `fu` float unsigned DEFAULT NULL,
+  `du` double unsigned DEFAULT NULL,
+  `f30` float(30,5) DEFAULT NULL,
+  `r` double(8,3) DEFAULT NULL,
+  `dp` double(6,2) DEFAULT NULL,
+  `f25` double DEFAULT NULL,
+  `f24` float DEFAULT NULL,
+  `f0` float(7,0) DEFAULT NULL,
+  `f25u` double unsigned DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+-- DESCRIBE fm
+id | int | NO | PRI | NULL | 
+f | float(7,2) | YES |  | NULL | 
+d | double(10,3) | YES |  | NULL | 
+u | float(5,1) unsigned | YES |  | NULL | 
+p | float | YES |  | NULL | 
+q | double | YES |  | NULL | 
+fu | float unsigned | YES |  | NULL | 
+du | double unsigned | YES |  | NULL | 
+f30 | float(30,5) | YES |  | NULL | 
+r | double(8,3) | YES |  | NULL | 
+dp | double(6,2) | YES |  | NULL | 
+f25 | double | YES |  | NULL | 
+f24 | float | YES |  | NULL | 
+f0 | float(7,0) | YES |  | NULL | 
+f25u | double unsigned | YES |  | NULL | 
+
+-- SHOW FULL COLUMNS FROM fm
+id | int | NULL | NO | PRI | NULL |  | select,insert,update,references | 
+f | float(7,2) | NULL | YES |  | NULL |  | select,insert,update,references | 
+d | double(10,3) | NULL | YES |  | NULL |  | select,insert,update,references | 
+u | float(5,1) unsigned | NULL | YES |  | NULL |  | select,insert,update,references | 
+p | float | NULL | YES |  | NULL |  | select,insert,update,references | 
+q | double | NULL | YES |  | NULL |  | select,insert,update,references | 
+fu | float unsigned | NULL | YES |  | NULL |  | select,insert,update,references | 
+du | double unsigned | NULL | YES |  | NULL |  | select,insert,update,references | 
+f30 | float(30,5) | NULL | YES |  | NULL |  | select,insert,update,references | 
+r | double(8,3) | NULL | YES |  | NULL |  | select,insert,update,references | 
+dp | double(6,2) | NULL | YES |  | NULL |  | select,insert,update,references | 
+f25 | double | NULL | YES |  | NULL |  | select,insert,update,references | 
+f24 | float | NULL | YES |  | NULL |  | select,insert,update,references | 
+f0 | float(7,0) | NULL | YES |  | NULL |  | select,insert,update,references | 
+f25u | double unsigned | NULL | YES |  | NULL |  | select,insert,update,references | 
+
+-- SELECT COLUMN_NAME, COLUMN_TYPE, DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'fm' ORDER BY ORDINAL_POSITION
+id | int | int
+f | float(7,2) | float
+d | double(10,3) | double
+u | float(5,1) unsigned | float
+p | float | float
+q | double | double
+fu | float unsigned | float
+du | double unsigned | double
+f30 | float(30,5) | float
+r | double(8,3) | double
+dp | double(6,2) | double
+f25 | double | double
+f24 | float | float
+f0 | float(7,0) | float
+f25u | double unsigned | double
+
+-- SELECT * FROM fm ORDER BY id
+# INT32/0 FLOAT32/2 FLOAT64/3 FLOAT32/1 FLOAT32/31 FLOAT64/31 FLOAT32/31 FLOAT64/31 FLOAT32/5 FLOAT64/3 FLOAT64/2 FLOAT64/31 FLOAT32/31 FLOAT32/0 FLOAT64/31
+1 | 1.55 | 2.001 | 1.2 | 1.5 | 1.5 | 1 | 1 | 1234567.12500 | 1.234 | 1.23 | 1.5 | 1.5 | 2 | 1
+2 | 12345.68 | 1234567.891 | 0.0 | 2 | 2 | 2 | 2 | 1.00000 | 1.000 | 1.00 | 1 | 1 | -3 | 2
+3 | 99999.99 | 0.000 | 3.4 | 3 | 3 | 3 | 3 | 3.00000 | 3.000 | 3.00 | 3 | 3 | 0 | 3
+4 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL
+5 | 0.10 | -0.001 | 99.9 | 0.5 | 0.25 | 0 | 0 | -1.50000 | -2.500 | 0.01 | 0.1 | 0.1 | 7 | 0
+
+-- SELECT id, f + 0, f - 1, f * 2, f % 3, f / 3, d / 3, -f, ABS(f), -u, u - 1, f + d, f + p, f + 1.5, f + id, f * 1.5, f / 2.5, 1.5 / f, d / f, f / p, f0 + 1, f0 / 2 FROM fm ORDER BY id
+# INT32/0 FLOAT64/2 FLOAT64/2 FLOAT64/2 FLOAT64/2 FLOAT64/6 FLOAT64/7 FLOAT64/2 FLOAT64/2 FLOAT64/1 FLOAT64/1 FLOAT64/3 FLOAT64/31 FLOAT64/2 FLOAT64/2 FLOAT64/2 FLOAT64/6 FLOAT64/6 FLOAT64/7 FLOAT64/31 FLOAT64/0 FLOAT64/4
+1 | 1.55 | 0.55 | 3.10 | 1.55 | 0.516667 | 0.6670000 | -1.55 | 1.55 | -1.2 | 0.2 | 3.551 | 3.049999952316284 | 3.05 | 2.55 | 2.32 | 0.620000 | 0.967742 | 1.2909678 | 1.0333333015441895 | 3 | 1.0000
+2 | 12345.68 | 12344.68 | 24691.36 | 0.68 | 4115.226562 | 411522.6303333 | -12345.68 | 12345.68 | -0.0 | -1.0 | 1246913.571 | 12347.6796875 | 12347.18 | 12347.68 | 18518.52 | 4938.271875 | 0.000121 | 99.9999937 | 6172.83984375 | -2 | -1.5000
+3 | 99999.99 | 99998.99 | 199999.98 | 0.99 | 33333.330729 | 0.0000000 | -99999.99 | 99999.99 | -3.4 | 2.4 | 99999.992 | 100002.9921875 | 100001.49 | 100002.99 | 149999.99 | 39999.996875 | 0.000015 | 0.0000000 | 33333.330729166664 | 1 | 0.0000
+4 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL
+5 | 0.10 | -0.90 | 0.20 | 0.10 | 0.033333 | -0.0003333 | -0.10 | 0.10 | -99.9 | 98.9 | 0.099 | 0.6000000014901161 | 1.60 | 5.10 | 0.15 | 0.040000 | 15.000000 | -0.0100000 | 0.20000000298023224 | 8 | 3.5000
+
+-- SELECT id, IF(id > 1, f, d), COALESCE(f, d), IFNULL(f, 0), IFNULL(f, d), CASE WHEN id > 1 THEN f ELSE d END, CASE WHEN id > 1 THEN f ELSE 0 END, IF(id > 1, f, f), COALESCE(u, 0), f DIV 1 FROM fm ORDER BY id
+# INT32/0 FLOAT64/3 FLOAT64/3 FLOAT32/2 FLOAT64/3 FLOAT64/3 FLOAT32/2 FLOAT32/2 FLOAT32/1 INT64/0
+1 | 2.001 | 1.550 | 1.55 | 1.550 | 2.001 | 0.00 | 1.55 | 1.2 | 1
+2 | 12345.680 | 12345.680 | 12345.68 | 12345.680 | 12345.680 | 12345.68 | 12345.68 | 0.0 | 12345
+3 | 99999.992 | 99999.992 | 99999.99 | 99999.992 | 99999.992 | 99999.99 | 99999.99 | 3.4 | 99999
+4 | NULL | NULL | 0.00 | NULL | NULL | NULL | NULL | 0.0 | NULL
+5 | 0.100 | 0.100 | 0.10 | 0.100 | 0.100 | 0.10 | 0.10 | 99.9 | 0
+
+-- SELECT SUM(f), AVG(f), MAX(f), MIN(f), SUM(d), AVG(d), MAX(d), MIN(d), AVG(u), SUM(f0), AVG(f0), MAX(f30), SUM(p) FROM fm
+# FLOAT64/2 FLOAT64/6 FLOAT32/2 FLOAT32/2 FLOAT64/3 FLOAT64/7 FLOAT64/3 FLOAT64/3 FLOAT64/5 FLOAT64/0 FLOAT64/4 FLOAT32/5 FLOAT64/31
+112347.32 | 28086.830469 | 99999.99 | 0.10 | 1234569.891 | 308642.4727500 | 1234567.891 | -0.001 | 26.12500 | 6 | 1.5000 | 1234567.12500 | 7
+
+-- SELECT id, SUM(f) OVER (ORDER BY id), AVG(d) OVER (), MAX(u) OVER (), MIN(f) OVER (PARTITION BY id > 2) FROM fm ORDER BY id
+# INT32/0 FLOAT64/2 FLOAT64/7 FLOAT32/1 FLOAT32/2
+1 | 1.55 | 308642.4727500 | 99.9 | 1.55
+2 | 12347.23 | 308642.4727500 | 99.9 | 1.55
+3 | 112347.22 | 308642.4727500 | 99.9 | 0.10
+4 | 112347.22 | 308642.4727500 | 99.9 | 0.10
+5 | 112347.32 | 308642.4727500 | 99.9 | 0.10
+
+-- SELECT id DIV 2 AS g, SUM(f), AVG(f), MAX(d) FROM fm GROUP BY g ORDER BY g
+# INT64/0 FLOAT64/2 FLOAT64/6 FLOAT64/3
+0 | 1.55 | 1.550000 | 2.001
+1 | 112345.67 | 56172.835938 | 1234567.891
+2 | 0.10 | 0.100000 | -0.001
+
+-- CREATE TABLE x1 (f FLOAT(256,2))
+error 1439
+-- CREATE TABLE x2 (f FLOAT(40,31))
+error 1425
+-- CREATE TABLE x3 (f FLOAT(3,5))
+error 1427
+-- CREATE TABLE x4 (f DOUBLE(256,2))
+error 1439
+-- CREATE TABLE x5 (f DOUBLE(10,31))
+error 1425
+-- CREATE TABLE x6 (f FLOAT(0,0))
+error 1439
+-- CREATE TABLE x7 (f FLOAT(255,30), g DOUBLE(255,30), h FLOAT(53,2))
+ok affected=0
+-- SHOW CREATE TABLE x7
+x7 | CREATE TABLE `x7` (
+  `f` float(255,30) DEFAULT NULL,
+  `g` double(255,30) DEFAULT NULL,
+  `h` float(53,2) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+-- DROP TABLE x7
+ok affected=0
+-- ALTER TABLE fm ADD COLUMN z DOUBLE(300,2)
+error 1439
+-- ALTER TABLE fm MODIFY f FLOAT(8,3)
+ok
+-- ALTER TABLE fm MODIFY p FLOAT(10,4) UNSIGNED, MODIFY q DOUBLE(12,4)
+ok
+-- ALTER TABLE fm MODIFY fu FLOAT
+ok
+-- SHOW CREATE TABLE fm
+fm | CREATE TABLE `fm` (
+  `id` int NOT NULL,
+  `f` float(8,3) DEFAULT NULL,
+  `d` double(10,3) DEFAULT NULL,
+  `u` float(5,1) unsigned DEFAULT NULL,
+  `p` float(10,4) unsigned DEFAULT NULL,
+  `q` double(12,4) DEFAULT NULL,
+  `fu` float DEFAULT NULL,
+  `du` double unsigned DEFAULT NULL,
+  `f30` float(30,5) DEFAULT NULL,
+  `r` double(8,3) DEFAULT NULL,
+  `dp` double(6,2) DEFAULT NULL,
+  `f25` double DEFAULT NULL,
+  `f24` float DEFAULT NULL,
+  `f0` float(7,0) DEFAULT NULL,
+  `f25u` double unsigned DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+-- SELECT id, f, p, q, fu FROM fm ORDER BY id
+# INT32/0 FLOAT32/3 FLOAT32/4 FLOAT64/4 FLOAT32/31
+1 | 1.550 | 1.5000 | 1.5000 | 1
+2 | 12345.680 | 2.0000 | 2.0000 | 2
+3 | 99999.992 | 3.0000 | 3.0000 | 3
+4 | NULL | NULL | NULL | NULL
+5 | 0.100 | 0.5000 | 0.2500 | 0
+
+-- ALTER TABLE fm MODIFY f FLOAT(3,5)
+error 1427
+-- CREATE TABLE wfLocs (IP BINARY(16) NOT NULL DEFAULT '', ctime INT UNSIGNED NOT NULL, failed TINYINT UNSIGNED NOT NULL, city VARCHAR(255) DEFAULT '', region VARCHAR(255) DEFAULT '', countryName VARCHAR(255) DEFAULT '', countryCode CHAR(2) DEFAULT '', lat FLOAT(10,7) DEFAULT 0, lon FLOAT(10,7) DEFAULT 0, PRIMARY KEY (IP))
+ok affected=0
+-- INSERT INTO wfLocs (IP, ctime, failed, city, lat, lon) VALUES ('a', 1, 0, 'Tokyo', 35.6812363, 139.7671248), ('b', 2, 0, 'Sydney', -33.8688197, 151.2092955), ('c', 3, 1, '', 0, 0)
+ok affected=3
+-- SELECT city, lat, lon FROM wfLocs ORDER BY ctime
+# VARCHAR/0 FLOAT32/7 FLOAT32/7
+Tokyo | 35.6812363 | 139.7671204
+Sydney | -33.8688202 | 151.2092896
+ | 0.0000000 | 0.0000000
+
+-- DESCRIBE wfLocs
+IP | binary(16) | NO | PRI | 0x | 
+ctime | int unsigned | NO |  | NULL | 
+failed | tinyint unsigned | NO |  | NULL | 
+city | varchar(255) | YES |  |  | 
+region | varchar(255) | YES |  |  | 
+countryName | varchar(255) | YES |  |  | 
+countryCode | char(2) | YES |  |  | 
+lat | float(10,7) | YES |  | 0.0000000 | 
+lon | float(10,7) | YES |  | 0.0000000 | 
+
+-- CREATE TABLE wfHits (id INT UNSIGNED NOT NULL AUTO_INCREMENT, attackLogTime DOUBLE(17,6) UNSIGNED NOT NULL, ctime DOUBLE(17,6) UNSIGNED NOT NULL, statusCode INT NOT NULL DEFAULT 200, PRIMARY KEY (id), KEY k1 (ctime), KEY k2 (attackLogTime))
+ok affected=0
+-- INSERT INTO wfHits (attackLogTime, ctime) VALUES (0, 1700000000.123456), (1700000001.5, 1700000001.000001)
+ok affected=2
+-- SELECT id, attackLogTime, ctime, ctime - attackLogTime, ROUND(ctime) FROM wfHits ORDER BY id
+# UINT32/0 FLOAT64/6 FLOAT64/6 FLOAT64/6 FLOAT64/31
+1 | 0.000000 | 1700000000.123456 | 1700000000.123456 | 1700000000
+2 | 1700000001.500000 | 1700000001.000001 | -0.499999 | 1700000001
+
+-- SELECT id FROM wfHits WHERE ctime > 1700000000.5 ORDER BY id
+# UINT32/0
+2
+
+-- DESCRIBE wfHits
+id | int unsigned | NO | PRI | NULL | auto_increment
+attackLogTime | double(17,6) unsigned | NO | MUL | NULL | 
+ctime | double(17,6) unsigned | NO | MUL | NULL | 
+statusCode | int | NO |  | 200 | 
+
+-- CREATE TABLE changes_logs (log_id BIGINT NOT NULL AUTO_INCREMENT, duration FLOAT(11,4) NOT NULL DEFAULT 0, PRIMARY KEY (log_id))
+ok affected=0
+-- INSERT INTO changes_logs (duration) VALUES (0.0125), (12.5), (0)
+ok affected=3
+-- SELECT log_id, duration, duration * 1000 FROM changes_logs ORDER BY log_id
+# INT64/0 FLOAT32/4 FLOAT64/4
+1 | 0.0125 | 12.5000
+2 | 12.5000 | 12500.0000
+3 | 0.0000 | 0.0000
+
+-- SHOW COLUMNS FROM changes_logs
+log_id | bigint | NO | PRI | NULL | auto_increment
+duration | float(11,4) | NO |  | 0.0000 | 
+
+-- DROP TABLE changes_logs
+ok affected=0
+-- DROP TABLE wfHits
+ok affected=0
+-- DROP TABLE wfLocs
+ok affected=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE fm
+ok affected=0
+-- CREATE TABLE rw (id INT PRIMARY KEY, f FLOAT(7,2), d DOUBLE(10,3), u FLOAT(5,1) UNSIGNED, fu FLOAT UNSIGNED, du DOUBLE UNSIGNED, f107 FLOAT(10,7), KEY kf (f), UNIQUE KEY ud (d))
+ok affected=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- INSERT INTO rw VALUES (1, 1.555, 2.0005, 1.25, 1, 1, 1.23456789)
+ok affected=1
+-- SHOW WARNINGS
+
+-- INSERT INTO rw VALUES (2, 12345.678, 1234567.8915, 0.05, 0, 0, 35.6812363)
+ok affected=1
+-- INSERT INTO rw VALUES (3, 99999.999, 99999999, 9999.95, 1e39, 1e300, 1234567.5)
+error 1264
+-- SHOW WARNINGS
+Error | 1264 | Out of range value for column 'f' at row 1
+
+-- INSERT INTO rw VALUES (4, -1, -0.0004, -5, -1, -2, -0.00000005)
+error 1264
+-- SHOW WARNINGS
+Error | 1264 | Out of range value for column 'u' at row 1
+
+-- INSERT INTO rw VALUES (5, '12.345x', ' 7.0005 ', '-0.04', '3', '-0', '1e-8')
+error 1265
+-- SHOW WARNINGS
+Error | 1265 | Data truncated for column 'f' at row 1
+
+-- INSERT INTO rw VALUES (6, 0.125, 1.0005, 3.35, 2.5, 0.0005, 0.12345675)
+ok affected=1
+-- SELECT * FROM rw ORDER BY id
+# INT32/0 FLOAT32/2 FLOAT64/3 FLOAT32/1 FLOAT32/31 FLOAT64/31 FLOAT32/7
+1 | 1.55 | 2.001 | 1.2 | 1 | 1 | 1.2345679
+2 | 12345.68 | 1234567.891 | 0.0 | 0 | 0 | 35.6812363
+6 | 0.12 | 1.000 | 3.4 | 2.5 | 0.0005 | 0.1234568
+
+-- UPDATE rw SET f = f + 0.005, d = d * 1.0004 WHERE id = 1
+ok affected=1
+-- SHOW WARNINGS
+
+-- UPDATE rw SET d = 99999999, u = -1 WHERE id = 2
+error 1264
+-- SHOW WARNINGS
+Error | 1264 | Out of range value for column 'd' at row 1
+
+-- INSERT INTO rw SELECT id + 10, f * 1.001, d + 1000.0004, u, fu, du, f107 / 3 FROM rw WHERE id <= 2
+ok affected=2
+-- SHOW WARNINGS
+
+-- INSERT INTO rw (id, f, d) VALUES (1, 2.345, 5) ON DUPLICATE KEY UPDATE f = f + 1.004, u = 2.25
+ok affected=2
+-- SHOW WARNINGS
+
+-- INSERT INTO rw (id, d) VALUES (20, 2.0016)
+error 1062
+-- INSERT INTO rw (id, d) VALUES (21, 2.0024)
+error 1062
+-- SELECT * FROM rw ORDER BY id
+# INT32/0 FLOAT32/2 FLOAT64/3 FLOAT32/1 FLOAT32/31 FLOAT64/31 FLOAT32/7
+1 | 2.55 | 2.002 | 2.2 | 1 | 1 | 1.2345679
+2 | 12345.68 | 1234567.891 | 0.0 | 0 | 0 | 35.6812363
+6 | 0.12 | 1.000 | 3.4 | 2.5 | 0.0005 | 0.1234568
+11 | 1.55 | 1002.002 | 1.2 | 1 | 1 | 0.4115226
+12 | 12358.03 | 1235567.891 | 0.0 | 0 | 0 | 11.8937454
+
+-- SELECT id FROM rw WHERE f = 1.56 ORDER BY id
+# INT32/0
+
+-- SELECT id FROM rw IGNORE INDEX (kf) WHERE f = 1.56 ORDER BY id
+# INT32/0
+
+-- SELECT id FROM rw WHERE f > 12345.68 ORDER BY id
+# INT32/0
+12
+
+-- SELECT id FROM rw IGNORE INDEX (kf) WHERE f > 12345.68 ORDER BY id
+# INT32/0
+12
+
+-- SELECT id FROM rw WHERE d = 2.002 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM rw IGNORE INDEX (ud) WHERE d = 2.002 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM rw WHERE d >= 7 ORDER BY id
+# INT32/0
+2
+11
+12
+
+-- SELECT id FROM rw IGNORE INDEX (ud) WHERE d >= 7 ORDER BY id
+# INT32/0
+2
+11
+12
+
+-- DELETE FROM rw
+ok affected=5
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- INSERT INTO rw VALUES (1, 1.555, 2.0005, 1.25, 1, 1, 1.23456789)
+ok affected=1
+-- SHOW WARNINGS
+
+-- INSERT INTO rw VALUES (2, 12345.678, 1234567.8915, 0.05, 0, 0, 35.6812363)
+ok affected=1
+-- INSERT INTO rw VALUES (3, 99999.999, 99999999, 9999.95, 1e39, 1e300, 1234567.5)
+ok affected=1
+-- SHOW WARNINGS
+Warning | 1264 | Out of range value for column 'f' at row 1
+Warning | 1264 | Out of range value for column 'd' at row 1
+Warning | 1264 | Out of range value for column 'u' at row 1
+Warning | 1264 | Out of range value for column 'fu' at row 1
+Warning | 1264 | Out of range value for column 'f107' at row 1
+
+-- INSERT INTO rw VALUES (4, -1, -0.0004, -5, -1, -2, -0.00000005)
+ok affected=1
+-- SHOW WARNINGS
+Warning | 1264 | Out of range value for column 'u' at row 1
+Warning | 1264 | Out of range value for column 'fu' at row 1
+Warning | 1264 | Out of range value for column 'du' at row 1
+
+-- INSERT INTO rw VALUES (5, '12.345x', ' 7.0005 ', '-0.04', '3', '-0', '1e-8')
+ok affected=1
+-- SHOW WARNINGS
+Warning | 1265 | Data truncated for column 'f' at row 1
+Warning | 1264 | Out of range value for column 'u' at row 1
+
+-- INSERT INTO rw VALUES (6, 0.125, 1.0005, 3.35, 2.5, 0.0005, 0.12345675)
+ok affected=1
+-- SELECT * FROM rw ORDER BY id
+# INT32/0 FLOAT32/2 FLOAT64/3 FLOAT32/1 FLOAT32/31 FLOAT64/31 FLOAT32/7
+1 | 1.55 | 2.001 | 1.2 | 1 | 1 | 1.2345679
+2 | 12345.68 | 1234567.891 | 0.0 | 0 | 0 | 35.6812363
+3 | 99999.99 | 9999999.999 | 9999.9 | 3.40282e38 | 1e300 | 1000.0000000
+4 | -1.00 | 0.000 | 0.0 | 0 | 0 | 0.0000000
+5 | 12.35 | 7.000 | 0.0 | 3 | -0 | 0.0000000
+6 | 0.12 | 1.000 | 3.4 | 2.5 | 0.0005 | 0.1234568
+
+-- UPDATE rw SET f = f + 0.005, d = d * 1.0004 WHERE id = 1
+ok affected=1
+-- SHOW WARNINGS
+
+-- UPDATE rw SET d = 99999999, u = -1 WHERE id = 2
+error 1062
+-- SHOW WARNINGS
+Warning | 1264 | Out of range value for column 'd' at row 1
+Warning | 1264 | Out of range value for column 'u' at row 1
+Error | 1062 | Duplicate entry '9999999.999' for key 'rw.ud'
+
+-- INSERT INTO rw SELECT id + 10, f * 1.001, d + 1000.0004, u, fu, du, f107 / 3 FROM rw WHERE id <= 2
+ok affected=2
+-- SHOW WARNINGS
+
+-- INSERT INTO rw (id, f, d) VALUES (1, 2.345, 5) ON DUPLICATE KEY UPDATE f = f + 1.004, u = 2.25
+ok affected=2
+-- SHOW WARNINGS
+
+-- INSERT INTO rw (id, d) VALUES (20, 2.0016)
+error 1062
+-- INSERT INTO rw (id, d) VALUES (21, 2.0024)
+error 1062
+-- SELECT * FROM rw ORDER BY id
+# INT32/0 FLOAT32/2 FLOAT64/3 FLOAT32/1 FLOAT32/31 FLOAT64/31 FLOAT32/7
+1 | 2.55 | 2.002 | 2.2 | 1 | 1 | 1.2345679
+2 | 12345.68 | 1234567.891 | 0.0 | 0 | 0 | 35.6812363
+3 | 99999.99 | 9999999.999 | 9999.9 | 3.40282e38 | 1e300 | 1000.0000000
+4 | -1.00 | 0.000 | 0.0 | 0 | 0 | 0.0000000
+5 | 12.35 | 7.000 | 0.0 | 3 | -0 | 0.0000000
+6 | 0.12 | 1.000 | 3.4 | 2.5 | 0.0005 | 0.1234568
+11 | 1.55 | 1002.002 | 1.2 | 1 | 1 | 0.4115226
+12 | 12358.03 | 1235567.891 | 0.0 | 0 | 0 | 11.8937454
+
+-- SELECT id FROM rw WHERE f = 1.56 ORDER BY id
+# INT32/0
+
+-- SELECT id FROM rw IGNORE INDEX (kf) WHERE f = 1.56 ORDER BY id
+# INT32/0
+
+-- SELECT id FROM rw WHERE f > 12345.68 ORDER BY id
+# INT32/0
+3
+12
+
+-- SELECT id FROM rw IGNORE INDEX (kf) WHERE f > 12345.68 ORDER BY id
+# INT32/0
+3
+12
+
+-- SELECT id FROM rw WHERE d = 2.002 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM rw IGNORE INDEX (ud) WHERE d = 2.002 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM rw WHERE d >= 7 ORDER BY id
+# INT32/0
+2
+3
+5
+11
+12
+
+-- SELECT id FROM rw IGNORE INDEX (ud) WHERE d >= 7 ORDER BY id
+# INT32/0
+2
+3
+5
+11
+12
+
+-- DELETE FROM rw
+ok affected=8
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- CREATE TABLE c1 (id INT PRIMARY KEY, f FLOAT(7,2), d DOUBLE(10,3))
+ok affected=0
+-- CREATE TABLE c2 (id INT PRIMARY KEY, f FLOAT(7,2), d DOUBLE(10,3), KEY kf (f), KEY kd (d))
+ok affected=0
+-- INSERT INTO c1 VALUES (1, 1.55, 1.5), (2, 1.56, 1.25), (3, 0.1, 0.1), (4, 100, 100), (5, 1.555, 2.0005)
+ok affected=5
+-- INSERT INTO c2 SELECT * FROM c1
+ok affected=5
+-- SELECT * FROM c2 ORDER BY id
+# INT32/0 FLOAT32/2 FLOAT64/3
+1 | 1.55 | 1.500
+2 | 1.56 | 1.250
+3 | 0.10 | 0.100
+4 | 100.00 | 100.000
+5 | 1.55 | 2.001
+
+-- SELECT id FROM c1 WHERE f = 1.55 ORDER BY id
+# INT32/0
+1
+5
+
+-- SELECT id FROM c2 WHERE f = 1.55 ORDER BY id
+# INT32/0
+1
+5
+
+-- SELECT id FROM c1 WHERE f = 0.1 ORDER BY id
+# INT32/0
+3
+
+-- SELECT id FROM c2 WHERE f = 0.1 ORDER BY id
+# INT32/0
+3
+
+-- SELECT id FROM c1 WHERE f > 1.55 ORDER BY id
+# INT32/0
+2
+4
+
+-- SELECT id FROM c2 WHERE f > 1.55 ORDER BY id
+# INT32/0
+2
+4
+
+-- SELECT id FROM c1 WHERE f >= 1.56 ORDER BY id
+# INT32/0
+2
+4
+
+-- SELECT id FROM c2 WHERE f >= 1.56 ORDER BY id
+# INT32/0
+2
+4
+
+-- SELECT id FROM c1 WHERE f < 1.56 ORDER BY id
+# INT32/0
+1
+3
+5
+
+-- SELECT id FROM c2 WHERE f < 1.56 ORDER BY id
+# INT32/0
+1
+3
+5
+
+-- SELECT id FROM c1 WHERE f = 100 ORDER BY id
+# INT32/0
+4
+
+-- SELECT id FROM c2 WHERE f = 100 ORDER BY id
+# INT32/0
+4
+
+-- SELECT id FROM c1 WHERE f <> 1.55 ORDER BY id
+# INT32/0
+2
+3
+4
+
+-- SELECT id FROM c2 WHERE f <> 1.55 ORDER BY id
+# INT32/0
+2
+3
+4
+
+-- SELECT id FROM c1 WHERE d = 1.5 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM c2 WHERE d = 1.5 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM c1 WHERE d = 0.1 ORDER BY id
+# INT32/0
+3
+
+-- SELECT id FROM c2 WHERE d = 0.1 ORDER BY id
+# INT32/0
+3
+
+-- SELECT id FROM c1 WHERE d > 1.25 ORDER BY id
+# INT32/0
+1
+4
+5
+
+-- SELECT id FROM c2 WHERE d > 1.25 ORDER BY id
+# INT32/0
+1
+4
+5
+
+-- SELECT id FROM c1 WHERE d = 2.001 ORDER BY id
+# INT32/0
+5
+
+-- SELECT id FROM c2 WHERE d = 2.001 ORDER BY id
+# INT32/0
+5
+
+-- SELECT id FROM c1 WHERE d > 1.2495 ORDER BY id
+# INT32/0
+1
+2
+4
+5
+
+-- SELECT id FROM c2 WHERE d > 1.2495 ORDER BY id
+# INT32/0
+1
+2
+4
+5
+
+-- SELECT id FROM c1 WHERE d < 1.2505 ORDER BY id
+# INT32/0
+2
+3
+
+-- SELECT id FROM c2 WHERE d < 1.2505 ORDER BY id
+# INT32/0
+2
+3
+
+-- SELECT id FROM c1 WHERE d >= 1.2505 ORDER BY id
+# INT32/0
+1
+4
+5
+
+-- SELECT id FROM c2 WHERE d >= 1.2505 ORDER BY id
+# INT32/0
+1
+4
+5
+
+-- SELECT id FROM c1 WHERE d <= 1.2495 ORDER BY id
+# INT32/0
+3
+
+-- SELECT id FROM c2 WHERE d <= 1.2495 ORDER BY id
+# INT32/0
+3
+
+-- SELECT id FROM c1 WHERE d BETWEEN 1.2495 AND 1.2505 ORDER BY id
+# INT32/0
+2
+
+-- SELECT id FROM c2 WHERE d BETWEEN 1.2495 AND 1.2505 ORDER BY id
+# INT32/0
+2
+
+-- SELECT id FROM c1 WHERE f >= 1.555 ORDER BY id
+# INT32/0
+2
+4
+
+-- SELECT id FROM c2 WHERE f >= 1.555 ORDER BY id
+# INT32/0
+2
+4
+
+-- SELECT id FROM c1 WHERE f < 1.555 ORDER BY id
+# INT32/0
+1
+3
+5
+
+-- SELECT id FROM c2 WHERE f < 1.555 ORDER BY id
+# INT32/0
+1
+3
+5
+
+-- /* rows */ SELECT id, IF(f = 1.55, 'y', 'n'), IF(f = 0.1, 'y', 'n'), IF(f > 1.55, 'y', 'n'), IF(d = 2.001, 'y', 'n'), IF(f = 1.55e0, 'y', 'n') FROM c1 ORDER BY id
+1 | y | n | n | n | n
+2 | n | n | y | n | n
+3 | n | y | n | n | n
+4 | n | n | y | n | n
+5 | y | n | n | y | n
+
+-- CREATE TABLE ra (id INT PRIMARY KEY, y FLOAT)
+ok affected=0
+-- INSERT INTO ra VALUES (1, 1.23456), (2, 2.5), (3, -1)
+ok affected=3
+-- ALTER TABLE ra MODIFY y FLOAT(5,1) UNSIGNED
+error 1264
+-- SELECT * FROM ra ORDER BY id
+# INT32/0 FLOAT32/31
+1 | 1.23456
+2 | 2.5
+3 | -1
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- ALTER TABLE ra MODIFY y FLOAT(5,1) UNSIGNED
+ok
+-- SELECT * FROM ra ORDER BY id
+# INT32/0 FLOAT32/1
+1 | 1.2
+2 | 2.5
+3 | 0.0
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE ra
+ok affected=0
+-- DROP TABLE c2
+ok affected=0
+-- DROP TABLE c1
+ok affected=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE rw
+ok affected=0
+-- CREATE TABLE sb (id INT PRIMARY KEY, s SET('a','b','c'), b BIT(8), b64 BIT(64), KEY ks (s), KEY kb (b), KEY kb64 (b64), UNIQUE KEY us (s, b))
+ok affected=0
+-- INSERT INTO sb VALUES (1, 'a', 5, 1), (2, 'a,c', 255, 18446744073709551615), (3, '', 0, 9223372036854775808), (4, 'b,c', 16, 0), (5, NULL, NULL, NULL), (6, 'a', 6, 2), (7, 'c', 53, 9223372036854775807)
+ok affected=7
+-- CREATE TABLE sj (id INT PRIMARY KEY, v VARCHAR(10))
+ok affected=0
+-- INSERT INTO sj VALUES (1, 'c'), (2, '4'), (3, 'a,c'), (4, 'x')
+ok affected=4
+-- SELECT id FROM sb WHERE s = 'a' ORDER BY id
+# INT32/0
+1
+6
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE s = 'a' ORDER BY id
+# INT32/0
+1
+6
+
+-- SELECT id FROM sb WHERE s = 'bad' ORDER BY id
+# INT32/0
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE s = 'bad' ORDER BY id
+# INT32/0
+
+-- SELECT id FROM sb WHERE s IN ('a', 'bad') ORDER BY id
+# INT32/0
+1
+6
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE s IN ('a', 'bad') ORDER BY id
+# INT32/0
+1
+6
+
+-- SELECT id FROM sb WHERE s IN ('a,c', 'b,c') ORDER BY id
+# INT32/0
+2
+4
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE s IN ('a,c', 'b,c') ORDER BY id
+# INT32/0
+2
+4
+
+-- SELECT id FROM sb WHERE s = '' ORDER BY id
+# INT32/0
+3
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE s = '' ORDER BY id
+# INT32/0
+3
+
+-- SELECT id FROM sb WHERE s = 3 ORDER BY id
+# INT32/0
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE s = 3 ORDER BY id
+# INT32/0
+
+-- SELECT id FROM sb WHERE s IS NULL ORDER BY id
+# INT32/0
+5
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE s IS NULL ORDER BY id
+# INT32/0
+5
+
+-- SELECT id FROM sb WHERE b = 5 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE b = 5 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM sb WHERE b > 5 ORDER BY id
+# INT32/0
+2
+4
+6
+7
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE b > 5 ORDER BY id
+# INT32/0
+2
+4
+6
+7
+
+-- SELECT id FROM sb WHERE b >= 6 AND b < 255 ORDER BY id
+# INT32/0
+4
+6
+7
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE b >= 6 AND b < 255 ORDER BY id
+# INT32/0
+4
+6
+7
+
+-- SELECT id FROM sb WHERE b IN (5, 16, 300) ORDER BY id
+# INT32/0
+1
+4
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE b IN (5, 16, 300) ORDER BY id
+# INT32/0
+1
+4
+
+-- SELECT id FROM sb WHERE b BETWEEN 6 AND 53 ORDER BY id
+# INT32/0
+4
+6
+7
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE b BETWEEN 6 AND 53 ORDER BY id
+# INT32/0
+4
+6
+7
+
+-- SELECT id FROM sb WHERE b = 256 ORDER BY id
+# INT32/0
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE b = 256 ORDER BY id
+# INT32/0
+
+-- SELECT id FROM sb WHERE b = -1 ORDER BY id
+# INT32/0
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE b = -1 ORDER BY id
+# INT32/0
+
+-- SELECT id FROM sb WHERE b < 0 ORDER BY id
+# INT32/0
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE b < 0 ORDER BY id
+# INT32/0
+
+-- SELECT id FROM sb WHERE b <> 5 ORDER BY id
+# INT32/0
+2
+3
+4
+6
+7
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE b <> 5 ORDER BY id
+# INT32/0
+2
+3
+4
+6
+7
+
+-- SELECT id FROM sb WHERE b64 >= 9223372036854775808 ORDER BY id
+# INT32/0
+2
+3
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE b64 >= 9223372036854775808 ORDER BY id
+# INT32/0
+2
+3
+
+-- SELECT id FROM sb WHERE b64 < 2 ORDER BY id
+# INT32/0
+1
+4
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE b64 < 2 ORDER BY id
+# INT32/0
+1
+4
+
+-- SELECT id FROM sb WHERE b64 = 18446744073709551615 ORDER BY id
+# INT32/0
+2
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE b64 = 18446744073709551615 ORDER BY id
+# INT32/0
+2
+
+-- SELECT id FROM sb WHERE s = 'a' AND b > 5 ORDER BY id
+# INT32/0
+6
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE s = 'a' AND b > 5 ORDER BY id
+# INT32/0
+6
+
+-- SELECT id FROM sb WHERE s = 'a,c' AND b = 255 ORDER BY id
+# INT32/0
+2
+
+-- SELECT id FROM sb IGNORE INDEX (ks, kb, kb64, us) WHERE s = 'a,c' AND b = 255 ORDER BY id
+# INT32/0
+2
+
+-- SELECT id FROM sb FORCE INDEX (kb) WHERE b > 0 ORDER BY b
+# INT32/0
+1
+6
+4
+7
+2
+
+-- SELECT id FROM sb FORCE INDEX (kb) WHERE b >= 0 ORDER BY b DESC
+# INT32/0
+2
+7
+4
+6
+1
+3
+
+-- SELECT id FROM sb FORCE INDEX (kb64) WHERE b64 > 0 ORDER BY b64 DESC
+# INT32/0
+2
+3
+7
+6
+1
+
+-- SELECT id FROM sb FORCE INDEX (ks) WHERE s IN ('a', 'c', 'a,c') ORDER BY s, id
+# INT32/0
+1
+6
+7
+2
+
+-- UPDATE sb SET s = 'b', b = 7 WHERE id = 6
+ok affected=1
+-- DELETE FROM sb WHERE id = 7
+ok affected=1
+-- INSERT INTO sb VALUES (8, 'a,b', 9, 3)
+ok affected=1
+-- INSERT INTO sb VALUES (9, 'a,c', 255, 4)
+error 1062
+-- INSERT INTO sb VALUES (10, 'c,a', 255, 4)
+error 1062
+-- SELECT id FROM sb WHERE s = 'b' ORDER BY id
+# INT32/0
+6
+
+-- SELECT id FROM sb WHERE b IN (6, 7, 9) ORDER BY id
+# INT32/0
+6
+8
+
+-- SELECT id FROM sb WHERE b64 >= 3 ORDER BY id
+# INT32/0
+2
+3
+8
+
+-- SELECT sb.id, sj.id FROM sb JOIN sj ON sb.s = sj.v ORDER BY sb.id, sj.id
+# INT32/0 INT32/0
+2 | 3
+
+-- SELECT sj.id, sb.id FROM sj JOIN sb ON sb.s = sj.v ORDER BY sj.id, sb.id
+# INT32/0 INT32/0
+3 | 2
+
+-- DROP TABLE sj
+ok affected=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE sb
+ok affected=0
+-- CREATE TABLE c2 (id INT PRIMARY KEY, h FLOAT(10,7), k FLOAT(11,4), d DOUBLE(10,3), KEY kh (h), KEY kk (k))
+ok affected=0
+-- INSERT INTO c2 VALUES (1, 35.6812363, 1234567.12345, 1.5), (2, 0.1, 2.5, 0.1), (3, 1.25, 3, 2.001)
+ok affected=3
+-- CREATE TABLE wfHits (id INT PRIMARY KEY, ctime DOUBLE(17,6) UNSIGNED, f FLOAT(7,2), u FLOAT UNSIGNED)
+ok affected=0
+-- INSERT INTO wfHits VALUES (1, 1700000000.123456, 1.55, 2.5), (2, 9.5, 100, 0.5)
+ok affected=2
+-- CREATE TABLE wc_order_stats (id INT PRIMARY KEY, net_total DOUBLE, i INT, fl FLOAT)
+ok affected=0
+-- INSERT INTO wc_order_stats VALUES (1, 10.25, 7, 1.5), (2, 1000, 20, 0.25)
+ok affected=2
+-- CREATE TABLE e (id INT PRIMARY KEY, h FLOAT(10,7), d DOUBLE(5,2))
+ok affected=0
+-- SELECT id FROM c2 WHERE h = 35.6812363 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM c2 IGNORE INDEX (kh, kk) WHERE h = 35.6812363 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM c2 WHERE h >= 35.6812363 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM c2 IGNORE INDEX (kh, kk) WHERE h >= 35.6812363 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM c2 WHERE h IN (35.6812363, 0.1) ORDER BY id
+# INT32/0
+
+-- SELECT id FROM c2 IGNORE INDEX (kh, kk) WHERE h IN (35.6812363, 0.1) ORDER BY id
+# INT32/0
+
+-- SELECT id FROM c2 WHERE h IN (35.6812363, 1.25) ORDER BY id
+# INT32/0
+3
+
+-- SELECT id FROM c2 IGNORE INDEX (kh, kk) WHERE h IN (35.6812363, 1.25) ORDER BY id
+# INT32/0
+3
+
+-- SELECT id FROM c2 WHERE h <> 0 AND h < 35.6812363 ORDER BY id
+# INT32/0
+2
+3
+
+-- SELECT id FROM c2 IGNORE INDEX (kh, kk) WHERE h <> 0 AND h < 35.6812363 ORDER BY id
+# INT32/0
+2
+3
+
+-- SELECT id FROM c2 WHERE h > 1.25 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM c2 IGNORE INDEX (kh, kk) WHERE h > 1.25 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM c2 WHERE h <> 35.6812363 ORDER BY id
+# INT32/0
+2
+3
+
+-- SELECT id FROM c2 IGNORE INDEX (kh, kk) WHERE h <> 35.6812363 ORDER BY id
+# INT32/0
+2
+3
+
+-- SELECT id FROM c2 WHERE h BETWEEN 1.25 AND 35.6812363 ORDER BY id
+# INT32/0
+1
+3
+
+-- SELECT id FROM c2 IGNORE INDEX (kh, kk) WHERE h BETWEEN 1.25 AND 35.6812363 ORDER BY id
+# INT32/0
+1
+3
+
+-- SELECT id FROM c2 WHERE k = 1234567.125 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM c2 IGNORE INDEX (kh, kk) WHERE k = 1234567.125 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM c2 WHERE k >= 1234567.1234 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM c2 IGNORE INDEX (kh, kk) WHERE k >= 1234567.1234 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM c2 WHERE k = 1234567.1234 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM c2 IGNORE INDEX (kh, kk) WHERE k = 1234567.1234 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM c2 WHERE h = 0.1 ORDER BY id
+# INT32/0
+2
+
+-- SELECT id FROM c2 IGNORE INDEX (kh, kk) WHERE h = 0.1 ORDER BY id
+# INT32/0
+2
+
+-- SELECT id FROM c2 WHERE h = 35 ORDER BY id
+# INT32/0
+
+-- SELECT id FROM c2 IGNORE INDEX (kh, kk) WHERE h = 35 ORDER BY id
+# INT32/0
+
+-- SELECT id FROM c2 WHERE h = '35.6812363' ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM c2 IGNORE INDEX (kh, kk) WHERE h = '35.6812363' ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM c2 WHERE h = CAST(35.6812363 AS FLOAT) ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM c2 IGNORE INDEX (kh, kk) WHERE h = CAST(35.6812363 AS FLOAT) ORDER BY id
+# INT32/0
+1
+
+-- UPDATE c2 SET d = 9 WHERE h = 35.6812363
+ok affected=1
+-- SELECT id, d FROM c2 ORDER BY id
+# INT32/0 FLOAT64/3
+1 | 9.000
+2 | 0.100
+3 | 2.001
+
+-- SELECT ctime FROM wfHits UNION ALL SELECT net_total FROM wc_order_stats ORDER BY 1
+# FLOAT64/31
+9.5
+10.25
+1000
+1700000000.123456
+
+-- SELECT ctime FROM wfHits UNION ALL SELECT 1 ORDER BY 1
+# FLOAT64/6
+1.000000
+9.500000
+1700000000.123456
+
+-- SELECT f FROM wfHits UNION ALL SELECT i FROM wc_order_stats ORDER BY 1
+# FLOAT64/2
+1.55
+7.00
+20.00
+100.00
+
+-- SELECT f FROM wfHits UNION ALL SELECT fl FROM wc_order_stats ORDER BY 1
+# FLOAT32/31
+0.25
+1.5
+1.55
+100
+
+-- SELECT u FROM wfHits UNION SELECT net_total FROM wc_order_stats ORDER BY 1
+# FLOAT64/31
+0.5
+2.5
+10.25
+1000
+
+-- SELECT f FROM wfHits UNION ALL SELECT ctime FROM wfHits ORDER BY 1
+# FLOAT64/6
+1.550000
+9.500000
+100.000000
+1700000000.123456
+
+-- SELECT net_total FROM wc_order_stats UNION ALL SELECT fl FROM wc_order_stats ORDER BY 1
+# FLOAT64/31
+0.25
+1.5
+10.25
+1000
+
+-- SELECT MAX(x) FROM (SELECT ctime AS x FROM wfHits UNION ALL SELECT net_total FROM wc_order_stats) t
+# FLOAT64/31
+1700000000.123456
+
+-- CREATE TABLE x1 AS SELECT ctime FROM wfHits UNION ALL SELECT net_total FROM wc_order_stats
+ok affected=4
+-- CREATE TABLE x4 AS SELECT f FROM wfHits UNION ALL SELECT fl FROM wc_order_stats
+ok affected=4
+-- CREATE TABLE x5 AS SELECT u FROM wfHits UNION ALL SELECT net_total FROM wc_order_stats
+ok affected=4
+-- CREATE TABLE x7 AS SELECT net_total FROM wc_order_stats UNION ALL SELECT fl FROM wc_order_stats
+ok affected=4
+-- SELECT TABLE_NAME, COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('x1', 'x4', 'x5', 'x7') ORDER BY TABLE_NAME
+x1 | double
+x4 | float
+x5 | double
+x7 | double
+
+-- DROP TABLE x1
+ok affected=0
+-- DROP TABLE x4
+ok affected=0
+-- DROP TABLE x5
+ok affected=0
+-- DROP TABLE x7
+ok affected=0
+-- INSERT INTO e VALUES (1, 1000, 1)
+error 1264
+-- INSERT INTO e VALUES (2, -1000, 1)
+error 1264
+-- INSERT INTO e VALUES (3, 999.99999999, 1)
+error 1264
+-- INSERT INTO e VALUES (4, 999.9999999, 999.99)
+ok affected=1
+-- INSERT INTO e VALUES (5, 999.99999994, 999.994)
+ok affected=1
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- INSERT INTO e VALUES (6, 1000, 999.995)
+ok affected=1
+-- SHOW WARNINGS
+Warning | 1264 | Out of range value for column 'h' at row 1
+Warning | 1264 | Out of range value for column 'd' at row 1
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT * FROM e ORDER BY id
+# INT32/0 FLOAT32/7 FLOAT64/2
+4 | 1000.0000000 | 999.99
+5 | 1000.0000000 | 999.99
+6 | 1000.0000000 | 999.99
+
+-- UPDATE e SET h = h + 0.0000001 WHERE id = 4
+error 1264
+-- UPDATE e SET d = 1 WHERE id = 6
+ok affected=1
+-- INSERT INTO e SELECT id + 10, h, d FROM e
+ok affected=3
+-- INSERT INTO e SELECT 20, h + 0, d FROM e WHERE id = 6
+error 1264
+-- SELECT * FROM e ORDER BY id
+# INT32/0 FLOAT32/7 FLOAT64/2
+4 | 1000.0000000 | 999.99
+5 | 1000.0000000 | 999.99
+6 | 1000.0000000 | 1.00
+14 | 1000.0000000 | 999.99
+15 | 1000.0000000 | 999.99
+16 | 1000.0000000 | 1.00
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE e
+ok affected=0
+-- DROP TABLE wc_order_stats
+ok affected=0
+-- DROP TABLE wfHits
+ok affected=0
+-- DROP TABLE c2
+ok affected=0
+-- CREATE TABLE fa (id INT PRIMARY KEY, h FLOAT(10,7), k FLOAT(11,4), f FLOAT, d DOUBLE, dm DOUBLE(10,3), dec1 DECIMAL(12,7), i INT)
+ok affected=0
+-- CREATE TABLE fi (id INT PRIMARY KEY, h FLOAT(10,7), k FLOAT(11,4), f FLOAT, d DOUBLE, dm DOUBLE(10,3), dec1 DECIMAL(12,7), i INT, KEY (h), KEY (k), KEY (f), KEY (d), KEY (dm), KEY (dec1), KEY (i))
+ok affected=0
+-- INSERT INTO fa VALUES (1, 35.6812363, 35.6812363, 35.6812363, 35.6812363, 35.6812363, 35.6812363, 35), (2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0), (3, 1.55, 1.55, 1.55, 1.55, 1.55, 1.55, 2), (4, -35.6812363, -35.6812363, -35.6812363, -35.6812363, -35.6812363, -35.6812363, -35), (5, NULL, NULL, NULL, NULL, NULL, NULL, NULL), (6, 100, 100, 100, 100, 100, 100, 100)
+ok affected=6
+-- INSERT INTO fi SELECT * FROM fa
+ok affected=6
+-- SELECT a.id, b.id FROM fa a JOIN fi b ON a.dec1 = b.dm ORDER BY a.id, b.id
+# INT32/0 INT32/0
+2 | 2
+3 | 3
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fa b ON a.dec1 = b.dm ORDER BY a.id, b.id
+# INT32/0 INT32/0
+2 | 2
+3 | 3
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fi b ON a.d = b.dm ORDER BY a.id, b.id
+# INT32/0 INT32/0
+2 | 2
+3 | 3
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fa b ON a.d = b.dm ORDER BY a.id, b.id
+# INT32/0 INT32/0
+2 | 2
+3 | 3
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fi b ON a.i = b.dm ORDER BY a.id, b.id
+# INT32/0 INT32/0
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fa b ON a.i = b.dm ORDER BY a.id, b.id
+# INT32/0 INT32/0
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fi b ON a.d = b.h ORDER BY a.id, b.id
+# INT32/0 INT32/0
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fa b ON a.d = b.h ORDER BY a.id, b.id
+# INT32/0 INT32/0
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fi b ON a.dec1 = b.f ORDER BY a.id, b.id
+# INT32/0 INT32/0
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fa b ON a.dec1 = b.f ORDER BY a.id, b.id
+# INT32/0 INT32/0
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fi b ON a.d = b.f ORDER BY a.id, b.id
+# INT32/0 INT32/0
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fa b ON a.d = b.f ORDER BY a.id, b.id
+# INT32/0 INT32/0
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fi b ON a.h = b.h ORDER BY a.id, b.id
+# INT32/0 INT32/0
+1 | 1
+2 | 2
+3 | 3
+4 | 4
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fa b ON a.h = b.h ORDER BY a.id, b.id
+# INT32/0 INT32/0
+1 | 1
+2 | 2
+3 | 3
+4 | 4
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fi b ON a.i = b.d ORDER BY a.id, b.id
+# INT32/0 INT32/0
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fa b ON a.i = b.d ORDER BY a.id, b.id
+# INT32/0 INT32/0
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fi b ON a.dec1 = b.d ORDER BY a.id, b.id
+# INT32/0 INT32/0
+1 | 1
+2 | 2
+3 | 3
+4 | 4
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fa b ON a.dec1 = b.d ORDER BY a.id, b.id
+# INT32/0 INT32/0
+1 | 1
+2 | 2
+3 | 3
+4 | 4
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fi b ON a.f = b.d ORDER BY a.id, b.id
+# INT32/0 INT32/0
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fa b ON a.f = b.d ORDER BY a.id, b.id
+# INT32/0 INT32/0
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fi b ON a.k = b.k ORDER BY a.id, b.id
+# INT32/0 INT32/0
+1 | 1
+2 | 2
+3 | 3
+4 | 4
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fa b ON a.k = b.k ORDER BY a.id, b.id
+# INT32/0 INT32/0
+1 | 1
+2 | 2
+3 | 3
+4 | 4
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fi b ON a.dm = b.dm ORDER BY a.id, b.id
+# INT32/0 INT32/0
+1 | 1
+2 | 2
+3 | 3
+4 | 4
+6 | 6
+
+-- SELECT a.id, b.id FROM fa a JOIN fa b ON a.dm = b.dm ORDER BY a.id, b.id
+# INT32/0 INT32/0
+1 | 1
+2 | 2
+3 | 3
+4 | 4
+6 | 6
+
+-- SELECT id FROM fa WHERE h BETWEEN 35.6812363 AND 36 ORDER BY id
+# INT32/0
+
+-- SELECT id FROM fi WHERE h BETWEEN 35.6812363 AND 36 ORDER BY id
+# INT32/0
+
+-- SELECT id FROM fa WHERE h NOT BETWEEN 35.6812363 AND 36 ORDER BY id
+# INT32/0
+1
+2
+3
+4
+6
+
+-- SELECT id FROM fa WHERE h = 35.6812363e0 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM fi WHERE h = 35.6812363e0 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM fa WHERE h >= 35.6812363e0 ORDER BY id
+# INT32/0
+1
+6
+
+-- SELECT id FROM fi WHERE h >= 35.6812363e0 ORDER BY id
+# INT32/0
+1
+6
+
+-- SELECT id FROM fa WHERE h IN (35.6812363) ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM fi WHERE h IN (35.6812363) ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM fa WHERE h = 1.55e0 ORDER BY id
+# INT32/0
+3
+
+-- SELECT id FROM fi WHERE h = 1.55e0 ORDER BY id
+# INT32/0
+3
+
+-- SELECT id FROM fa WHERE h IN (35.6812363, 1.55) ORDER BY id
+# INT32/0
+
+-- SELECT id FROM fi WHERE h IN (35.6812363, 1.55) ORDER BY id
+# INT32/0
+
+-- SELECT id FROM fa WHERE h = 1.55 ORDER BY id
+# INT32/0
+3
+
+-- SELECT id FROM fi WHERE h = 1.55 ORDER BY id
+# INT32/0
+3
+
+-- SELECT id FROM fa WHERE h = CONCAT('35.6812363', '') ORDER BY id
+# INT32/0
+
+-- SELECT id FROM fi WHERE h = CONCAT('35.6812363', '') ORDER BY id
+# INT32/0
+
+-- SELECT id FROM fa WHERE h = '35.6812363' ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM fi WHERE h = '35.6812363' ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM fa WHERE NOT (h < 35.6812363) AND id < 5 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM fi WHERE NOT (h < 35.6812363) AND id < 5 ORDER BY id
+# INT32/0
+1
+
+-- SELECT id FROM fa WHERE h = 35.6812363 OR h = 0.1 ORDER BY id
+# INT32/0
+1
+2
+
+-- SELECT id FROM fi WHERE h = 35.6812363 OR h = 0.1 ORDER BY id
+# INT32/0
+1
+2
+
+-- SELECT id FROM fi WHERE dm IN (SELECT dec1 FROM fa) ORDER BY id
+# INT32/0
+2
+3
+6
+
+-- SELECT id FROM fi WHERE f IN (SELECT d FROM fa) ORDER BY id
+# INT32/0
+6
+
+-- /* rows */ SELECT id, CASE h WHEN 35.6812363 THEN 'a' ELSE 'b' END, IF(h = 1.55e0, 'y', 'n') FROM fa ORDER BY id
+1 | b | n
+2 | b | n
+3 | b | n
+4 | b | n
+5 | b | n
+6 | b | n
+
+-- UPDATE fa SET i = 7 WHERE h BETWEEN 35.6812363 AND 36
+ok affected=0
+-- UPDATE fa SET i = 8 WHERE h = 35.6812363e0
+ok affected=1
+-- DELETE FROM fi WHERE h IN (1.55)
+ok affected=1
+-- SELECT id, i FROM fa ORDER BY id
+# INT32/0 INT32/0
+1 | 8
+2 | 0
+3 | 2
+4 | -35
+5 | NULL
+6 | 100
+
+-- SELECT id FROM fi ORDER BY id
+# INT32/0
+1
+2
+4
+5
+6
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE fi
+ok affected=0
+-- DROP TABLE fa
+ok affected=0

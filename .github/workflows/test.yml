@@ -1,0 +1,48 @@
+# Go のテスト（docs/plan.md の段階 40）。PHPUnit（docs/plan.md の「検証方法」）は時間がかかるので、ここでは流さない。
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  heimdb:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l cmd internal)"
+      - name: vet
+        run: go vet $(go list ./... | grep -v internal/sqlengine)
+      - name: test
+        # backend は -race で 8〜10 分かかり、既定の 10 分で止まることがあった（段階 96 の実行。docs/plan.md の段階 99）
+        run: go test -race -timeout 30m $(go list ./... | grep -v internal/sqlengine)
+      # 大きな結果と大きな記録だけが通る経路を、すべてのテストで通す（docs/plan.md の段階 59）
+      - name: test (cursors)
+        run: HEIMDB_TEST_CURSOR_MIN_ROWS=1 go test ./internal/backend
+      - name: test (log chunks)
+        run: HEIMDB_TEST_LOG_CHUNK_BYTES=64 go test ./internal/store ./internal/replication
+
+  # SQL エンジン（go-mysql-server のフォーク）の上流のテスト
+  sqlengine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: test
+        run: go test ./internal/sqlengine/...

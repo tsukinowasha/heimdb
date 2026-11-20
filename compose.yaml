@@ -1,0 +1,115 @@
+# HeimDB と WordPress をまとめて起動する（docs/operations.md の「Docker」）。
+#
+#   export HEIMDB_ROOT_PASSWORD='...' HEIMDB_SITE_PASSWORD='...'   # または .env に書く
+#   docker compose up -d
+#   docker compose run --rm cli wp core install --url=http://localhost:8080 --title=Site \
+#     --admin_user=admin --admin_password='...' --admin_email=you@example.com
+#
+# WordPress は、本番のデータベースだけの権限のユーザー wordpress でつなぐ（HeimDB が HEIMDB_SITE_PASSWORD で作る）。
+# root は wp-cli（cli）だけが使う（CALL heimdb_* や、ユーザーの作成のため）。
+#
+# ステージング（ブランチ wordpress@staging につなぐ 2 つ目の WordPress）は、そのブランチだけの権限のユーザー staging で
+# つなぐ（ステージングが乗っ取られても本番に届かない）。ブランチとユーザーを作ってから起動する:
+#
+#   export STAGING_DB_PASSWORD='...'
+#   docker compose run --rm cli wp db query "CALL heimdb_branch_create('staging')"
+#   docker compose run --rm cli wp db query "CREATE USER 'staging'@'%' IDENTIFIED BY '$STAGING_DB_PASSWORD'; GRANT ALL ON \`wordpress@staging\`.* TO 'staging'@'%'"
+#   docker compose --profile staging up -d staging
+#
+# ステージングを作り直すときは、ファイルの写しも消してから起動する（ユーザーはそのまま使える）:
+#
+#   docker compose --profile staging rm -sf staging staging-files
+#   docker volume rm heimdb_wordpress-staging
+#   docker compose run --rm cli wp db query "CALL heimdb_branch_delete('staging')"
+name: heimdb
+
+x-db-host: &db-host
+  WORDPRESS_DB_HOST: db:3306
+  WORDPRESS_DB_NAME: wordpress
+
+services:
+  db:
+    image: tsukinowa/heimdb:${HEIMDB_VERSION:-0.3.0}
+    environment:
+      HEIMDB_ROOT_PASSWORD: ${HEIMDB_ROOT_PASSWORD:?set HEIMDB_ROOT_PASSWORD}  # 初回の起動で root@'%' を作る
+      HEIMDB_SITE_PASSWORD: ${HEIMDB_SITE_PASSWORD:?set HEIMDB_SITE_PASSWORD}  # いなければ wordpress@'%' を作る
+    volumes:
+      - heimdb-data:/data
+    # 止めるときに実行中の文を待つ（HeimDB の -shutdown-timeout の既定 30 秒より長く）
+    stop_grace_period: 1m
+
+  wordpress:
+    image: wordpress:php8.3-apache
+    depends_on: [db]
+    ports:
+      - "${WP_PORT:-8080}:80"
+    environment:
+      <<: *db-host
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: ${HEIMDB_SITE_PASSWORD:?set HEIMDB_SITE_PASSWORD}
+    volumes:
+      - wordpress:/var/www/html
+
+  # ステージングを最初に起動するときに、本番のファイル（言語、プラグイン、テーマ、アップロード）を写す。DB のブランチと
+  # 同じく、ファイルも分岐の時点の写しから始める（写さないと、ステージングの管理画面でファイルのないプラグインが無効に
+  # なり、テーマが標準のものに替わり、それが本番にマージされてしまう）。2 回目からは写さない（ステージングで変えた
+  # ファイルを残す）。
+  staging-files:
+    image: wordpress:php8.3-apache
+    profiles: ["staging"]
+    environment:
+      STAGING_DB_PASSWORD: ${STAGING_DB_PASSWORD:-}
+    # ステージングのパスワードは、ステージングを使うときだけ要る（${...:?} はプロファイルに関係なく効くので、ここで
+    # 確かめる）。空かどうかではなく本体があるかで見る（Docker がイメージの空の wp-content を先にボリュームへ写すため）
+    entrypoint:
+      - sh
+      - -c
+      - |
+        [ -n "$$STAGING_DB_PASSWORD" ] || { echo "set STAGING_DB_PASSWORD" >&2; exit 1; }
+        [ -e /to/wp-includes/version.php ] || cp -a /from/. /to/
+    volumes:
+      - wordpress:/from:ro
+      - wordpress-staging:/to
+    restart: "no"
+
+  staging:
+    image: wordpress:php8.3-apache
+    profiles: ["staging"]
+    depends_on:
+      db:
+        condition: service_started
+      staging-files:
+        condition: service_completed_successfully
+    ports:
+      - "${STAGING_PORT:-8081}:80"
+    environment:
+      <<: *db-host
+      WORDPRESS_DB_NAME: wordpress@${STAGING_BRANCH:-staging}
+      WORDPRESS_DB_USER: staging
+      WORDPRESS_DB_PASSWORD: ${STAGING_DB_PASSWORD:-}
+      # 本番と同じデータを読むので、URL をこのサイトのものに替える
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_HOME', 'http://localhost:${STAGING_PORT:-8081}');
+        define('WP_SITEURL', 'http://localhost:${STAGING_PORT:-8081}');
+    # ファイル（プラグイン、テーマ、アップロード）は DB の外にあるので、本番とは別のボリュームに置く（ステージングで
+    # プラグインを更新しても本番のファイルは変わらない）。ファイルはマージされない
+    volumes:
+      - wordpress-staging:/var/www/html
+
+  # wp-cli。管理者の道具なので root でつなぐ（CALL heimdb_* とユーザーの作成のため）
+  cli:
+    image: wordpress:cli
+    profiles: ["cli"]
+    depends_on: [db]
+    user: "33:33"
+    environment:
+      <<: *db-host
+      WORDPRESS_DB_USER: root
+      WORDPRESS_DB_PASSWORD: ${HEIMDB_ROOT_PASSWORD:?set HEIMDB_ROOT_PASSWORD}
+    volumes:
+      - wordpress:/var/www/html
+
+volumes:
+  heimdb-data:
+  wordpress:
+  wordpress-staging:

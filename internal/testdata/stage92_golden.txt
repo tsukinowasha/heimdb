@@ -1,0 +1,306 @@
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE s (id INT AUTO_INCREMENT PRIMARY KEY, v VARCHAR(5), c CHAR(3), tx TINYTEXT, b VARBINARY(4), tb TINYBLOB) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
+ok
+-- INSERT INTO s (v) VALUES ('abcdefg')
+ok
+-- SHOW WARNINGS
+Warning | 1265 | Data truncated for column 'v' at row 1
+
+-- INSERT INTO s (v) VALUES ('あいうえおか'), ('abc  '), ('abcde   '), ('abcde	'), ('abcde 
+'), ('abcde　'), (12345678)
+ok
+-- SHOW WARNINGS
+Warning | 1265 | Data truncated for column 'v' at row 1
+Note | 1265 | Data truncated for column 'v' at row 3
+Note | 1265 | Data truncated for column 'v' at row 4
+Note | 1265 | Data truncated for column 'v' at row 5
+Warning | 1265 | Data truncated for column 'v' at row 6
+Warning | 1265 | Data truncated for column 'v' at row 7
+
+-- INSERT INTO s (c) VALUES ('ab		'), ('ab 	'), ('abc
+')
+ok
+-- SHOW WARNINGS
+
+-- INSERT INTO s (c, tx) VALUES ('abcd', CONCAT(REPEAT('あ', 100), '   ')), ('ab   ', REPEAT('x', 300))
+ok
+-- SHOW WARNINGS
+Warning | 1265 | Data truncated for column 'c' at row 1
+Warning | 1265 | Data truncated for column 'tx' at row 1
+Warning | 1265 | Data truncated for column 'tx' at row 2
+
+-- INSERT INTO s (tx) VALUES (CONCAT(REPEAT('x', 255), '  '))
+ok
+-- SHOW WARNINGS
+Note | 1265 | Data truncated for column 'tx' at row 1
+
+-- INSERT INTO s (b, tb) VALUES ('abcdef', REPEAT('y', 300)), ('ab    ', NULL), (X'0102030405', NULL)
+ok
+-- SHOW WARNINGS
+Warning | 1265 | Data truncated for column 'b' at row 1
+Warning | 1265 | Data truncated for column 'tb' at row 1
+Warning | 1265 | Data truncated for column 'b' at row 2
+Warning | 1265 | Data truncated for column 'b' at row 3
+
+-- SELECT id, v, c, HEX(c), CHAR_LENGTH(tx), LENGTH(tx), HEX(b), LENGTH(tb) FROM s ORDER BY id
+1 | abcde | NULL | NULL | NULL | NULL | NULL | NULL
+2 | あいうえお | NULL | NULL | NULL | NULL | NULL | NULL
+3 | abc   | NULL | NULL | NULL | NULL | NULL | NULL
+4 | abcde | NULL | NULL | NULL | NULL | NULL | NULL
+5 | abcde | NULL | NULL | NULL | NULL | NULL | NULL
+6 | abcde | NULL | NULL | NULL | NULL | NULL | NULL
+7 | abcde | NULL | NULL | NULL | NULL | NULL | NULL
+8 | 12345 | NULL | NULL | NULL | NULL | NULL | NULL
+9 | NULL | ab	 | 616209 | NULL | NULL | NULL | NULL
+10 | NULL | ab | 6162 | NULL | NULL | NULL | NULL
+11 | NULL | abc | 616263 | NULL | NULL | NULL | NULL
+12 | NULL | abc | 616263 | 85 | 255 | NULL | NULL
+13 | NULL | ab | 6162 | 255 | 255 | NULL | NULL
+14 | NULL | NULL | NULL | 255 | 255 | NULL | NULL
+15 | NULL | NULL | NULL | NULL | NULL | 61626364 | 255
+16 | NULL | NULL | NULL | NULL | NULL | 61622020 | NULL
+17 | NULL | NULL | NULL | NULL | NULL | 01020304 | NULL
+
+-- CREATE TABLE n (id INT AUTO_INCREMENT PRIMARY KEY, i INT, u INT UNSIGNED, ti TINYINT, tu TINYINT UNSIGNED, mi MEDIUMINT, bi BIGINT, bu BIGINT UNSIGNED, d DECIMAL(5,2), f FLOAT, db DOUBLE) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
+ok
+-- INSERT INTO n (i) VALUES (99999999999), (-99999999999), ('99999999999'), (1e20), ('1e20'), (2147483647.6), (2147483647.4), ('99999999999abc'), ('-99999999999 '), (-2147483648.5)
+ok
+-- SHOW WARNINGS
+Warning | 1264 | Out of range value for column 'i' at row 1
+Warning | 1264 | Out of range value for column 'i' at row 2
+Warning | 1264 | Out of range value for column 'i' at row 3
+Warning | 1264 | Out of range value for column 'i' at row 4
+Warning | 1264 | Out of range value for column 'i' at row 5
+Warning | 1264 | Out of range value for column 'i' at row 6
+Warning | 1264 | Out of range value for column 'i' at row 8
+Warning | 1264 | Out of range value for column 'i' at row 9
+Warning | 1264 | Out of range value for column 'i' at row 10
+
+-- INSERT INTO n (u, tu) VALUES (-1, 256), ('-5', '-1'), (5000000000, -0.4), (-0.6, 0)
+ok
+-- SHOW WARNINGS
+Warning | 1264 | Out of range value for column 'u' at row 1
+Warning | 1264 | Out of range value for column 'tu' at row 1
+Warning | 1264 | Out of range value for column 'u' at row 2
+Warning | 1264 | Out of range value for column 'tu' at row 2
+Warning | 1264 | Out of range value for column 'u' at row 3
+Warning | 1264 | Out of range value for column 'tu' at row 3
+Warning | 1264 | Out of range value for column 'u' at row 4
+
+-- INSERT INTO n (ti, mi, bi, bu) VALUES (300, 8388608, 99999999999999999999, -1), (-300, -8388609, '-99999999999999999999', '99999999999999999999')
+ok
+-- SHOW WARNINGS
+Warning | 1264 | Out of range value for column 'ti' at row 1
+Warning | 1264 | Out of range value for column 'mi' at row 1
+Warning | 1264 | Out of range value for column 'bi' at row 1
+Warning | 1264 | Out of range value for column 'bu' at row 1
+Warning | 1264 | Out of range value for column 'ti' at row 2
+Warning | 1264 | Out of range value for column 'mi' at row 2
+Warning | 1264 | Out of range value for column 'bi' at row 2
+Warning | 1264 | Out of range value for column 'bu' at row 2
+
+-- INSERT INTO n (d) VALUES (12345.678), (-99999), ('1000'), (999.995), (999.994), ('99999abc'), ('abc'), ('-1e10')
+ok
+-- SHOW WARNINGS
+Warning | 1264 | Out of range value for column 'd' at row 1
+Warning | 1264 | Out of range value for column 'd' at row 2
+Warning | 1264 | Out of range value for column 'd' at row 3
+Warning | 1264 | Out of range value for column 'd' at row 4
+Note | 1265 | Data truncated for column 'd' at row 5
+Note | 1265 | Data truncated for column 'd' at row 6
+Warning | 1264 | Out of range value for column 'd' at row 6
+Warning | 1366 | Incorrect decimal value: 'abc' for column 'd' at row 7
+Warning | 1264 | Out of range value for column 'd' at row 8
+
+-- INSERT INTO n (f, db) VALUES (1e40, '1e400'), (-1e40, '-1e400')
+ok
+-- SHOW WARNINGS
+Warning | 1264 | Out of range value for column 'f' at row 1
+Warning | 1264 | Out of range value for column 'db' at row 1
+Warning | 1264 | Out of range value for column 'f' at row 2
+Warning | 1264 | Out of range value for column 'db' at row 2
+
+-- INSERT INTO n (i, u, d) VALUES (99999999999, -1, 12345)
+ok
+-- SHOW WARNINGS
+Warning | 1264 | Out of range value for column 'i' at row 1
+Warning | 1264 | Out of range value for column 'u' at row 1
+Warning | 1264 | Out of range value for column 'd' at row 1
+
+-- INSERT INTO n (u, bu) VALUES (3e9, 0e0), (5000000000.0, 99999999999999999999), (4294967295.4, 1.5)
+ok
+-- SHOW WARNINGS
+Warning | 1264 | Out of range value for column 'u' at row 2
+Warning | 1264 | Out of range value for column 'bu' at row 2
+
+-- INSERT INTO n (i, db, d) VALUES ('1e99999', '1e99999', '1.005'), ('-1e99999', '-1e99999', ' 1.50 '), ('1e-99999', '1e-99999', '1.2e1')
+ok
+-- SHOW WARNINGS
+Warning | 1264 | Out of range value for column 'i' at row 1
+Warning | 1264 | Out of range value for column 'db' at row 1
+Note | 1265 | Data truncated for column 'd' at row 1
+Warning | 1264 | Out of range value for column 'i' at row 2
+Warning | 1264 | Out of range value for column 'db' at row 2
+
+-- SELECT id, i, u, ti, tu, mi, bi, bu, d, f, db FROM n ORDER BY id
+1 | 2147483647 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL
+2 | -2147483648 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL
+3 | 2147483647 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL
+4 | 2147483647 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL
+5 | 2147483647 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL
+6 | 2147483647 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL
+7 | 2147483647 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL
+8 | 2147483647 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL
+9 | -2147483648 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL
+10 | -2147483648 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL
+11 | NULL | 0 | NULL | 255 | NULL | NULL | NULL | NULL | NULL | NULL
+12 | NULL | 0 | NULL | 0 | NULL | NULL | NULL | NULL | NULL | NULL
+13 | NULL | 4294967295 | NULL | 0 | NULL | NULL | NULL | NULL | NULL | NULL
+14 | NULL | 0 | NULL | 0 | NULL | NULL | NULL | NULL | NULL | NULL
+15 | NULL | NULL | 127 | NULL | 8388607 | 9223372036854775807 | 0 | NULL | NULL | NULL
+16 | NULL | NULL | -128 | NULL | -8388608 | -9223372036854775808 | 18446744073709551615 | NULL | NULL | NULL
+17 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | 999.99 | NULL | NULL
+18 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | -999.99 | NULL | NULL
+19 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | 999.99 | NULL | NULL
+20 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | 999.99 | NULL | NULL
+21 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | 999.99 | NULL | NULL
+22 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | 999.99 | NULL | NULL
+23 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | 0.00 | NULL | NULL
+24 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | -999.99 | NULL | NULL
+25 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | 3.40282e+38 | 1.7976931348623157e+308
+26 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | NULL | -3.40282e+38 | -1.7976931348623157e+308
+27 | 2147483647 | 0 | NULL | NULL | NULL | NULL | NULL | 999.99 | NULL | NULL
+28 | NULL | 3000000000 | NULL | NULL | NULL | NULL | 0 | NULL | NULL | NULL
+29 | NULL | 4294967295 | NULL | NULL | NULL | NULL | 18446744073709551615 | NULL | NULL | NULL
+30 | NULL | 4294967295 | NULL | NULL | NULL | NULL | 2 | NULL | NULL | NULL
+31 | 2147483647 | NULL | NULL | NULL | NULL | NULL | NULL | 1.01 | NULL | 1.7976931348623157e+308
+32 | -2147483648 | NULL | NULL | NULL | NULL | NULL | NULL | 1.50 | NULL | -1.7976931348623157e+308
+33 | 0 | NULL | NULL | NULL | NULL | NULL | NULL | 12.00 | NULL | 0
+
+-- UPDATE s SET v = CONCAT(v, 'zzzzzz') WHERE id <= 3
+ok
+-- SHOW WARNINGS
+Warning | 1265 | Data truncated for column 'v' at row 1
+Warning | 1265 | Data truncated for column 'v' at row 2
+Warning | 1265 | Data truncated for column 'v' at row 3
+
+-- UPDATE n SET i = i + 3000000000, d = d * 10 WHERE id IN (1, 7)
+ok
+-- SHOW WARNINGS
+Warning | 1264 | Out of range value for column 'i' at row 1
+Warning | 1264 | Out of range value for column 'i' at row 2
+
+-- INSERT INTO s (id, v) VALUES (100, 'a'), (101, 'b'), (1, 'c') ON DUPLICATE KEY UPDATE v = 'yyyyyyyy'
+ok
+-- SHOW WARNINGS
+Warning | 1265 | Data truncated for column 'v' at row 3
+
+-- INSERT INTO s (id, v) VALUES (100, 'abcdefgh') ON DUPLICATE KEY UPDATE v = VALUES(v)
+ok
+-- SHOW WARNINGS
+Warning | 1265 | Data truncated for column 'v' at row 1
+
+-- INSERT INTO s (id, v) VALUES (200, 'q'), (101, 'あいうえおかき') ON DUPLICATE KEY UPDATE v = VALUES(v)
+ok
+-- SHOW WARNINGS
+Warning | 1265 | Data truncated for column 'v' at row 2
+
+-- INSERT INTO s (v, c) SELECT CONCAT(v, 'qqqqqq'), 'xxxx' FROM s WHERE id IN (2, 3) ORDER BY id
+ok
+-- SHOW WARNINGS
+Warning | 1265 | Data truncated for column 'v' at row 1
+Warning | 1265 | Data truncated for column 'c' at row 1
+Warning | 1265 | Data truncated for column 'v' at row 2
+Warning | 1265 | Data truncated for column 'c' at row 2
+
+-- REPLACE INTO s (id, v) VALUES (2, 'rrrrrrrr')
+ok
+-- SHOW WARNINGS
+Warning | 1265 | Data truncated for column 'v' at row 1
+
+-- SELECT id, v, c FROM s ORDER BY id
+1 | yyyyy | NULL
+2 | rrrrr | NULL
+3 | abc   | NULL
+4 | abcde | NULL
+5 | abcde | NULL
+6 | abcde | NULL
+7 | abcde | NULL
+8 | 12345 | NULL
+9 | NULL | ab	
+10 | NULL | ab
+11 | NULL | abc
+12 | NULL | abc
+13 | NULL | ab
+14 | NULL | NULL
+15 | NULL | NULL
+16 | NULL | NULL
+17 | NULL | NULL
+100 | abcde | NULL
+101 | あいうえお | NULL
+200 | q | NULL
+201 | あいうえお | xxx
+202 | abc   | xxx
+
+-- SET SESSION sql_mode = 'STRICT_TRANS_TABLES'
+ok
+-- CREATE TABLE g (id INT AUTO_INCREMENT PRIMARY KEY, v VARCHAR(3), b VARBINARY(2), n INT, u INT UNSIGNED, d DECIMAL(5,2), dt DATETIME, k INT NOT NULL) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
+ok
+-- INSERT IGNORE INTO g (v, b, n, u, d, k) VALUES ('あいうえ', X'010203', 99999999999, -1, 12345, 1), ('abcd  ', 'ab ', '12abc', '-5', '99999abc', 2)
+ok
+-- SHOW WARNINGS
+Warning | 1265 | Data truncated for column 'v' at row 1
+Warning | 1265 | Data truncated for column 'b' at row 1
+Warning | 1264 | Out of range value for column 'n' at row 1
+Warning | 1264 | Out of range value for column 'u' at row 1
+Warning | 1264 | Out of range value for column 'd' at row 1
+Warning | 1265 | Data truncated for column 'v' at row 2
+Warning | 1265 | Data truncated for column 'b' at row 2
+Warning | 1265 | Data truncated for column 'n' at row 2
+Warning | 1264 | Out of range value for column 'u' at row 2
+Note | 1265 | Data truncated for column 'd' at row 2
+Warning | 1264 | Out of range value for column 'd' at row 2
+
+-- INSERT IGNORE INTO g (v, dt, k) VALUES ('x', '2012-01-01 25:00:00', 3), ('y', '2012-13-01', 4)
+ok
+-- SHOW WARNINGS
+Warning | 1265 | Data truncated for column 'dt' at row 1
+Warning | 1265 | Data truncated for column 'dt' at row 2
+
+-- INSERT IGNORE INTO g (v, k) VALUES ('z', NULL), ('w', 5)
+ok
+-- SHOW WARNINGS
+Warning | 1048 | Column 'k' cannot be null
+
+-- INSERT IGNORE INTO g (v, k) VALUES ('s', NULL)
+ok
+-- SHOW WARNINGS
+Warning | 1048 | Column 'k' cannot be null
+
+-- INSERT IGNORE INTO g (v) VALUES ('t')
+ok
+-- SHOW WARNINGS
+Warning | 1364 | Field 'k' doesn't have a default value
+
+-- UPDATE IGNORE g SET v = 'abcdef', n = n + 3000000000 WHERE id = 1
+ok
+-- SHOW WARNINGS
+Warning | 1265 | Data truncated for column 'v' at row 1
+Warning | 1264 | Out of range value for column 'n' at row 1
+
+-- UPDATE IGNORE g SET k = NULL WHERE id = 2
+ok
+-- SHOW WARNINGS
+Warning | 1048 | Column 'k' cannot be null
+
+-- SELECT id, v, HEX(v), HEX(b), n, u, d, dt, k FROM g ORDER BY id
+1 | abc | 616263 | 0102 | 2147483647 | 0 | 999.99 | NULL | 1
+2 | abc | 616263 | 6162 | 12 | 0 | 999.99 | NULL | 0
+3 | x | 78 | NULL | NULL | NULL | NULL | 0000-00-00 00:00:00 | 3
+4 | y | 79 | NULL | NULL | NULL | NULL | 0000-00-00 00:00:00 | 4
+5 | z | 7A | NULL | NULL | NULL | NULL | NULL | 0
+6 | w | 77 | NULL | NULL | NULL | NULL | NULL | 5
+7 | s | 73 | NULL | NULL | NULL | NULL | NULL | 0
+8 | t | 74 | NULL | NULL | NULL | NULL | NULL | 0
+

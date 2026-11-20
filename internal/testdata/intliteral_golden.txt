@@ -1,0 +1,99 @@
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE ints (id int NOT NULL PRIMARY KEY, ti tinyint NOT NULL, tu tinyint unsigned NOT NULL, i int, bu bigint unsigned NOT NULL, bs bigint NOT NULL)
+ok affected=0 insert_id=0
+-- INSERT INTO ints VALUES (1, -128, 0, NULL, 0, -9223372036854775808), (2, 127, 255, 1, 1, 9223372036854775807), (3, 1, 1, -1, 18446744073709551615, 1), (4, 0, 128, 2, 9223372036854775808, 0)
+ok affected=4 insert_id=0
+-- SELECT id FROM ints WHERE bu = 1 ORDER BY id
+2
+
+-- SELECT id FROM ints WHERE 1 = bu ORDER BY id
+2
+
+-- SELECT id FROM ints WHERE bu <> 0 ORDER BY id
+2
+3
+4
+
+-- SELECT id FROM ints WHERE bu > 1 ORDER BY id
+3
+4
+
+-- SELECT id FROM ints WHERE bu >= 9223372036854775808 ORDER BY id
+3
+4
+
+-- SELECT id FROM ints WHERE bu = 18446744073709551615 ORDER BY id
+3
+
+-- SELECT id FROM ints WHERE ti < 1 ORDER BY id
+1
+4
+
+-- SELECT id FROM ints WHERE tu <= 128 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM ints WHERE i <=> 1 ORDER BY id
+2
+
+-- SELECT id FROM ints WHERE i IN (2) ORDER BY id
+4
+
+-- SELECT id FROM ints WHERE i NOT IN (2) ORDER BY id
+2
+3
+
+-- SELECT id FROM ints WHERE bs = -9223372036854775808 ORDER BY id
+1
+
+-- SELECT id FROM ints WHERE ti = 128 ORDER BY id
+
+-- SELECT id FROM ints WHERE ti < 128 ORDER BY id
+1
+2
+3
+4
+
+-- SELECT id FROM ints WHERE tu > -1 ORDER BY id
+1
+2
+3
+4
+
+-- SELECT id FROM ints WHERE bu = -1 ORDER BY id
+
+-- SELECT id FROM ints WHERE bu <> -1 ORDER BY id
+1
+2
+3
+4
+
+-- SELECT id FROM ints WHERE bu = 18446744073709551616 ORDER BY id
+
+-- SELECT id FROM ints WHERE bu = 1.0 ORDER BY id
+2
+
+-- SELECT id FROM ints WHERE ti = 0.5 ORDER BY id
+
+-- SELECT id FROM ints WHERE bu = '1' ORDER BY id
+2
+
+-- SELECT id FROM ints WHERE i <=> NULL ORDER BY id
+1
+
+-- SELECT id FROM ints WHERE i = NULL ORDER BY id
+
+-- SELECT COUNT(*) FROM ints WHERE ( ( ti = 0 OR ti = 1 ) ) AND tu NOT IN (128) AND bu = 1
+0
+
+-- UPDATE ints SET i = 5 WHERE bu = 1
+ok affected=1 insert_id=0
+-- DELETE FROM ints WHERE tu = 128
+ok affected=1 insert_id=0
+-- SELECT id, i FROM ints ORDER BY id
+1 | NULL
+2 | 5
+3 | -1
+

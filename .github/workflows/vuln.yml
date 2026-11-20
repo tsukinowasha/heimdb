@@ -1,0 +1,93 @@
+# 既知の脆弱性の確認（docs/plan.md の段階 49 と 127。手順は docs/operations.md の「脆弱性の確かめ方」）。
+# govulncheck は、実際に呼ぶ関数まで調べるので、依存にあるだけの脆弱性では落ちない。新しく公開された脆弱性に
+# 気づくよう、毎週も流す。
+#
+# - govulncheck: Go の最新の安定バージョンで、コードが呼ぶものを調べる。
+# - toolchain: go.mod の toolchain のバージョン（イメージを作る Go と同じ）で調べる。標準ライブラリの脆弱性は使う Go のバージョンで
+#   決まるので、toolchain が古いままならここで落ちる（段階 127。GO-2026-6859 は stable では出なかった）。
+# - image: 公開しているイメージのバイナリを調べる（毎週と手動だけ）。Dockerfile は記号表を残してビルドする
+#   （-s を付けると記号表がなく、呼ばない関数の脆弱性まで出る）。
+# - advisories: internal/sqlengine にフォークした go-mysql-server と vitess は govulncheck にも Dependabot にも
+#   見えないので、GitHub の advisory を引き、.github/known-advisories.txt にないものがあれば落とす。
+name: vuln
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: govulncheck
+        run: GOTOOLCHAIN=local go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  toolchain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: check the Go version
+        run: |
+          want=$(awk '$1 == "toolchain" { print $2 }' go.mod)
+          got=$(go env GOVERSION)
+          echo "go.mod: $want, using: $got"
+          test "$got" = "$want"
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  image:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: extract the binary
+        run: |
+          docker pull --platform linux/amd64 tsukinowa/heimdb:latest
+          id=$(docker create --platform linux/amd64 tsukinowa/heimdb:latest)
+          docker cp "$id:/heimdb" ./heimdb
+          docker rm "$id"
+          go version -m ./heimdb | head -3
+      - name: govulncheck
+        run: GOTOOLCHAIN=local go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -mode binary ./heimdb
+
+  advisories:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: GitHub advisories for the forked modules
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          new=0
+          for m in github.com/dolthub/go-mysql-server github.com/dolthub/vitess; do
+            gh api "/advisories?ecosystem=go&affects=$m&per_page=100" \
+              --jq '.[] | [.ghsa_id, .published_at[:10], .severity, .summary, .html_url] | @tsv' > found.tsv
+            echo "$m: $(wc -l < found.tsv) advisories"
+            while IFS=$'\t' read -r id date severity summary url; do
+              if ! grep -qE "^$id( |$)" .github/known-advisories.txt; then
+                echo "::error::$m: $id ($date, $severity) $summary $url"
+                new=1
+              fi
+            done < found.tsv
+          done
+          exit $new

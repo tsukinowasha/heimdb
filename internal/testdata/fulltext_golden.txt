@@ -1,0 +1,204 @@
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE wptests_dbdelta_test (id bigint(20) NOT NULL AUTO_INCREMENT,
+					column_1 varchar(255) NOT NULL,
+					column_2 text,
+					column_3 blob,
+					PRIMARY KEY  (id),
+					KEY key_1 (column_1(191)),
+					KEY compound_key (id,column_1(191)),
+					FULLTEXT KEY fulltext_key (column_1)) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
+ok affected=0 insert_id=0
+-- SHOW INDEX FROM wptests_dbdelta_test
+0 | PRIMARY | 1 | id | NULL |  | BTREE
+1 | key_1 | 1 | column_1 | 191 |  | BTREE
+1 | compound_key | 1 | id | NULL |  | BTREE
+1 | compound_key | 2 | column_1 | 191 |  | BTREE
+1 | fulltext_key | 1 | column_1 | NULL |  | FULLTEXT
+
+-- SHOW CREATE TABLE wptests_dbdelta_test
+wptests_dbdelta_test | CREATE TABLE `wptests_dbdelta_test` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `column_1` varchar(255) NOT NULL,
+  `column_2` text,
+  `column_3` blob,
+  PRIMARY KEY (`id`),
+  KEY `key_1` (`column_1`(191)),
+  KEY `compound_key` (`id`,`column_1`(191)),
+  FULLTEXT KEY `fulltext_key` (`column_1`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+-- SHOW COLUMNS FROM wptests_dbdelta_test
+id | bigint | NO | PRI | NULL | auto_increment
+column_1 | varchar(255) | NO | MUL | NULL | 
+column_2 | text | YES |  | NULL | 
+column_3 | blob | YES |  | NULL | 
+
+-- SELECT INDEX_NAME, SEQ_IN_INDEX, COLUMN_NAME, NON_UNIQUE, NULLABLE, INDEX_TYPE FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'wptests_dbdelta_test' ORDER BY INDEX_NAME, SEQ_IN_INDEX
+compound_key | 1 | id | 1 |  | BTREE
+compound_key | 2 | column_1 | 1 |  | BTREE
+fulltext_key | 1 | column_1 | 1 |  | FULLTEXT
+key_1 | 1 | column_1 | 1 |  | BTREE
+PRIMARY | 1 | id | 0 |  | BTREE
+
+-- INSERT INTO wptests_dbdelta_test (column_1, column_2) VALUES ('hello world', 'a'), ('second row', 'b')
+ok affected=2 insert_id=1
+-- SELECT id FROM wptests_dbdelta_test WHERE column_1 = 'hello world'
+1
+
+-- CREATE FULLTEXT INDEX ft_2 ON wptests_dbdelta_test (column_2)
+ok affected=0 insert_id=0
+-- ALTER TABLE wptests_dbdelta_test ADD FULLTEXT (column_1, column_2)
+ok
+-- ALTER TABLE wptests_dbdelta_test ADD FULLTEXT INDEX key_5 (column_1)
+ok
+-- SHOW INDEX FROM wptests_dbdelta_test
+0 | PRIMARY | 1 | id | NULL |  | BTREE
+1 | key_1 | 1 | column_1 | 191 |  | BTREE
+1 | compound_key | 1 | id | NULL |  | BTREE
+1 | compound_key | 2 | column_1 | 191 |  | BTREE
+1 | fulltext_key | 1 | column_1 | NULL |  | FULLTEXT
+1 | ft_2 | 1 | column_2 | NULL | YES | FULLTEXT
+1 | column_1 | 1 | column_1 | NULL |  | FULLTEXT
+1 | column_1 | 2 | column_2 | NULL | YES | FULLTEXT
+1 | key_5 | 1 | column_1 | NULL |  | FULLTEXT
+
+-- ALTER TABLE wptests_dbdelta_test RENAME INDEX ft_2 TO ft_2b
+ok
+-- DROP INDEX ft_2b ON wptests_dbdelta_test
+ok affected=0 insert_id=0
+-- ALTER TABLE wptests_dbdelta_test DROP INDEX column_1
+ok
+-- SHOW INDEX FROM wptests_dbdelta_test
+0 | PRIMARY | 1 | id | NULL |  | BTREE
+1 | key_1 | 1 | column_1 | 191 |  | BTREE
+1 | compound_key | 1 | id | NULL |  | BTREE
+1 | compound_key | 2 | column_1 | 191 |  | BTREE
+1 | fulltext_key | 1 | column_1 | NULL |  | FULLTEXT
+1 | key_5 | 1 | column_1 | NULL |  | FULLTEXT
+
+-- ALTER TABLE wptests_dbdelta_test ADD FULLTEXT KEY bad (id)
+error 1283
+-- ALTER TABLE wptests_dbdelta_test ADD FULLTEXT KEY bad (column_3)
+error 1283
+-- ALTER TABLE wptests_dbdelta_test MODIFY column_1 varchar(300) NOT NULL
+ok
+-- ALTER TABLE wptests_dbdelta_test CHANGE column_1 column_1b varchar(300) NOT NULL
+ok
+-- SHOW INDEX FROM wptests_dbdelta_test
+0 | PRIMARY | 1 | id | NULL |  | BTREE
+1 | key_1 | 1 | column_1b | 191 |  | BTREE
+1 | compound_key | 1 | id | NULL |  | BTREE
+1 | compound_key | 2 | column_1b | 191 |  | BTREE
+1 | fulltext_key | 1 | column_1b | NULL |  | FULLTEXT
+1 | key_5 | 1 | column_1b | NULL |  | FULLTEXT
+
+-- SHOW CREATE TABLE wptests_dbdelta_test
+wptests_dbdelta_test | CREATE TABLE `wptests_dbdelta_test` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `column_1b` varchar(300) NOT NULL,
+  `column_2` text,
+  `column_3` blob,
+  PRIMARY KEY (`id`),
+  KEY `key_1` (`column_1b`(191)),
+  KEY `compound_key` (`id`,`column_1b`(191)),
+  FULLTEXT KEY `fulltext_key` (`column_1b`),
+  FULLTEXT KEY `key_5` (`column_1b`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+-- ALTER TABLE wptests_dbdelta_test ADD FULLTEXT KEY ft_multi (column_1b, column_2)
+ok
+-- ALTER TABLE wptests_dbdelta_test ADD FULLTEXT KEY ft_only2 (column_2)
+ok
+-- ALTER TABLE wptests_dbdelta_test DROP COLUMN column_2
+ok
+-- SHOW INDEX FROM wptests_dbdelta_test
+0 | PRIMARY | 1 | id | NULL |  | BTREE
+1 | key_1 | 1 | column_1b | 191 |  | BTREE
+1 | compound_key | 1 | id | NULL |  | BTREE
+1 | compound_key | 2 | column_1b | 191 |  | BTREE
+1 | fulltext_key | 1 | column_1b | NULL |  | FULLTEXT
+1 | key_5 | 1 | column_1b | NULL |  | FULLTEXT
+1 | ft_multi | 1 | column_1b | NULL |  | FULLTEXT
+
+-- ALTER TABLE wptests_dbdelta_test ADD COLUMN body text
+ok
+-- ALTER TABLE wptests_dbdelta_test ADD FULLTEXT KEY ft_body (body)
+ok
+-- ALTER TABLE wptests_dbdelta_test MODIFY body longtext
+ok
+-- ALTER TABLE wptests_dbdelta_test CHANGE body body mediumtext
+ok
+-- ALTER TABLE wptests_dbdelta_test MODIFY body text COMMENT 'c'
+ok
+-- ALTER TABLE wptests_dbdelta_test ADD COLUMN c2 text, ADD FULLTEXT KEY ft_c2 (c2)
+ok
+-- ALTER TABLE wptests_dbdelta_test ADD COLUMN c3 int, ADD FULLTEXT KEY ft_c3 (c3)
+error 1283
+-- SHOW COLUMNS FROM wptests_dbdelta_test LIKE 'c%'
+column_1b | varchar(300) | NO | MUL | NULL | 
+column_3 | blob | YES |  | NULL | 
+c2 | text | YES | MUL | NULL | 
+
+-- ALTER TABLE wptests_dbdelta_test DROP COLUMN c2
+ok
+-- SHOW INDEX FROM wptests_dbdelta_test
+0 | PRIMARY | 1 | id | NULL |  | BTREE
+1 | key_1 | 1 | column_1b | 191 |  | BTREE
+1 | compound_key | 1 | id | NULL |  | BTREE
+1 | compound_key | 2 | column_1b | 191 |  | BTREE
+1 | fulltext_key | 1 | column_1b | NULL |  | FULLTEXT
+1 | key_5 | 1 | column_1b | NULL |  | FULLTEXT
+1 | ft_multi | 1 | column_1b | NULL |  | FULLTEXT
+1 | ft_body | 1 | body | NULL | YES | FULLTEXT
+
+-- INSERT INTO wptests_dbdelta_test (column_1b, body) VALUES ('a', 'x'), ('b', 'y'), ('a', 'z')
+ok affected=3 insert_id=3
+-- SELECT a.id FROM wptests_dbdelta_test a JOIN wptests_dbdelta_test b ON a.column_1b = b.column_1b WHERE b.body = 'y'
+4
+
+-- SELECT id FROM wptests_dbdelta_test WHERE column_1b IN (SELECT column_1b FROM wptests_dbdelta_test WHERE body = 'z') ORDER BY id
+3
+5
+
+-- SELECT id FROM wptests_dbdelta_test WHERE column_1b = 'a' ORDER BY id
+3
+5
+
+-- SELECT id, column_1b FROM wptests_dbdelta_test ORDER BY column_1b, id
+3 | a
+5 | a
+4 | b
+1 | hello world
+2 | second row
+
+-- CREATE TABLE wptests_like_copy LIKE wptests_dbdelta_test
+ok affected=0 insert_id=0
+-- SHOW INDEX FROM wptests_like_copy
+0 | PRIMARY | 1 | id | NULL |  | BTREE
+1 | key_1 | 1 | column_1b | 191 |  | BTREE
+1 | compound_key | 1 | id | NULL |  | BTREE
+1 | compound_key | 2 | column_1b | 191 |  | BTREE
+1 | fulltext_key | 1 | column_1b | NULL |  | FULLTEXT
+1 | key_5 | 1 | column_1b | NULL |  | FULLTEXT
+1 | ft_multi | 1 | column_1b | NULL |  | FULLTEXT
+1 | ft_body | 1 | body | NULL | YES | FULLTEXT
+
+-- DROP TABLE wptests_like_copy
+ok affected=0 insert_id=0
+-- TRUNCATE TABLE wptests_dbdelta_test
+ok affected=0 insert_id=0
+-- INSERT INTO wptests_dbdelta_test (column_1b, column_2) VALUES ('x', 'y')
+error 1054
+-- SELECT id, column_1b FROM wptests_dbdelta_test
+
+-- DROP TABLE wptests_dbdelta_test
+ok affected=0 insert_id=0
+-- CREATE TEMPORARY TABLE tmp_ft (id int NOT NULL, body text, PRIMARY KEY (id), FULLTEXT KEY body (body))
+error 1796
+-- CREATE TEMPORARY TABLE tmp_ft (id int NOT NULL, body text, PRIMARY KEY (id))
+ok affected=0 insert_id=0
+-- CREATE TABLE bad_ft (id int NOT NULL PRIMARY KEY, FULLTEXT KEY f (id))
+error 1283
+-- SHOW TABLES LIKE 'bad\_ft'
+

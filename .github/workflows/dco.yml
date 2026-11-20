@@ -1,0 +1,33 @@
+# PR のすべてのコミットに、作者と同じ名前とメールアドレスの Signed-off-by があるかを確かめる（CONTRIBUTING.md の DCO）。
+# Dependabot などのボットのコミットは除く。
+name: dco
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  signoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: check Signed-off-by
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bad=0
+          for c in $(git rev-list --no-merges "$BASE..$HEAD"); do
+            case "$(git log -1 --format=%ae "$c")" in *'[bot]@users.noreply.github.com') continue ;; esac
+            want="Signed-off-by: $(git log -1 --format='%an <%ae>' "$c")"
+            if ! git log -1 --format=%B "$c" | grep -qxF "$want"; then
+              echo "::error::$(git log -1 --format='%h %s' "$c"): missing \"$want\""
+              bad=1
+            fi
+          done
+          exit $bad

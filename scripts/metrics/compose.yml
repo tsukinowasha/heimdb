@@ -1,0 +1,87 @@
+# 手元の HeimDB の指標を見る Prometheus と Grafana（docs/operations.md の「指標」）。リポジトリの直下で:
+#
+#   go run ./cmd/heimdb -metrics-addr 127.0.0.1:9104     # HeimDB は手元で動かす（Docker の HeimDB なら下の METRICS_TARGET）
+#   docker compose -f scripts/metrics/compose.yml up -d
+#
+#   Grafana:    http://127.0.0.1:3000   （ログインなし。ダッシュボード「HeimDB」）
+#   Prometheus: http://127.0.0.1:9090   （Status > Targets、Alerts）
+#
+# HeimDB は Docker Desktop の host.docker.internal 経由で読む（127.0.0.1 で開いた口にも届く）。読む先は METRICS_TARGET で
+# 替えられる（例: METRICS_TARGET=db:9104 で、同じネットワークに参加させた HeimDB のコンテナ）。規則は rules.yml、
+# ダッシュボードは grafana-dashboard.json を読む。ポートは 127.0.0.1 だけで開く。片付けは docker compose ... down -v。
+name: heimdb-metrics
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    configs:
+      - source: prometheus
+        target: /etc/prometheus/prometheus.yml
+      - source: rules
+        target: /etc/prometheus/rules.yml
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - prometheus:/prometheus
+
+  grafana:
+    image: grafana/grafana:12.0.2
+    depends_on: [prometheus]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/heimdb.json
+    configs:
+      - source: datasource
+        target: /etc/grafana/provisioning/datasources/prometheus.yml
+      - source: dashboards
+        target: /etc/grafana/provisioning/dashboards/heimdb.yml
+      - source: dashboard
+        target: /etc/grafana/dashboards/heimdb.json
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - grafana:/var/lib/grafana
+
+configs:
+  prometheus:
+    content: |
+      global:
+        scrape_interval: 15s
+        evaluation_interval: 15s
+      rule_files:
+        - rules.yml
+      scrape_configs:
+        - job_name: heimdb
+          static_configs:
+            - targets: ["${METRICS_TARGET:-host.docker.internal:9104}"]
+  rules:
+    file: ./rules.yml
+  datasource:
+    content: |
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          uid: prom
+          type: prometheus
+          url: http://prometheus:9090
+          isDefault: true
+  dashboards:
+    content: |
+      apiVersion: 1
+      providers:
+        - name: heimdb
+          options:
+            path: /etc/grafana/dashboards
+  dashboard:
+    file: ./grafana-dashboard.json
+
+volumes:
+  prometheus:
+  grafana:

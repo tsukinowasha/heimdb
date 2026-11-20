@@ -1,0 +1,12 @@
+HeimDB
+Copyright 2026 Tsukinowa Inc.
+
+This product includes software derived from go-mysql-server
+(https://github.com/dolthub/go-mysql-server), version 0.20.0,
+Copyright 2020-2025 DoltHub, Inc., licensed under the Apache License 2.0.
+The derived code is in internal/sqlengine and has been modified by
+Tsukinowa Inc. (see internal/sqlengine/README.md and docs/engine.md).
+
+The MySQL compatibility test suite in compat/ builds on the WordPress test
+framework and is licensed under the GNU General Public License, version 2 or
+later (see compat/LICENSE). It is not part of the Go module or the Docker image.

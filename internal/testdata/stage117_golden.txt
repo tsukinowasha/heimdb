@@ -1,0 +1,690 @@
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- CREATE TABLE dd (id INT PRIMARY KEY, d DECIMAL(19,4) NULL, KEY kd (d))
+ok affected=0 insert_id=0
+-- INSERT INTO dd VALUES (1, 9.9999), (2, 10.0000), (3, 10.0001), (4, 10.5000), (5, -0.0001), (6, 0), (7, NULL), (8, 999999999999999.9999), (9, -999999999999999.9999), (10, -0.0000), (11, 10.0000)
+ok affected=11 insert_id=0
+-- SELECT id, d FROM dd WHERE d > 10.00005 ORDER BY d, id
+3 | 10.0001
+4 | 10.5000
+8 | 999999999999999.9999
+
+-- SELECT id, d FROM dd WHERE d >= 10.00005 ORDER BY d, id
+3 | 10.0001
+4 | 10.5000
+8 | 999999999999999.9999
+
+-- SELECT id, d FROM dd WHERE d < 10.00005 ORDER BY d, id
+9 | -999999999999999.9999
+5 | -0.0001
+6 | 0.0000
+10 | 0.0000
+1 | 9.9999
+2 | 10.0000
+11 | 10.0000
+
+-- SELECT id, d FROM dd WHERE d <= 10 ORDER BY d, id
+9 | -999999999999999.9999
+5 | -0.0001
+6 | 0.0000
+10 | 0.0000
+1 | 9.9999
+2 | 10.0000
+11 | 10.0000
+
+-- SELECT id, d FROM dd WHERE d = 10.00005
+
+-- SELECT id, d FROM dd WHERE d = 10 ORDER BY id
+2 | 10.0000
+11 | 10.0000
+
+-- SELECT id, d FROM dd WHERE d = 10.0000 ORDER BY id
+2 | 10.0000
+11 | 10.0000
+
+-- SELECT id, d FROM dd WHERE d = '10.00000' ORDER BY id
+2 | 10.0000
+11 | 10.0000
+
+-- SELECT id, d FROM dd WHERE d = 0 ORDER BY id
+6 | 0.0000
+10 | 0.0000
+
+-- SELECT id, d FROM dd WHERE d = -0.0001
+5 | -0.0001
+
+-- SELECT id, d FROM dd WHERE d BETWEEN 9.99995 AND 10.00005 ORDER BY d, id
+2 | 10.0000
+11 | 10.0000
+
+-- SELECT id, d FROM dd WHERE d BETWEEN -1 AND 1 ORDER BY d, id
+5 | -0.0001
+6 | 0.0000
+10 | 0.0000
+
+-- SELECT id, d FROM dd WHERE d IN (10, 10.5, -0.0001, 3) ORDER BY id
+2 | 10.0000
+4 | 10.5000
+5 | -0.0001
+11 | 10.0000
+
+-- SELECT id, d FROM dd WHERE d NOT IN (10, 10.5) ORDER BY id
+1 | 9.9999
+3 | 10.0001
+5 | -0.0001
+6 | 0.0000
+8 | 999999999999999.9999
+9 | -999999999999999.9999
+10 | 0.0000
+
+-- SELECT id, d FROM dd WHERE d > 1e30
+
+-- SELECT id, d FROM dd WHERE d < -1e30
+
+-- SELECT id, d FROM dd WHERE d IS NULL
+7 | NULL
+
+-- SELECT id, d FROM dd WHERE d IS NOT NULL ORDER BY d DESC, id DESC
+8 | 999999999999999.9999
+4 | 10.5000
+3 | 10.0001
+11 | 10.0000
+2 | 10.0000
+1 | 9.9999
+10 | 0.0000
+6 | 0.0000
+5 | -0.0001
+9 | -999999999999999.9999
+
+-- SELECT id, d FROM dd ORDER BY d, id
+7 | NULL
+9 | -999999999999999.9999
+5 | -0.0001
+6 | 0.0000
+10 | 0.0000
+1 | 9.9999
+2 | 10.0000
+11 | 10.0000
+3 | 10.0001
+4 | 10.5000
+8 | 999999999999999.9999
+
+-- SELECT id, d FROM dd ORDER BY d DESC, id DESC
+8 | 999999999999999.9999
+4 | 10.5000
+3 | 10.0001
+11 | 10.0000
+2 | 10.0000
+1 | 9.9999
+10 | 0.0000
+6 | 0.0000
+5 | -0.0001
+9 | -999999999999999.9999
+7 | NULL
+
+-- SELECT id, d FROM dd ORDER BY d LIMIT 3
+7 | NULL
+9 | -999999999999999.9999
+5 | -0.0001
+
+-- SELECT id, d FROM dd WHERE d > 0 ORDER BY d DESC LIMIT 2
+8 | 999999999999999.9999
+4 | 10.5000
+
+-- SELECT MIN(d), MAX(d), COUNT(d) FROM dd
+-999999999999999.9999 | 999999999999999.9999 | 10
+
+-- SELECT d, COUNT(*) FROM dd GROUP BY d ORDER BY d
+NULL | 1
+-999999999999999.9999 | 1
+-0.0001 | 1
+0.0000 | 2
+9.9999 | 1
+10.0000 | 2
+10.0001 | 1
+10.5000 | 1
+999999999999999.9999 | 1
+
+-- SELECT COUNT(*) FROM dd WHERE d >= 10
+5
+
+-- UPDATE dd SET d = 10.2500 WHERE id = 3
+ok affected=1 insert_id=0
+-- DELETE FROM dd WHERE id = 1
+ok affected=1 insert_id=0
+-- INSERT INTO dd VALUES (12, 10.12), (13, -5)
+ok affected=2 insert_id=0
+-- UPDATE dd SET d = d + 1 WHERE d BETWEEN 10 AND 10.3
+ok affected=4 insert_id=0
+-- SELECT id, d FROM dd WHERE d BETWEEN 9 AND 12 ORDER BY d, id
+4 | 10.5000
+2 | 11.0000
+11 | 11.0000
+12 | 11.1200
+3 | 11.2500
+
+-- SELECT id, d FROM dd ORDER BY d, id
+7 | NULL
+9 | -999999999999999.9999
+13 | -5.0000
+5 | -0.0001
+6 | 0.0000
+10 | 0.0000
+4 | 10.5000
+2 | 11.0000
+11 | 11.0000
+12 | 11.1200
+3 | 11.2500
+8 | 999999999999999.9999
+
+-- DROP TABLE dd
+ok affected=0 insert_id=0
+-- CREATE TABLE mm (id INT PRIMARY KEY, s VARCHAR(10), d DECIMAL(10,2), n INT, KEY ksd (s, d), KEY kdn (d, n))
+ok affected=0 insert_id=0
+-- INSERT INTO mm VALUES (1,'a',1.00,1),(2,'a',2.50,2),(3,'b',0.10,3),(4,'a',NULL,4),(5,'a',1.01,5),(6,'b',2.50,1),(7,'a',2.50,0)
+ok affected=7 insert_id=0
+-- SELECT id FROM mm WHERE s = 'a' AND d > 1.005 ORDER BY id
+2
+5
+7
+
+-- SELECT id FROM mm WHERE s = 'a' AND d = 2.5 ORDER BY id
+2
+7
+
+-- SELECT id FROM mm WHERE s = 'a' AND d < 2 ORDER BY d, id
+1
+5
+
+-- SELECT id, d, n FROM mm WHERE d = 2.50 AND n >= 1 ORDER BY id
+2 | 2.50 | 2
+6 | 2.50 | 1
+
+-- SELECT id, d, n FROM mm WHERE d = 2.50 ORDER BY d, n
+7 | 2.50 | 0
+6 | 2.50 | 1
+2 | 2.50 | 2
+
+-- SELECT id, s, d FROM mm WHERE s IN ('a', 'b') AND d BETWEEN 0.1 AND 1.01 ORDER BY s, d
+1 | a | 1.00
+5 | a | 1.01
+3 | b | 0.10
+
+-- SELECT id FROM mm ORDER BY d DESC, n DESC
+2
+6
+7
+5
+1
+3
+4
+
+-- DROP TABLE mm
+ok affected=0 insert_id=0
+-- CREATE TABLE ff (id INT PRIMARY KEY, f FLOAT NULL, g DOUBLE NULL, KEY kf (f), KEY kg (g))
+ok affected=0 insert_id=0
+-- INSERT INTO ff VALUES (1, 0.5, 0.1), (2, 0, 0), (3, -0.0, -0.0), (4, 1e38, 1e300), (5, -1e38, -1e300), (6, NULL, NULL), (7, 0.25, 0.3), (8, 1.5, 1.5), (9, -2.5, -2.5), (10, 1.5, 0.30000000000000004)
+ok affected=10 insert_id=0
+-- SELECT id, g FROM ff WHERE g = 0.1
+1 | 0.1
+
+-- SELECT id, g FROM ff WHERE g = 0.3
+7 | 0.3
+
+-- SELECT id, g FROM ff WHERE g > 0.1 ORDER BY g, id
+7 | 0.3
+10 | 0.30000000000000004
+8 | 1.5
+4 | 1e+300
+
+-- SELECT id, g FROM ff WHERE g >= 0.1 ORDER BY g, id
+1 | 0.1
+7 | 0.3
+10 | 0.30000000000000004
+8 | 1.5
+4 | 1e+300
+
+-- SELECT id, g FROM ff WHERE g < 0 ORDER BY g, id
+5 | -1e+300
+9 | -2.5
+
+-- SELECT id, g FROM ff WHERE g = 0 ORDER BY id
+2 | 0
+3 | 0
+
+-- SELECT id, g FROM ff WHERE g = -0.0 ORDER BY id
+2 | 0
+3 | 0
+
+-- SELECT id, g FROM ff WHERE g BETWEEN -3 AND 0.3 ORDER BY g, id
+9 | -2.5
+2 | 0
+3 | 0
+1 | 0.1
+7 | 0.3
+
+-- SELECT id, g FROM ff WHERE g IN (0.1, 1.5, 7) ORDER BY id
+1 | 0.1
+8 | 1.5
+
+-- SELECT id, g FROM ff WHERE g = '0.1'
+1 | 0.1
+
+-- SELECT id, g FROM ff WHERE g > 1e299 ORDER BY id
+4 | 1e+300
+
+-- SELECT id, g FROM ff ORDER BY g, id
+6 | NULL
+5 | -1e+300
+9 | -2.5
+2 | 0
+3 | 0
+1 | 0.1
+7 | 0.3
+10 | 0.30000000000000004
+8 | 1.5
+4 | 1e+300
+
+-- SELECT id, g FROM ff ORDER BY g DESC, id DESC
+4 | 1e+300
+8 | 1.5
+10 | 0.30000000000000004
+7 | 0.3
+1 | 0.1
+3 | 0
+2 | 0
+9 | -2.5
+5 | -1e+300
+6 | NULL
+
+-- SELECT id, f FROM ff WHERE f = 0.5
+1 | 0.5
+
+-- SELECT id, f FROM ff WHERE f = 1.5 ORDER BY id
+8 | 1.5
+10 | 1.5
+
+-- SELECT id, f FROM ff WHERE f > 0.5 ORDER BY f, id
+8 | 1.5
+10 | 1.5
+4 | 1e+38
+
+-- SELECT id, f FROM ff WHERE f >= 0.25 ORDER BY f, id
+7 | 0.25
+1 | 0.5
+8 | 1.5
+10 | 1.5
+4 | 1e+38
+
+-- SELECT id, f FROM ff WHERE f < 0 ORDER BY f, id
+5 | -1e+38
+9 | -2.5
+
+-- SELECT id, f FROM ff WHERE f = 0 ORDER BY id
+2 | 0
+3 | 0
+
+-- SELECT id, f FROM ff WHERE f BETWEEN -3 AND 0.25 ORDER BY f, id
+9 | -2.5
+2 | 0
+3 | 0
+7 | 0.25
+
+-- SELECT id, f FROM ff WHERE f IN (0.5, 1.5) ORDER BY id
+1 | 0.5
+8 | 1.5
+10 | 1.5
+
+-- SELECT id, f FROM ff ORDER BY f, id
+6 | NULL
+5 | -1e+38
+9 | -2.5
+2 | 0
+3 | 0
+7 | 0.25
+1 | 0.5
+8 | 1.5
+10 | 1.5
+4 | 1e+38
+
+-- SELECT id, f FROM ff ORDER BY f DESC, id DESC
+4 | 1e+38
+10 | 1.5
+8 | 1.5
+1 | 0.5
+7 | 0.25
+3 | 0
+2 | 0
+9 | -2.5
+5 | -1e+38
+6 | NULL
+
+-- SELECT MIN(f), MAX(f), MIN(g), MAX(g) FROM ff
+-1e+38 | 1e+38 | -1e+300 | 1e+300
+
+-- UPDATE ff SET g = 0.2, f = 0.75 WHERE id = 1
+ok affected=1 insert_id=0
+-- DELETE FROM ff WHERE id = 7
+ok affected=1 insert_id=0
+-- SELECT id, f, g FROM ff WHERE g BETWEEN 0 AND 1 ORDER BY g, id
+2 | 0 | 0
+3 | 0 | 0
+1 | 0.75 | 0.2
+10 | 1.5 | 0.30000000000000004
+
+-- SELECT id, f FROM ff WHERE f > 0.5 ORDER BY f, id
+1 | 0.75
+8 | 1.5
+10 | 1.5
+4 | 1e+38
+
+-- DROP TABLE ff
+ok affected=0 insert_id=0
+-- CREATE TABLE ee (id INT PRIMARY KEY, e ENUM('z','b','a') NULL, KEY ke (e))
+ok affected=0 insert_id=0
+-- INSERT INTO ee VALUES (1,'z'),(2,'b'),(3,'a'),(4,NULL),(5,'z'),(6,'a')
+ok affected=6 insert_id=0
+-- SELECT id, e FROM ee ORDER BY e, id
+4 | NULL
+1 | z
+5 | z
+2 | b
+3 | a
+6 | a
+
+-- SELECT id, e FROM ee ORDER BY e DESC, id DESC
+6 | a
+3 | a
+2 | b
+5 | z
+1 | z
+4 | NULL
+
+-- SELECT id, e FROM ee WHERE e = 'a' ORDER BY id
+3 | a
+6 | a
+
+-- SELECT id, e FROM ee WHERE e = 'A' ORDER BY id
+3 | a
+6 | a
+
+-- SELECT id, e FROM ee WHERE e = 2 ORDER BY id
+2 | b
+
+-- SELECT id, e FROM ee WHERE e > 1 ORDER BY id
+2 | b
+3 | a
+6 | a
+
+-- SELECT id, e FROM ee WHERE e IN ('a','z') ORDER BY id
+1 | z
+3 | a
+5 | z
+6 | a
+
+-- SELECT id, e FROM ee WHERE e <> 'z' ORDER BY id
+2 | b
+3 | a
+6 | a
+
+-- SELECT id, e FROM ee WHERE e = 'q'
+
+-- SELECT id, e FROM ee WHERE e IS NULL
+4 | NULL
+
+-- SELECT e, COUNT(*) FROM ee GROUP BY e ORDER BY e
+NULL | 1
+z | 2
+b | 1
+a | 2
+
+-- UPDATE ee SET e = 'b' WHERE id = 1
+ok affected=1 insert_id=0
+-- DELETE FROM ee WHERE id = 3
+ok affected=1 insert_id=0
+-- INSERT INTO ee VALUES (7, 'a')
+ok affected=1 insert_id=0
+-- SELECT id, e FROM ee WHERE e = 'a' ORDER BY id
+6 | a
+7 | a
+
+-- SELECT id, e FROM ee WHERE e = 'b' ORDER BY id
+1 | b
+2 | b
+
+-- SELECT id, e FROM ee ORDER BY e, id
+4 | NULL
+5 | z
+1 | b
+2 | b
+6 | a
+7 | a
+
+-- DROP TABLE ee
+ok affected=0 insert_id=0
+-- CREATE TABLE uu (id INT PRIMARY KEY, d DECIMAL(10,2), UNIQUE KEY ud (d))
+ok affected=0 insert_id=0
+-- CREATE TABLE uf (id INT PRIMARY KEY, f FLOAT, g DOUBLE, UNIQUE KEY uf (f), UNIQUE KEY ug (g))
+ok affected=0 insert_id=0
+-- CREATE TABLE ue (id INT PRIMARY KEY, e ENUM('a','b'), UNIQUE KEY ue (e))
+ok affected=0 insert_id=0
+-- CREATE TABLE un (id INT PRIMARY KEY, d DECIMAL(10,2), f DOUBLE)
+ok affected=0 insert_id=0
+-- INSERT INTO uu VALUES (1, 1.5)
+ok affected=1 insert_id=0
+-- INSERT INTO uu VALUES (2, 1.50)
+error 1062
+-- INSERT INTO uu VALUES (3, 1.504)
+error 1062
+-- INSERT INTO uu VALUES (4, 1.506)
+ok affected=1 insert_id=0
+-- INSERT INTO uu VALUES (5, NULL), (6, NULL)
+ok affected=2 insert_id=0
+-- UPDATE uu SET d = 1.5 WHERE id = 4
+error 1062
+-- UPDATE uu SET d = 1.49 WHERE id = 4
+ok affected=1 insert_id=0
+-- INSERT INTO uu VALUES (7, 1.51)
+ok affected=1 insert_id=0
+-- SELECT id, d FROM uu ORDER BY id
+1 | 1.50
+4 | 1.49
+5 | NULL
+6 | NULL
+7 | 1.51
+
+-- INSERT INTO uf VALUES (1, 0, 1)
+ok affected=1 insert_id=0
+-- INSERT INTO uf VALUES (2, -0.0, 2)
+error 1062
+-- INSERT INTO uf VALUES (3, 1, -0.0)
+ok affected=1 insert_id=0
+-- INSERT INTO uf VALUES (4, 2, 0)
+error 1062
+-- INSERT INTO uf VALUES (5, 2.5, 1)
+error 1062
+-- SELECT id, f, g FROM uf ORDER BY id
+1 | 0 | 1
+3 | 1 | 0
+
+-- INSERT INTO ue VALUES (1, 'a')
+ok affected=1 insert_id=0
+-- INSERT INTO ue VALUES (2, 'A')
+error 1062
+-- INSERT INTO ue VALUES (3, 1)
+error 1062
+-- INSERT INTO ue VALUES (4, 'b')
+ok affected=1 insert_id=0
+-- SELECT id, e FROM ue ORDER BY id
+1 | a
+4 | b
+
+-- INSERT INTO un VALUES (1, 1.50, 0), (2, 2.00, -0.0), (3, 1.5, 3)
+ok affected=3 insert_id=0
+-- CREATE UNIQUE INDEX und ON un (d)
+error 1062
+-- CREATE UNIQUE INDEX unf ON un (f)
+error 1062
+-- UPDATE un SET d = 3 WHERE id = 3
+ok affected=1 insert_id=0
+-- CREATE UNIQUE INDEX und ON un (d)
+ok affected=0 insert_id=0
+-- INSERT INTO un VALUES (4, 3.00, 4)
+error 1062
+-- ALTER TABLE un ADD COLUMN x INT
+ok
+-- INSERT INTO un VALUES (5, 2.0, 5, 1)
+error 1062
+-- ALTER TABLE un MODIFY d DECIMAL(10,0)
+error 1062
+-- ALTER TABLE un MODIFY d DECIMAL(12,2)
+ok
+-- INSERT INTO un VALUES (6, 2.0, 6, 1)
+error 1062
+-- SELECT id, d, f, x FROM un ORDER BY id
+1 | 1.50 | 0 | NULL
+2 | 2.00 | 0 | NULL
+3 | 3.00 | 3 | NULL
+
+-- DROP TABLE uu
+ok affected=0 insert_id=0
+-- DROP TABLE uf
+ok affected=0 insert_id=0
+-- DROP TABLE ue
+ok affected=0 insert_id=0
+-- DROP TABLE un
+ok affected=0 insert_id=0
+-- CREATE TABLE sp (code VARCHAR(20) PRIMARY KEY, amount DECIMAL(10,2) NOT NULL, rate DOUBLE, kind ENUM('x','y'), KEY ka (amount), KEY kr (rate), KEY kk (kind, amount))
+ok affected=0 insert_id=0
+-- INSERT INTO sp VALUES ('b', 1.50, 0.5, 'x'), ('a', -2.25, 1.5, 'y'), ('c', 0, NULL, 'x'), ('d', 1.5, -0.5, NULL), ('ee', 100, 2, 'y')
+ok affected=5 insert_id=0
+-- SELECT code, amount FROM sp WHERE amount >= 0 ORDER BY amount, code
+c | 0.00
+b | 1.50
+d | 1.50
+ee | 100.00
+
+-- SELECT code FROM sp WHERE amount = 1.5 ORDER BY code
+b
+d
+
+-- SELECT code, rate FROM sp WHERE rate > 0 ORDER BY rate
+b | 0.5
+a | 1.5
+ee | 2
+
+-- SELECT code FROM sp WHERE kind = 'x' AND amount > 0 ORDER BY code
+b
+
+-- SELECT code FROM sp ORDER BY kind DESC, amount DESC, code DESC
+ee
+a
+b
+c
+d
+
+-- UPDATE sp SET amount = 7 WHERE code = 'c'
+ok affected=1 insert_id=0
+-- SELECT code, amount FROM sp WHERE amount > 1 ORDER BY amount, code
+b | 1.50
+d | 1.50
+c | 7.00
+ee | 100.00
+
+-- DROP TABLE sp
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_wc_product_meta_lookup (product_id BIGINT NOT NULL, sku VARCHAR(100) NULL DEFAULT '', min_price DECIMAL(19,4) NULL DEFAULT NULL, max_price DECIMAL(19,4) NULL DEFAULT NULL, stock_quantity DOUBLE NULL DEFAULT NULL, stock_status VARCHAR(100) NULL DEFAULT 'instock', PRIMARY KEY (product_id), KEY stock_status (stock_status), KEY stock_quantity (stock_quantity), KEY min_max_price (min_price, max_price))
+ok affected=0 insert_id=0
+-- INSERT INTO wp_wc_product_meta_lookup (product_id, min_price, max_price, stock_quantity) VALUES (1, 10.0000, 12.5000, 5), (2, 9.9950, 9.9950, NULL), (3, 12345678901234.5678, 12345678901234.5678, 1), (4, 0, 0, 0), (5, 20, 30, -1), (6, 25.0000, 25.0000, 2.5), (7, NULL, NULL, 0), (8, 9.99, 19.99, 10)
+ok affected=8 insert_id=0
+-- CREATE TABLE price_list (id INT PRIMARY KEY, price DECIMAL(19,4), KEY kp (price))
+ok affected=0 insert_id=0
+-- INSERT INTO price_list VALUES (1, 10), (2, 25), (3, 9.995), (4, 7), (5, NULL), (6, 25.00001)
+ok affected=6 insert_id=0
+-- SELECT product_id FROM wp_wc_product_meta_lookup WHERE min_price >= 10.000000 AND max_price <= 25.000000 ORDER BY product_id
+1
+6
+
+-- SELECT product_id FROM wp_wc_product_meta_lookup WHERE min_price >= 9.99501 AND max_price <= 19.99985 ORDER BY product_id
+1
+
+-- SELECT product_id FROM wp_wc_product_meta_lookup WHERE max_price >= 0 AND min_price <= 10 ORDER BY product_id
+1
+2
+4
+8
+
+-- SELECT product_id, min_price FROM wp_wc_product_meta_lookup ORDER BY min_price ASC, product_id ASC
+7 | NULL
+4 | 0.0000
+8 | 9.9900
+2 | 9.9950
+1 | 10.0000
+5 | 20.0000
+6 | 25.0000
+3 | 12345678901234.5678
+
+-- SELECT product_id, max_price FROM wp_wc_product_meta_lookup ORDER BY max_price DESC, product_id DESC
+3 | 12345678901234.5678
+5 | 30.0000
+6 | 25.0000
+8 | 19.9900
+1 | 12.5000
+2 | 9.9950
+4 | 0.0000
+7 | NULL
+
+-- SELECT MIN(min_price) AS min_price, MAX(max_price) AS max_price FROM wp_wc_product_meta_lookup WHERE product_id IN (1, 2, 5, 8)
+9.9900 | 30.0000
+
+-- SELECT product_id FROM wp_wc_product_meta_lookup WHERE stock_quantity <= 0 ORDER BY product_id
+4
+5
+7
+
+-- SELECT product_id FROM wp_wc_product_meta_lookup WHERE stock_quantity > 2 ORDER BY product_id
+1
+6
+8
+
+-- SELECT product_id FROM wp_wc_product_meta_lookup WHERE stock_quantity = 2.5
+6
+
+-- SELECT product_id, stock_quantity FROM wp_wc_product_meta_lookup WHERE stock_quantity IS NOT NULL ORDER BY stock_quantity, product_id
+5 | -1
+4 | 0
+7 | 0
+3 | 1
+6 | 2.5
+1 | 5
+8 | 10
+
+-- SELECT l.id, p.product_id FROM price_list l JOIN wp_wc_product_meta_lookup p ON p.min_price = l.price ORDER BY l.id, p.product_id
+1 | 1
+2 | 6
+3 | 2
+6 | 6
+
+-- SELECT /*+ LOOKUP_JOIN(p, l) */ p.product_id, l.id FROM wp_wc_product_meta_lookup p JOIN price_list l ON l.price = p.max_price ORDER BY p.product_id, l.id
+2 | 3
+6 | 2
+6 | 6
+
+-- SELECT /*+ LOOKUP_JOIN(l, p) */ l.id, p.product_id FROM price_list l LEFT JOIN wp_wc_product_meta_lookup p ON p.stock_quantity = l.price ORDER BY l.id, p.product_id
+1 | 8
+2 | NULL
+3 | NULL
+4 | NULL
+5 | NULL
+6 | NULL
+
+-- UPDATE wp_wc_product_meta_lookup SET min_price = 11, max_price = 11 WHERE product_id = 1
+ok affected=1 insert_id=0
+-- SELECT product_id FROM wp_wc_product_meta_lookup WHERE min_price >= 10.000000 AND max_price <= 25.000000 ORDER BY product_id
+1
+6
+
+-- DROP TABLE price_list
+ok affected=0 insert_id=0
+-- DROP TABLE wp_wc_product_meta_lookup
+ok affected=0 insert_id=0

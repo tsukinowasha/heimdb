@@ -1,0 +1,768 @@
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE wp_termmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	term_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY term_id (term_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_terms (
+ term_id bigint(20) unsigned NOT NULL auto_increment,
+ name varchar(200) NOT NULL default '',
+ slug varchar(200) NOT NULL default '',
+ term_group bigint(10) NOT NULL default 0,
+ PRIMARY KEY  (term_id),
+ KEY slug (slug(191)),
+ KEY name (name(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_term_taxonomy (
+ term_taxonomy_id bigint(20) unsigned NOT NULL auto_increment,
+ term_id bigint(20) unsigned NOT NULL default 0,
+ taxonomy varchar(32) NOT NULL default '',
+ description longtext NOT NULL,
+ parent bigint(20) unsigned NOT NULL default 0,
+ count bigint(20) NOT NULL default 0,
+ PRIMARY KEY  (term_taxonomy_id),
+ UNIQUE KEY term_id_taxonomy (term_id,taxonomy),
+ KEY taxonomy (taxonomy)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_term_relationships (
+ object_id bigint(20) unsigned NOT NULL default 0,
+ term_taxonomy_id bigint(20) unsigned NOT NULL default 0,
+ term_order int(11) NOT NULL default 0,
+ PRIMARY KEY  (object_id,term_taxonomy_id),
+ KEY term_taxonomy_id (term_taxonomy_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_commentmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	comment_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY comment_id (comment_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_comments (
+	comment_ID bigint(20) unsigned NOT NULL auto_increment,
+	comment_post_ID bigint(20) unsigned NOT NULL default '0',
+	comment_author tinytext NOT NULL,
+	comment_author_email varchar(100) NOT NULL default '',
+	comment_author_url varchar(200) NOT NULL default '',
+	comment_author_IP varchar(100) NOT NULL default '',
+	comment_date datetime NOT NULL default '0000-00-00 00:00:00',
+	comment_date_gmt datetime NOT NULL default '0000-00-00 00:00:00',
+	comment_content text NOT NULL,
+	comment_karma int(11) NOT NULL default '0',
+	comment_approved varchar(20) NOT NULL default '1',
+	comment_agent varchar(255) NOT NULL default '',
+	comment_type varchar(20) NOT NULL default 'comment',
+	comment_parent bigint(20) unsigned NOT NULL default '0',
+	user_id bigint(20) unsigned NOT NULL default '0',
+	PRIMARY KEY  (comment_ID),
+	KEY comment_post_ID (comment_post_ID),
+	KEY comment_approved_date_gmt (comment_approved,comment_date_gmt),
+	KEY comment_date_gmt (comment_date_gmt),
+	KEY comment_parent (comment_parent),
+	KEY comment_author_email (comment_author_email(10))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_links (
+	link_id bigint(20) unsigned NOT NULL auto_increment,
+	link_url varchar(255) NOT NULL default '',
+	link_name varchar(255) NOT NULL default '',
+	link_image varchar(255) NOT NULL default '',
+	link_target varchar(25) NOT NULL default '',
+	link_description varchar(255) NOT NULL default '',
+	link_visible varchar(20) NOT NULL default 'Y',
+	link_owner bigint(20) unsigned NOT NULL default '1',
+	link_rating int(11) NOT NULL default '0',
+	link_updated datetime NOT NULL default '0000-00-00 00:00:00',
+	link_rel varchar(255) NOT NULL default '',
+	link_notes mediumtext NOT NULL,
+	link_rss varchar(255) NOT NULL default '',
+	PRIMARY KEY  (link_id),
+	KEY link_visible (link_visible)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_options (
+	option_id bigint(20) unsigned NOT NULL auto_increment,
+	option_name varchar(191) NOT NULL default '',
+	option_value longtext NOT NULL,
+	autoload varchar(20) NOT NULL default 'yes',
+	PRIMARY KEY  (option_id),
+	UNIQUE KEY option_name (option_name),
+	KEY autoload (autoload)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_postmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	post_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY post_id (post_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_posts (
+	ID bigint(20) unsigned NOT NULL auto_increment,
+	post_author bigint(20) unsigned NOT NULL default '0',
+	post_date datetime NOT NULL default '0000-00-00 00:00:00',
+	post_date_gmt datetime NOT NULL default '0000-00-00 00:00:00',
+	post_content longtext NOT NULL,
+	post_title text NOT NULL,
+	post_excerpt text NOT NULL,
+	post_status varchar(20) NOT NULL default 'publish',
+	comment_status varchar(20) NOT NULL default 'open',
+	ping_status varchar(20) NOT NULL default 'open',
+	post_password varchar(255) NOT NULL default '',
+	post_name varchar(200) NOT NULL default '',
+	to_ping text NOT NULL,
+	pinged text NOT NULL,
+	post_modified datetime NOT NULL default '0000-00-00 00:00:00',
+	post_modified_gmt datetime NOT NULL default '0000-00-00 00:00:00',
+	post_content_filtered longtext NOT NULL,
+	post_parent bigint(20) unsigned NOT NULL default '0',
+	guid varchar(255) NOT NULL default '',
+	menu_order int(11) NOT NULL default '0',
+	post_type varchar(20) NOT NULL default 'post',
+	post_mime_type varchar(100) NOT NULL default '',
+	comment_count bigint(20) NOT NULL default '0',
+	PRIMARY KEY  (ID),
+	KEY post_name (post_name(191)),
+	KEY type_status_date (post_type,post_status,post_date,ID),
+	KEY post_parent (post_parent),
+	KEY post_author (post_author),
+	KEY type_status_author (post_type,post_status,post_author)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_users (
+	ID bigint(20) unsigned NOT NULL auto_increment,
+	user_login varchar(60) NOT NULL default '',
+	user_pass varchar(255) NOT NULL default '',
+	user_nicename varchar(50) NOT NULL default '',
+	user_email varchar(100) NOT NULL default '',
+	user_url varchar(100) NOT NULL default '',
+	user_registered datetime NOT NULL default '0000-00-00 00:00:00',
+	user_activation_key varchar(255) NOT NULL default '',
+	user_status int(11) NOT NULL default '0',
+	display_name varchar(250) NOT NULL default '',
+	PRIMARY KEY  (ID),
+	KEY user_login_key (user_login),
+	KEY user_nicename (user_nicename),
+	KEY user_email (user_email)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_usermeta (
+	umeta_id bigint(20) unsigned NOT NULL auto_increment,
+	user_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (umeta_id),
+	KEY user_id (user_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_blogs (
+	blog_id bigint(20) unsigned NOT NULL auto_increment,
+	site_id bigint(20) unsigned NOT NULL default '0',
+	domain varchar(200) NOT NULL default '',
+	path varchar(100) NOT NULL default '',
+	registered datetime NOT NULL default '0000-00-00 00:00:00',
+	last_updated datetime NOT NULL default '0000-00-00 00:00:00',
+	public tinyint(2) NOT NULL default '1',
+	archived tinyint(2) NOT NULL default '0',
+	mature tinyint(2) NOT NULL default '0',
+	spam tinyint(2) NOT NULL default '0',
+	deleted tinyint(2) NOT NULL default '0',
+	lang_id int(11) NOT NULL default '0',
+	PRIMARY KEY  (blog_id),
+	KEY domain (domain(50),path(5)),
+	KEY lang_id (lang_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_blogmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	blog_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY meta_key (meta_key(191)),
+	KEY blog_id (blog_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_registration_log (
+	ID bigint(20) unsigned NOT NULL auto_increment,
+	email varchar(255) NOT NULL default '',
+	IP varchar(30) NOT NULL default '',
+	blog_id bigint(20) unsigned NOT NULL default '0',
+	date_registered datetime NOT NULL default '0000-00-00 00:00:00',
+	PRIMARY KEY  (ID),
+	KEY IP (IP)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_site (
+	id bigint(20) unsigned NOT NULL auto_increment,
+	domain varchar(200) NOT NULL default '',
+	path varchar(100) NOT NULL default '',
+	PRIMARY KEY  (id),
+	KEY domain (domain(140),path(51))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_sitemeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	site_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY meta_key (meta_key(191)),
+	KEY site_id (site_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_signups (
+	signup_id bigint(20) unsigned NOT NULL auto_increment,
+	domain varchar(200) NOT NULL default '',
+	path varchar(100) NOT NULL default '',
+	title longtext NOT NULL,
+	user_login varchar(60) NOT NULL default '',
+	user_email varchar(100) NOT NULL default '',
+	registered datetime NOT NULL default '0000-00-00 00:00:00',
+	activated datetime NOT NULL default '0000-00-00 00:00:00',
+	active tinyint(1) NOT NULL default '0',
+	activation_key varchar(50) NOT NULL default '',
+	meta longtext,
+	PRIMARY KEY  (signup_id),
+	KEY activation_key (activation_key),
+	KEY user_email (user_email),
+	KEY user_login_email (user_login,user_email),
+	KEY domain_path (domain(140),path(51))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- SHOW INDEX FROM wp_termmeta
+0 | PRIMARY | 1 | meta_id | NULL |  | BTREE
+1 | term_id | 1 | term_id | NULL |  | BTREE
+1 | meta_key | 1 | meta_key | 191 | YES | BTREE
+
+-- SHOW FULL COLUMNS FROM wp_termmeta
+meta_id | bigint unsigned | NULL | NO | PRI | NULL | auto_increment | select,insert,update,references | 
+term_id | bigint unsigned | NULL | NO | MUL | 0 |  | select,insert,update,references | 
+meta_key | varchar(255) | utf8mb4_unicode_520_ci | YES | MUL | NULL |  | select,insert,update,references | 
+meta_value | longtext | utf8mb4_unicode_520_ci | YES |  | NULL |  | select,insert,update,references | 
+
+-- SHOW INDEX FROM wp_terms
+0 | PRIMARY | 1 | term_id | NULL |  | BTREE
+1 | slug | 1 | slug | 191 |  | BTREE
+1 | name | 1 | name | 191 |  | BTREE
+
+-- SHOW FULL COLUMNS FROM wp_terms
+term_id | bigint unsigned | NULL | NO | PRI | NULL | auto_increment | select,insert,update,references | 
+name | varchar(200) | utf8mb4_unicode_520_ci | NO | MUL |  |  | select,insert,update,references | 
+slug | varchar(200) | utf8mb4_unicode_520_ci | NO | MUL |  |  | select,insert,update,references | 
+term_group | bigint | NULL | NO |  | 0 |  | select,insert,update,references | 
+
+-- SHOW INDEX FROM wp_term_taxonomy
+0 | PRIMARY | 1 | term_taxonomy_id | NULL |  | BTREE
+0 | term_id_taxonomy | 1 | term_id | NULL |  | BTREE
+0 | term_id_taxonomy | 2 | taxonomy | NULL |  | BTREE
+1 | taxonomy | 1 | taxonomy | NULL |  | BTREE
+
+-- SHOW FULL COLUMNS FROM wp_term_taxonomy
+term_taxonomy_id | bigint unsigned | NULL | NO | PRI | NULL | auto_increment | select,insert,update,references | 
+term_id | bigint unsigned | NULL | NO | MUL | 0 |  | select,insert,update,references | 
+taxonomy | varchar(32) | utf8mb4_unicode_520_ci | NO | MUL |  |  | select,insert,update,references | 
+description | longtext | utf8mb4_unicode_520_ci | NO |  | NULL |  | select,insert,update,references | 
+parent | bigint unsigned | NULL | NO |  | 0 |  | select,insert,update,references | 
+count | bigint | NULL | NO |  | 0 |  | select,insert,update,references | 
+
+-- SHOW INDEX FROM wp_term_relationships
+0 | PRIMARY | 1 | object_id | NULL |  | BTREE
+0 | PRIMARY | 2 | term_taxonomy_id | NULL |  | BTREE
+1 | term_taxonomy_id | 1 | term_taxonomy_id | NULL |  | BTREE
+
+-- SHOW FULL COLUMNS FROM wp_term_relationships
+object_id | bigint unsigned | NULL | NO | PRI | 0 |  | select,insert,update,references | 
+term_taxonomy_id | bigint unsigned | NULL | NO | PRI | 0 |  | select,insert,update,references | 
+term_order | int | NULL | NO |  | 0 |  | select,insert,update,references | 
+
+-- SHOW INDEX FROM wp_commentmeta
+0 | PRIMARY | 1 | meta_id | NULL |  | BTREE
+1 | comment_id | 1 | comment_id | NULL |  | BTREE
+1 | meta_key | 1 | meta_key | 191 | YES | BTREE
+
+-- SHOW FULL COLUMNS FROM wp_commentmeta
+meta_id | bigint unsigned | NULL | NO | PRI | NULL | auto_increment | select,insert,update,references | 
+comment_id | bigint unsigned | NULL | NO | MUL | 0 |  | select,insert,update,references | 
+meta_key | varchar(255) | utf8mb4_unicode_520_ci | YES | MUL | NULL |  | select,insert,update,references | 
+meta_value | longtext | utf8mb4_unicode_520_ci | YES |  | NULL |  | select,insert,update,references | 
+
+-- SHOW INDEX FROM wp_comments
+0 | PRIMARY | 1 | comment_ID | NULL |  | BTREE
+1 | comment_post_ID | 1 | comment_post_ID | NULL |  | BTREE
+1 | comment_approved_date_gmt | 1 | comment_approved | NULL |  | BTREE
+1 | comment_approved_date_gmt | 2 | comment_date_gmt | NULL |  | BTREE
+1 | comment_date_gmt | 1 | comment_date_gmt | NULL |  | BTREE
+1 | comment_parent | 1 | comment_parent | NULL |  | BTREE
+1 | comment_author_email | 1 | comment_author_email | 10 |  | BTREE
+
+-- SHOW FULL COLUMNS FROM wp_comments
+comment_ID | bigint unsigned | NULL | NO | PRI | NULL | auto_increment | select,insert,update,references | 
+comment_post_ID | bigint unsigned | NULL | NO | MUL | 0 |  | select,insert,update,references | 
+comment_author | tinytext | utf8mb4_unicode_520_ci | NO |  | NULL |  | select,insert,update,references | 
+comment_author_email | varchar(100) | utf8mb4_unicode_520_ci | NO | MUL |  |  | select,insert,update,references | 
+comment_author_url | varchar(200) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+comment_author_IP | varchar(100) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+comment_date | datetime | NULL | NO |  | 0000-00-00 00:00:00 |  | select,insert,update,references | 
+comment_date_gmt | datetime | NULL | NO | MUL | 0000-00-00 00:00:00 |  | select,insert,update,references | 
+comment_content | text | utf8mb4_unicode_520_ci | NO |  | NULL |  | select,insert,update,references | 
+comment_karma | int | NULL | NO |  | 0 |  | select,insert,update,references | 
+comment_approved | varchar(20) | utf8mb4_unicode_520_ci | NO | MUL | 1 |  | select,insert,update,references | 
+comment_agent | varchar(255) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+comment_type | varchar(20) | utf8mb4_unicode_520_ci | NO |  | comment |  | select,insert,update,references | 
+comment_parent | bigint unsigned | NULL | NO | MUL | 0 |  | select,insert,update,references | 
+user_id | bigint unsigned | NULL | NO |  | 0 |  | select,insert,update,references | 
+
+-- SHOW INDEX FROM wp_links
+0 | PRIMARY | 1 | link_id | NULL |  | BTREE
+1 | link_visible | 1 | link_visible | NULL |  | BTREE
+
+-- SHOW FULL COLUMNS FROM wp_links
+link_id | bigint unsigned | NULL | NO | PRI | NULL | auto_increment | select,insert,update,references | 
+link_url | varchar(255) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+link_name | varchar(255) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+link_image | varchar(255) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+link_target | varchar(25) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+link_description | varchar(255) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+link_visible | varchar(20) | utf8mb4_unicode_520_ci | NO | MUL | Y |  | select,insert,update,references | 
+link_owner | bigint unsigned | NULL | NO |  | 1 |  | select,insert,update,references | 
+link_rating | int | NULL | NO |  | 0 |  | select,insert,update,references | 
+link_updated | datetime | NULL | NO |  | 0000-00-00 00:00:00 |  | select,insert,update,references | 
+link_rel | varchar(255) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+link_notes | mediumtext | utf8mb4_unicode_520_ci | NO |  | NULL |  | select,insert,update,references | 
+link_rss | varchar(255) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+
+-- SHOW INDEX FROM wp_options
+0 | PRIMARY | 1 | option_id | NULL |  | BTREE
+0 | option_name | 1 | option_name | NULL |  | BTREE
+1 | autoload | 1 | autoload | NULL |  | BTREE
+
+-- SHOW FULL COLUMNS FROM wp_options
+option_id | bigint unsigned | NULL | NO | PRI | NULL | auto_increment | select,insert,update,references | 
+option_name | varchar(191) | utf8mb4_unicode_520_ci | NO | UNI |  |  | select,insert,update,references | 
+option_value | longtext | utf8mb4_unicode_520_ci | NO |  | NULL |  | select,insert,update,references | 
+autoload | varchar(20) | utf8mb4_unicode_520_ci | NO | MUL | yes |  | select,insert,update,references | 
+
+-- SHOW INDEX FROM wp_postmeta
+0 | PRIMARY | 1 | meta_id | NULL |  | BTREE
+1 | post_id | 1 | post_id | NULL |  | BTREE
+1 | meta_key | 1 | meta_key | 191 | YES | BTREE
+
+-- SHOW FULL COLUMNS FROM wp_postmeta
+meta_id | bigint unsigned | NULL | NO | PRI | NULL | auto_increment | select,insert,update,references | 
+post_id | bigint unsigned | NULL | NO | MUL | 0 |  | select,insert,update,references | 
+meta_key | varchar(255) | utf8mb4_unicode_520_ci | YES | MUL | NULL |  | select,insert,update,references | 
+meta_value | longtext | utf8mb4_unicode_520_ci | YES |  | NULL |  | select,insert,update,references | 
+
+-- SHOW INDEX FROM wp_posts
+0 | PRIMARY | 1 | ID | NULL |  | BTREE
+1 | post_name | 1 | post_name | 191 |  | BTREE
+1 | type_status_date | 1 | post_type | NULL |  | BTREE
+1 | type_status_date | 2 | post_status | NULL |  | BTREE
+1 | type_status_date | 3 | post_date | NULL |  | BTREE
+1 | type_status_date | 4 | ID | NULL |  | BTREE
+1 | post_parent | 1 | post_parent | NULL |  | BTREE
+1 | post_author | 1 | post_author | NULL |  | BTREE
+1 | type_status_author | 1 | post_type | NULL |  | BTREE
+1 | type_status_author | 2 | post_status | NULL |  | BTREE
+1 | type_status_author | 3 | post_author | NULL |  | BTREE
+
+-- SHOW FULL COLUMNS FROM wp_posts
+ID | bigint unsigned | NULL | NO | PRI | NULL | auto_increment | select,insert,update,references | 
+post_author | bigint unsigned | NULL | NO | MUL | 0 |  | select,insert,update,references | 
+post_date | datetime | NULL | NO |  | 0000-00-00 00:00:00 |  | select,insert,update,references | 
+post_date_gmt | datetime | NULL | NO |  | 0000-00-00 00:00:00 |  | select,insert,update,references | 
+post_content | longtext | utf8mb4_unicode_520_ci | NO |  | NULL |  | select,insert,update,references | 
+post_title | text | utf8mb4_unicode_520_ci | NO |  | NULL |  | select,insert,update,references | 
+post_excerpt | text | utf8mb4_unicode_520_ci | NO |  | NULL |  | select,insert,update,references | 
+post_status | varchar(20) | utf8mb4_unicode_520_ci | NO |  | publish |  | select,insert,update,references | 
+comment_status | varchar(20) | utf8mb4_unicode_520_ci | NO |  | open |  | select,insert,update,references | 
+ping_status | varchar(20) | utf8mb4_unicode_520_ci | NO |  | open |  | select,insert,update,references | 
+post_password | varchar(255) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+post_name | varchar(200) | utf8mb4_unicode_520_ci | NO | MUL |  |  | select,insert,update,references | 
+to_ping | text | utf8mb4_unicode_520_ci | NO |  | NULL |  | select,insert,update,references | 
+pinged | text | utf8mb4_unicode_520_ci | NO |  | NULL |  | select,insert,update,references | 
+post_modified | datetime | NULL | NO |  | 0000-00-00 00:00:00 |  | select,insert,update,references | 
+post_modified_gmt | datetime | NULL | NO |  | 0000-00-00 00:00:00 |  | select,insert,update,references | 
+post_content_filtered | longtext | utf8mb4_unicode_520_ci | NO |  | NULL |  | select,insert,update,references | 
+post_parent | bigint unsigned | NULL | NO | MUL | 0 |  | select,insert,update,references | 
+guid | varchar(255) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+menu_order | int | NULL | NO |  | 0 |  | select,insert,update,references | 
+post_type | varchar(20) | utf8mb4_unicode_520_ci | NO | MUL | post |  | select,insert,update,references | 
+post_mime_type | varchar(100) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+comment_count | bigint | NULL | NO |  | 0 |  | select,insert,update,references | 
+
+-- SHOW INDEX FROM wp_users
+0 | PRIMARY | 1 | ID | NULL |  | BTREE
+1 | user_login_key | 1 | user_login | NULL |  | BTREE
+1 | user_nicename | 1 | user_nicename | NULL |  | BTREE
+1 | user_email | 1 | user_email | NULL |  | BTREE
+
+-- SHOW FULL COLUMNS FROM wp_users
+ID | bigint unsigned | NULL | NO | PRI | NULL | auto_increment | select,insert,update,references | 
+user_login | varchar(60) | utf8mb4_unicode_520_ci | NO | MUL |  |  | select,insert,update,references | 
+user_pass | varchar(255) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+user_nicename | varchar(50) | utf8mb4_unicode_520_ci | NO | MUL |  |  | select,insert,update,references | 
+user_email | varchar(100) | utf8mb4_unicode_520_ci | NO | MUL |  |  | select,insert,update,references | 
+user_url | varchar(100) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+user_registered | datetime | NULL | NO |  | 0000-00-00 00:00:00 |  | select,insert,update,references | 
+user_activation_key | varchar(255) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+user_status | int | NULL | NO |  | 0 |  | select,insert,update,references | 
+display_name | varchar(250) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+
+-- SHOW INDEX FROM wp_usermeta
+0 | PRIMARY | 1 | umeta_id | NULL |  | BTREE
+1 | user_id | 1 | user_id | NULL |  | BTREE
+1 | meta_key | 1 | meta_key | 191 | YES | BTREE
+
+-- SHOW FULL COLUMNS FROM wp_usermeta
+umeta_id | bigint unsigned | NULL | NO | PRI | NULL | auto_increment | select,insert,update,references | 
+user_id | bigint unsigned | NULL | NO | MUL | 0 |  | select,insert,update,references | 
+meta_key | varchar(255) | utf8mb4_unicode_520_ci | YES | MUL | NULL |  | select,insert,update,references | 
+meta_value | longtext | utf8mb4_unicode_520_ci | YES |  | NULL |  | select,insert,update,references | 
+
+-- SHOW INDEX FROM wp_blogs
+0 | PRIMARY | 1 | blog_id | NULL |  | BTREE
+1 | domain | 1 | domain | 50 |  | BTREE
+1 | domain | 2 | path | 5 |  | BTREE
+1 | lang_id | 1 | lang_id | NULL |  | BTREE
+
+-- SHOW FULL COLUMNS FROM wp_blogs
+blog_id | bigint unsigned | NULL | NO | PRI | NULL | auto_increment | select,insert,update,references | 
+site_id | bigint unsigned | NULL | NO |  | 0 |  | select,insert,update,references | 
+domain | varchar(200) | utf8mb4_unicode_520_ci | NO | MUL |  |  | select,insert,update,references | 
+path | varchar(100) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+registered | datetime | NULL | NO |  | 0000-00-00 00:00:00 |  | select,insert,update,references | 
+last_updated | datetime | NULL | NO |  | 0000-00-00 00:00:00 |  | select,insert,update,references | 
+public | tinyint | NULL | NO |  | 1 |  | select,insert,update,references | 
+archived | tinyint | NULL | NO |  | 0 |  | select,insert,update,references | 
+mature | tinyint | NULL | NO |  | 0 |  | select,insert,update,references | 
+spam | tinyint | NULL | NO |  | 0 |  | select,insert,update,references | 
+deleted | tinyint | NULL | NO |  | 0 |  | select,insert,update,references | 
+lang_id | int | NULL | NO | MUL | 0 |  | select,insert,update,references | 
+
+-- SHOW INDEX FROM wp_blogmeta
+0 | PRIMARY | 1 | meta_id | NULL |  | BTREE
+1 | meta_key | 1 | meta_key | 191 | YES | BTREE
+1 | blog_id | 1 | blog_id | NULL |  | BTREE
+
+-- SHOW FULL COLUMNS FROM wp_blogmeta
+meta_id | bigint unsigned | NULL | NO | PRI | NULL | auto_increment | select,insert,update,references | 
+blog_id | bigint unsigned | NULL | NO | MUL | 0 |  | select,insert,update,references | 
+meta_key | varchar(255) | utf8mb4_unicode_520_ci | YES | MUL | NULL |  | select,insert,update,references | 
+meta_value | longtext | utf8mb4_unicode_520_ci | YES |  | NULL |  | select,insert,update,references | 
+
+-- SHOW INDEX FROM wp_registration_log
+0 | PRIMARY | 1 | ID | NULL |  | BTREE
+1 | IP | 1 | IP | NULL |  | BTREE
+
+-- SHOW FULL COLUMNS FROM wp_registration_log
+ID | bigint unsigned | NULL | NO | PRI | NULL | auto_increment | select,insert,update,references | 
+email | varchar(255) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+IP | varchar(30) | utf8mb4_unicode_520_ci | NO | MUL |  |  | select,insert,update,references | 
+blog_id | bigint unsigned | NULL | NO |  | 0 |  | select,insert,update,references | 
+date_registered | datetime | NULL | NO |  | 0000-00-00 00:00:00 |  | select,insert,update,references | 
+
+-- SHOW INDEX FROM wp_site
+0 | PRIMARY | 1 | id | NULL |  | BTREE
+1 | domain | 1 | domain | 140 |  | BTREE
+1 | domain | 2 | path | 51 |  | BTREE
+
+-- SHOW FULL COLUMNS FROM wp_site
+id | bigint unsigned | NULL | NO | PRI | NULL | auto_increment | select,insert,update,references | 
+domain | varchar(200) | utf8mb4_unicode_520_ci | NO | MUL |  |  | select,insert,update,references | 
+path | varchar(100) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+
+-- SHOW INDEX FROM wp_sitemeta
+0 | PRIMARY | 1 | meta_id | NULL |  | BTREE
+1 | meta_key | 1 | meta_key | 191 | YES | BTREE
+1 | site_id | 1 | site_id | NULL |  | BTREE
+
+-- SHOW FULL COLUMNS FROM wp_sitemeta
+meta_id | bigint unsigned | NULL | NO | PRI | NULL | auto_increment | select,insert,update,references | 
+site_id | bigint unsigned | NULL | NO | MUL | 0 |  | select,insert,update,references | 
+meta_key | varchar(255) | utf8mb4_unicode_520_ci | YES | MUL | NULL |  | select,insert,update,references | 
+meta_value | longtext | utf8mb4_unicode_520_ci | YES |  | NULL |  | select,insert,update,references | 
+
+-- SHOW INDEX FROM wp_signups
+0 | PRIMARY | 1 | signup_id | NULL |  | BTREE
+1 | activation_key | 1 | activation_key | NULL |  | BTREE
+1 | user_email | 1 | user_email | NULL |  | BTREE
+1 | user_login_email | 1 | user_login | NULL |  | BTREE
+1 | user_login_email | 2 | user_email | NULL |  | BTREE
+1 | domain_path | 1 | domain | 140 |  | BTREE
+1 | domain_path | 2 | path | 51 |  | BTREE
+
+-- SHOW FULL COLUMNS FROM wp_signups
+signup_id | bigint unsigned | NULL | NO | PRI | NULL | auto_increment | select,insert,update,references | 
+domain | varchar(200) | utf8mb4_unicode_520_ci | NO | MUL |  |  | select,insert,update,references | 
+path | varchar(100) | utf8mb4_unicode_520_ci | NO |  |  |  | select,insert,update,references | 
+title | longtext | utf8mb4_unicode_520_ci | NO |  | NULL |  | select,insert,update,references | 
+user_login | varchar(60) | utf8mb4_unicode_520_ci | NO | MUL |  |  | select,insert,update,references | 
+user_email | varchar(100) | utf8mb4_unicode_520_ci | NO | MUL |  |  | select,insert,update,references | 
+registered | datetime | NULL | NO |  | 0000-00-00 00:00:00 |  | select,insert,update,references | 
+activated | datetime | NULL | NO |  | 0000-00-00 00:00:00 |  | select,insert,update,references | 
+active | tinyint(1) | NULL | NO |  | 0 |  | select,insert,update,references | 
+activation_key | varchar(50) | utf8mb4_unicode_520_ci | NO | MUL |  |  | select,insert,update,references | 
+meta | longtext | utf8mb4_unicode_520_ci | YES |  | NULL |  | select,insert,update,references | 
+
+-- DESCRIBE wp_posts
+ok affected=0 insert_id=0
+-- SHOW COLUMNS FROM wp_options
+option_id | bigint unsigned | NO | PRI | NULL | auto_increment
+option_name | varchar(191) | NO | UNI |  | 
+option_value | longtext | NO |  | NULL | 
+autoload | varchar(20) | NO | MUL | yes | 
+
+-- CREATE TABLE cols (id int NOT NULL AUTO_INCREMENT, created datetime NOT NULL DEFAULT CURRENT_TIMESTAMP, updated timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, price decimal(10,2) NOT NULL DEFAULT '1.50', kind enum('a','b') NOT NULL DEFAULT 'a', note varchar(10) DEFAULT NULL, flag tinyint(1) NOT NULL DEFAULT 0, a int, b int, PRIMARY KEY (id), UNIQUE KEY ab (a, b), KEY b (b)) DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- SHOW FULL COLUMNS FROM cols
+id | int | NULL | NO | PRI | NULL | auto_increment | select,insert,update,references | 
+created | datetime | NULL | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | select,insert,update,references | 
+updated | timestamp | NULL | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP | select,insert,update,references | 
+price | decimal(10,2) | NULL | NO |  | 1.50 |  | select,insert,update,references | 
+kind | enum('a','b') | utf8mb4_unicode_520_ci | NO |  | a |  | select,insert,update,references | 
+note | varchar(10) | utf8mb4_unicode_520_ci | YES |  | NULL |  | select,insert,update,references | 
+flag | tinyint(1) | NULL | NO |  | 0 |  | select,insert,update,references | 
+a | int | NULL | YES | MUL | NULL |  | select,insert,update,references | 
+b | int | NULL | YES | MUL | NULL |  | select,insert,update,references | 
+
+-- CREATE TABLE coltypes (id int NOT NULL, b1 bit(1) NOT NULL DEFAULT b'0', b8 bit(8) DEFAULT b'101', bn binary(4) NOT NULL DEFAULT 'ab', vb varbinary(10) DEFAULT 'xyz', f float NOT NULL DEFAULT 1.5, d double DEFAULT 0.1, dz decimal(5,2) DEFAULT 0, dt date DEFAULT '2026-10-03', tm time DEFAULT '10:00:00', ts timestamp(3) NULL DEFAULT CURRENT_TIMESTAMP(3), ui int unsigned DEFAULT 7, neg int DEFAULT -1, st set('a','b') DEFAULT 'a,b', PRIMARY KEY (id)) DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- SHOW FULL COLUMNS FROM coltypes
+id | int | NULL | NO | PRI | NULL |  | select,insert,update,references | 
+b1 | bit(1) | NULL | NO |  | b'0' |  | select,insert,update,references | 
+b8 | bit(8) | NULL | YES |  | b'101' |  | select,insert,update,references | 
+bn | binary(4) | NULL | NO |  | 0x6162 |  | select,insert,update,references | 
+vb | varbinary(10) | NULL | YES |  | 0x78797A |  | select,insert,update,references | 
+f | float | NULL | NO |  | 1.5 |  | select,insert,update,references | 
+d | double | NULL | YES |  | 0.1 |  | select,insert,update,references | 
+dz | decimal(5,2) | NULL | YES |  | 0.00 |  | select,insert,update,references | 
+dt | date | NULL | YES |  | 2026-10-03 |  | select,insert,update,references | 
+tm | time | NULL | YES |  | 10:00:00 |  | select,insert,update,references | 
+ts | timestamp(3) | NULL | YES |  | CURRENT_TIMESTAMP(3) | DEFAULT_GENERATED | select,insert,update,references | 
+ui | int unsigned | NULL | YES |  | 7 |  | select,insert,update,references | 
+neg | int | NULL | YES |  | -1 |  | select,insert,update,references | 
+st | set('a','b') | utf8mb4_unicode_520_ci | YES |  | a,b |  | select,insert,update,references | 
+
+-- INSERT INTO wp_options (option_name, option_value, autoload) VALUES ('siteurl', 'http://example.com', 'yes')
+ok affected=1 insert_id=1
+-- INSERT INTO wp_options (option_name, option_value, autoload) VALUES ('home', 'http://example.com', 'yes'), ('blogname', 'Test', 'yes')
+ok affected=2 insert_id=2
+-- SELECT * FROM wp_options ORDER BY option_id
+1 | siteurl | http://example.com | yes
+2 | home | http://example.com | yes
+3 | blogname | Test | yes
+
+-- SELECT LAST_INSERT_ID()
+2
+
+-- INSERT INTO wp_options (option_name, option_value, autoload) VALUES ('HOME', 'x', 'yes')
+error 1062
+-- INSERT INTO wp_options (option_name, option_value, autoload) VALUES ('home', 'http://new.example.com', 'yes') ON DUPLICATE KEY UPDATE option_value = VALUES(option_value)
+ok affected=2 insert_id=2
+-- SELECT option_id, option_name, option_value FROM wp_options WHERE option_name = 'home'
+2 | home | http://new.example.com
+
+-- INSERT IGNORE INTO wp_options (option_name, option_value, autoload) VALUES ('home', 'ignored', 'yes')
+ok affected=0 insert_id=0
+-- REPLACE INTO wp_options (option_id, option_name, option_value, autoload) VALUES (2, 'home', 'replaced', 'no')
+ok affected=2 insert_id=2
+-- SELECT * FROM wp_options ORDER BY option_id
+1 | siteurl | http://example.com | yes
+2 | home | replaced | no
+3 | blogname | Test | yes
+
+-- INSERT INTO wp_options (option_id, option_name, option_value, autoload) VALUES (100, 'explicit', 'v', 'yes')
+ok affected=1 insert_id=100
+-- INSERT INTO wp_options (option_name, option_value, autoload) VALUES ('after_explicit', 'v', 'yes')
+ok affected=1 insert_id=101
+-- SELECT option_id, option_name FROM wp_options ORDER BY option_id DESC
+101 | after_explicit
+100 | explicit
+3 | blogname
+2 | home
+1 | siteurl
+
+-- SELECT option_id FROM wp_options WHERE option_id > 2 AND option_id <= 100 ORDER BY option_id
+3
+100
+
+-- SELECT option_id FROM wp_options WHERE option_id IN (1, 3, 101) ORDER BY option_id DESC
+101
+3
+1
+
+-- UPDATE wp_options SET option_value = 'updated' WHERE option_name LIKE 'blog%'
+ok affected=1 insert_id=0
+-- UPDATE wp_options SET option_name = 'siteurl' WHERE option_name = 'blogname'
+error 1062
+-- UPDATE wp_options SET option_id = 50 WHERE option_name = 'explicit'
+ok affected=1 insert_id=0
+-- DELETE FROM wp_options WHERE option_name = 'after_explicit'
+ok affected=1 insert_id=0
+-- SELECT * FROM wp_options ORDER BY option_id
+1 | siteurl | http://example.com | yes
+2 | home | replaced | no
+3 | blogname | updated | yes
+50 | explicit | v | yes
+
+-- INSERT INTO wp_options (option_name, option_value, autoload) VALUES ('ok1', 'v', 'yes'), ('siteurl', 'dup', 'yes')
+error 1062
+-- SELECT option_name FROM wp_options ORDER BY option_id
+siteurl
+home
+blogname
+explicit
+
+-- START TRANSACTION
+ok affected=0 insert_id=0
+-- INSERT INTO wp_options (option_name, option_value, autoload) VALUES ('in_tx', 'v', 'yes')
+ok affected=1 insert_id=104
+-- SELECT option_name FROM wp_options WHERE option_name = 'in_tx'
+in_tx
+
+-- ROLLBACK
+ok affected=0 insert_id=0
+-- SELECT option_name FROM wp_options WHERE option_name = 'in_tx'
+
+-- SET autocommit = 0
+ok
+-- INSERT INTO wp_options (option_name, option_value, autoload) VALUES ('ac0', 'v', 'yes')
+ok affected=1 insert_id=105
+-- DELETE FROM wp_options WHERE option_name = 'home'
+ok affected=1 insert_id=0
+-- SELECT option_name FROM wp_options ORDER BY option_name
+ac0
+blogname
+explicit
+siteurl
+
+-- ROLLBACK
+ok affected=0 insert_id=0
+-- SELECT option_name FROM wp_options ORDER BY option_name
+blogname
+explicit
+home
+siteurl
+
+-- INSERT INTO wp_options (option_name, option_value, autoload) VALUES ('committed', 'v', 'yes')
+ok affected=1 insert_id=106
+-- COMMIT
+ok affected=0 insert_id=0
+-- SET autocommit = 1
+ok
+-- SELECT option_name FROM wp_options ORDER BY option_name
+blogname
+committed
+explicit
+home
+siteurl
+
+-- INSERT INTO wp_posts (post_author, post_date, post_content, post_title, post_excerpt, post_status, post_name, to_ping, pinged, post_content_filtered, post_type) VALUES (1, '2026-10-01 10:00:00', 'c', 'A', '', 'publish', 'a', '', '', '', 'post'),(1, '2026-10-01 10:00:00', 'c', 'B', '', 'publish', 'b', '', '', '', 'post'),(2, '2026-10-02 10:00:00', 'c', 'C', '', 'draft', 'c', '', '', '', 'post'),(2, '2026-09-30 10:00:00', 'c', 'D', '', 'publish', 'd', '', '', '', 'page')
+ok affected=4 insert_id=1
+-- INSERT INTO wp_postmeta (post_id, meta_key, meta_value) VALUES (1, '_thumb', 'x'), (2, '_thumb', 'y'), (2, 'other', 'z'), (4, '_thumb', 'w')
+ok affected=4 insert_id=1
+-- SELECT ID, post_title FROM wp_posts WHERE post_type = 'post' AND post_status = 'publish' ORDER BY post_date DESC, ID DESC
+2 | B
+1 | A
+
+-- SELECT ID FROM wp_posts WHERE post_name = 'c'
+3
+
+-- SELECT post_author, COUNT(*) FROM wp_posts GROUP BY post_author ORDER BY post_author
+1 | 2
+2 | 2
+
+-- SELECT p.ID, m.meta_value FROM wp_posts p JOIN wp_postmeta m ON m.post_id = p.ID WHERE m.meta_key = '_thumb' ORDER BY p.ID
+1 | x
+2 | y
+4 | w
+
+-- SELECT p.post_title FROM wp_posts p WHERE p.ID IN (SELECT post_id FROM wp_postmeta WHERE meta_key = 'other')
+B
+
+-- SELECT meta_id FROM wp_postmeta WHERE post_id = 2 ORDER BY meta_id DESC
+3
+2
+
+-- INSERT INTO wp_posts (post_author, post_date, post_content, post_title, post_excerpt, post_status, post_name, to_ping, pinged, post_content_filtered, post_type) VALUES (3, '2026-10-01 10:00:00', 'c', 'E', '', 'publish', 'e', '', '', '', 'post'),(1, '2026-10-01 10:00:00', 'c', 'F', '', 'private', 'f', '', '', '', 'post'),(2, '2026-10-01 10:00:00', 'c', 'G', '', 'publish', 'g', '', '', '', 'post')
+ok affected=3 insert_id=5
+-- SELECT ID FROM wp_posts WHERE post_type = 'post' AND post_status = 'publish' ORDER BY post_date DESC
+7
+5
+2
+1
+
+-- SELECT ID FROM wp_posts WHERE post_type = 'post' AND post_status = 'publish' ORDER BY post_date ASC
+1
+2
+5
+7
+
+-- SELECT ID FROM wp_posts WHERE post_type = 'post' AND post_status = 'publish' ORDER BY post_date DESC LIMIT 2
+7
+5
+
+-- SELECT SQL_CALC_FOUND_ROWS wp_posts.ID FROM wp_posts WHERE 1=1 AND ((wp_posts.post_type = 'post' AND (wp_posts.post_status = 'publish'))) ORDER BY wp_posts.post_date DESC LIMIT 0, 3
+7
+5
+2
+
+-- SELECT FOUND_ROWS()
+4
+
+-- SELECT wp_posts.* FROM wp_posts WHERE post_type = 'post' AND post_status = 'publish' ORDER BY post_date DESC LIMIT 3
+7 | 2 | 2026-10-01 10:00:00 | 0000-00-00 00:00:00 | c | G |  | publish | open | open |  | g |  |  | 0000-00-00 00:00:00 | 0000-00-00 00:00:00 |  | 0 |  | 0 | post |  | 0
+5 | 3 | 2026-10-01 10:00:00 | 0000-00-00 00:00:00 | c | E |  | publish | open | open |  | e |  |  | 0000-00-00 00:00:00 | 0000-00-00 00:00:00 |  | 0 |  | 0 | post |  | 0
+2 | 1 | 2026-10-01 10:00:00 | 0000-00-00 00:00:00 | c | B |  | publish | open | open |  | b |  |  | 0000-00-00 00:00:00 | 0000-00-00 00:00:00 |  | 0 |  | 0 | post |  | 0
+
+-- SELECT ID FROM wp_posts WHERE post_parent = 0 AND post_type = 'post' ORDER BY ID DESC
+7
+6
+5
+3
+2
+1
+
+-- SELECT ID FROM wp_posts ORDER BY post_name DESC LIMIT 2
+7
+6
+
+-- DELETE FROM wp_postmeta WHERE post_id = 2
+ok affected=2 insert_id=0
+-- SELECT meta_id, post_id FROM wp_postmeta ORDER BY meta_id
+1 | 1
+4 | 4
+
+-- SELECT COUNT(*) FROM wp_posts
+7
+
+-- INSERT INTO wp_term_relationships (object_id, term_taxonomy_id) VALUES (1, 1), (1, 2), (2, 1)
+ok affected=3 insert_id=0
+-- INSERT INTO wp_term_relationships (object_id, term_taxonomy_id) VALUES (1, 2)
+error 1062
+-- SELECT * FROM wp_term_relationships WHERE object_id = 1 ORDER BY term_taxonomy_id DESC
+1 | 2 | 0
+1 | 1 | 0
+
+-- SELECT object_id FROM wp_term_relationships WHERE term_taxonomy_id = 1 ORDER BY object_id
+1
+2
+

@@ -1,0 +1,460 @@
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE wp_termmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	term_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY term_id (term_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_terms (
+ term_id bigint(20) unsigned NOT NULL auto_increment,
+ name varchar(200) NOT NULL default '',
+ slug varchar(200) NOT NULL default '',
+ term_group bigint(10) NOT NULL default 0,
+ PRIMARY KEY  (term_id),
+ KEY slug (slug(191)),
+ KEY name (name(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_term_taxonomy (
+ term_taxonomy_id bigint(20) unsigned NOT NULL auto_increment,
+ term_id bigint(20) unsigned NOT NULL default 0,
+ taxonomy varchar(32) NOT NULL default '',
+ description longtext NOT NULL,
+ parent bigint(20) unsigned NOT NULL default 0,
+ count bigint(20) NOT NULL default 0,
+ PRIMARY KEY  (term_taxonomy_id),
+ UNIQUE KEY term_id_taxonomy (term_id,taxonomy),
+ KEY taxonomy (taxonomy)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_term_relationships (
+ object_id bigint(20) unsigned NOT NULL default 0,
+ term_taxonomy_id bigint(20) unsigned NOT NULL default 0,
+ term_order int(11) NOT NULL default 0,
+ PRIMARY KEY  (object_id,term_taxonomy_id),
+ KEY term_taxonomy_id (term_taxonomy_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_commentmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	comment_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY comment_id (comment_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_comments (
+	comment_ID bigint(20) unsigned NOT NULL auto_increment,
+	comment_post_ID bigint(20) unsigned NOT NULL default '0',
+	comment_author tinytext NOT NULL,
+	comment_author_email varchar(100) NOT NULL default '',
+	comment_author_url varchar(200) NOT NULL default '',
+	comment_author_IP varchar(100) NOT NULL default '',
+	comment_date datetime NOT NULL default '0000-00-00 00:00:00',
+	comment_date_gmt datetime NOT NULL default '0000-00-00 00:00:00',
+	comment_content text NOT NULL,
+	comment_karma int(11) NOT NULL default '0',
+	comment_approved varchar(20) NOT NULL default '1',
+	comment_agent varchar(255) NOT NULL default '',
+	comment_type varchar(20) NOT NULL default 'comment',
+	comment_parent bigint(20) unsigned NOT NULL default '0',
+	user_id bigint(20) unsigned NOT NULL default '0',
+	PRIMARY KEY  (comment_ID),
+	KEY comment_post_ID (comment_post_ID),
+	KEY comment_approved_date_gmt (comment_approved,comment_date_gmt),
+	KEY comment_date_gmt (comment_date_gmt),
+	KEY comment_parent (comment_parent),
+	KEY comment_author_email (comment_author_email(10))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_links (
+	link_id bigint(20) unsigned NOT NULL auto_increment,
+	link_url varchar(255) NOT NULL default '',
+	link_name varchar(255) NOT NULL default '',
+	link_image varchar(255) NOT NULL default '',
+	link_target varchar(25) NOT NULL default '',
+	link_description varchar(255) NOT NULL default '',
+	link_visible varchar(20) NOT NULL default 'Y',
+	link_owner bigint(20) unsigned NOT NULL default '1',
+	link_rating int(11) NOT NULL default '0',
+	link_updated datetime NOT NULL default '0000-00-00 00:00:00',
+	link_rel varchar(255) NOT NULL default '',
+	link_notes mediumtext NOT NULL,
+	link_rss varchar(255) NOT NULL default '',
+	PRIMARY KEY  (link_id),
+	KEY link_visible (link_visible)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_options (
+	option_id bigint(20) unsigned NOT NULL auto_increment,
+	option_name varchar(191) NOT NULL default '',
+	option_value longtext NOT NULL,
+	autoload varchar(20) NOT NULL default 'yes',
+	PRIMARY KEY  (option_id),
+	UNIQUE KEY option_name (option_name),
+	KEY autoload (autoload)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_postmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	post_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY post_id (post_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_posts (
+	ID bigint(20) unsigned NOT NULL auto_increment,
+	post_author bigint(20) unsigned NOT NULL default '0',
+	post_date datetime NOT NULL default '0000-00-00 00:00:00',
+	post_date_gmt datetime NOT NULL default '0000-00-00 00:00:00',
+	post_content longtext NOT NULL,
+	post_title text NOT NULL,
+	post_excerpt text NOT NULL,
+	post_status varchar(20) NOT NULL default 'publish',
+	comment_status varchar(20) NOT NULL default 'open',
+	ping_status varchar(20) NOT NULL default 'open',
+	post_password varchar(255) NOT NULL default '',
+	post_name varchar(200) NOT NULL default '',
+	to_ping text NOT NULL,
+	pinged text NOT NULL,
+	post_modified datetime NOT NULL default '0000-00-00 00:00:00',
+	post_modified_gmt datetime NOT NULL default '0000-00-00 00:00:00',
+	post_content_filtered longtext NOT NULL,
+	post_parent bigint(20) unsigned NOT NULL default '0',
+	guid varchar(255) NOT NULL default '',
+	menu_order int(11) NOT NULL default '0',
+	post_type varchar(20) NOT NULL default 'post',
+	post_mime_type varchar(100) NOT NULL default '',
+	comment_count bigint(20) NOT NULL default '0',
+	PRIMARY KEY  (ID),
+	KEY post_name (post_name(191)),
+	KEY type_status_date (post_type,post_status,post_date,ID),
+	KEY post_parent (post_parent),
+	KEY post_author (post_author),
+	KEY type_status_author (post_type,post_status,post_author)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_users (
+	ID bigint(20) unsigned NOT NULL auto_increment,
+	user_login varchar(60) NOT NULL default '',
+	user_pass varchar(255) NOT NULL default '',
+	user_nicename varchar(50) NOT NULL default '',
+	user_email varchar(100) NOT NULL default '',
+	user_url varchar(100) NOT NULL default '',
+	user_registered datetime NOT NULL default '0000-00-00 00:00:00',
+	user_activation_key varchar(255) NOT NULL default '',
+	user_status int(11) NOT NULL default '0',
+	display_name varchar(250) NOT NULL default '',
+	PRIMARY KEY  (ID),
+	KEY user_login_key (user_login),
+	KEY user_nicename (user_nicename),
+	KEY user_email (user_email)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_usermeta (
+	umeta_id bigint(20) unsigned NOT NULL auto_increment,
+	user_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (umeta_id),
+	KEY user_id (user_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_blogs (
+	blog_id bigint(20) unsigned NOT NULL auto_increment,
+	site_id bigint(20) unsigned NOT NULL default '0',
+	domain varchar(200) NOT NULL default '',
+	path varchar(100) NOT NULL default '',
+	registered datetime NOT NULL default '0000-00-00 00:00:00',
+	last_updated datetime NOT NULL default '0000-00-00 00:00:00',
+	public tinyint(2) NOT NULL default '1',
+	archived tinyint(2) NOT NULL default '0',
+	mature tinyint(2) NOT NULL default '0',
+	spam tinyint(2) NOT NULL default '0',
+	deleted tinyint(2) NOT NULL default '0',
+	lang_id int(11) NOT NULL default '0',
+	PRIMARY KEY  (blog_id),
+	KEY domain (domain(50),path(5)),
+	KEY lang_id (lang_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_blogmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	blog_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY meta_key (meta_key(191)),
+	KEY blog_id (blog_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_registration_log (
+	ID bigint(20) unsigned NOT NULL auto_increment,
+	email varchar(255) NOT NULL default '',
+	IP varchar(30) NOT NULL default '',
+	blog_id bigint(20) unsigned NOT NULL default '0',
+	date_registered datetime NOT NULL default '0000-00-00 00:00:00',
+	PRIMARY KEY  (ID),
+	KEY IP (IP)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_site (
+	id bigint(20) unsigned NOT NULL auto_increment,
+	domain varchar(200) NOT NULL default '',
+	path varchar(100) NOT NULL default '',
+	PRIMARY KEY  (id),
+	KEY domain (domain(140),path(51))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_sitemeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	site_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY meta_key (meta_key(191)),
+	KEY site_id (site_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_signups (
+	signup_id bigint(20) unsigned NOT NULL auto_increment,
+	domain varchar(200) NOT NULL default '',
+	path varchar(100) NOT NULL default '',
+	title longtext NOT NULL,
+	user_login varchar(60) NOT NULL default '',
+	user_email varchar(100) NOT NULL default '',
+	registered datetime NOT NULL default '0000-00-00 00:00:00',
+	activated datetime NOT NULL default '0000-00-00 00:00:00',
+	active tinyint(1) NOT NULL default '0',
+	activation_key varchar(50) NOT NULL default '',
+	meta longtext,
+	PRIMARY KEY  (signup_id),
+	KEY activation_key (activation_key),
+	KEY user_email (user_email),
+	KEY user_login_email (user_login,user_email),
+	KEY domain_path (domain(140),path(51))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- SET cte_max_recursion_depth = 2000
+ok
+-- INSERT INTO wp_posts (post_author, post_date, post_content, post_title, post_excerpt, post_status, post_name, to_ping, pinged, post_content_filtered, post_type) WITH RECURSIVE n (i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 2000) SELECT 1, '2024-01-01 00:00:00' + INTERVAL i * 7 MINUTE, 'c', CONCAT('News ', i), '', 'publish', CONCAT('news-', i), '', '', '', 'news' FROM n ORDER BY i
+ok affected=2000 insert_id=1
+-- INSERT INTO wp_postmeta (post_id, meta_key, meta_value) WITH RECURSIVE n (i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 2000), k (j) AS (SELECT 0 UNION ALL SELECT j + 1 FROM k WHERE j < 15) SELECT i, ELT(j + 1, 'category', '_category', 'priority', '_priority', 'event_date', '_event_date', 'featured', '_featured', 'summary', '_summary', 'source', '_source', '_edit_lock', '_edit_last', '_thumbnail_id', '_wp_old_slug'), ELT(j + 1, CONCAT('cat', (i * 7) % 10), 'field_category', (i * 37) % 1000, 'field_priority', DATE_FORMAT('2024-01-01' + INTERVAL (i * 13) % 730 DAY, '%Y%m%d'), 'field_event_date', IF(i % 9 = 0, '1', '0'), 'field_featured', CONCAT('Summary ', i), 'field_summary', 'wire', 'field_source', '1700000000:1', '1', '0', CONCAT('news-old-', i)) FROM n, k ORDER BY i, j
+ok affected=32000 insert_id=1
+-- ANALYZE TABLE wp_posts, wp_postmeta
+ok affected=0 insert_id=0
+-- SELECT SQL_CALC_FOUND_ROWS wp_posts.ID FROM wp_posts INNER JOIN wp_postmeta ON ( wp_posts.ID = wp_postmeta.post_id ) INNER JOIN wp_postmeta AS mt1 ON ( wp_posts.ID = mt1.post_id ) INNER JOIN wp_postmeta AS mt2 ON ( wp_posts.ID = mt2.post_id ) WHERE 1=1 AND ( ( wp_postmeta.meta_key = 'category' AND wp_postmeta.meta_value = 'cat3' ) AND ( mt1.meta_key = 'featured' AND mt1.meta_value = '1' ) AND mt2.meta_key = 'event_date' ) AND wp_posts.post_type = 'news' AND ((wp_posts.post_status = 'publish')) GROUP BY wp_posts.ID ORDER BY CAST(mt2.meta_value AS CHAR) DESC, wp_posts.ID DESC LIMIT 0, 20
+1179
+729
+279
+1899
+1449
+999
+549
+99
+1719
+1269
+819
+369
+1989
+1539
+1089
+639
+189
+1809
+1359
+909
+
+-- SELECT FOUND_ROWS()
+23
+
+-- SELECT SQL_CALC_FOUND_ROWS wp_posts.ID FROM wp_posts INNER JOIN wp_postmeta ON ( wp_posts.ID = wp_postmeta.post_id ) INNER JOIN wp_postmeta AS mt1 ON ( wp_posts.ID = mt1.post_id ) INNER JOIN wp_postmeta AS mt2 ON ( wp_posts.ID = mt2.post_id ) WHERE 1=1 AND ( ( wp_postmeta.meta_key = 'category' AND wp_postmeta.meta_value = 'cat3' ) AND ( mt1.meta_key = 'featured' AND mt1.meta_value = '0' ) AND mt2.meta_key = 'event_date' ) AND wp_posts.post_type = 'news' AND ((wp_posts.post_status = 'publish')) GROUP BY wp_posts.ID ORDER BY CAST(mt2.meta_value AS CHAR) DESC, wp_posts.ID DESC LIMIT 20, 20
+499
+1509
+779
+49
+1789
+1059
+329
+1339
+609
+1619
+889
+159
+1169
+439
+719
+1729
+269
+1279
+1559
+829
+
+-- SELECT FOUND_ROWS()
+177
+
+-- SELECT SQL_CALC_FOUND_ROWS wp_posts.ID FROM wp_posts INNER JOIN wp_postmeta ON ( wp_posts.ID = wp_postmeta.post_id ) INNER JOIN wp_postmeta AS mt1 ON ( wp_posts.ID = mt1.post_id ) INNER JOIN wp_postmeta AS mt2 ON ( wp_posts.ID = mt2.post_id ) WHERE 1=1 AND ( ( wp_postmeta.meta_key = 'category' AND wp_postmeta.meta_value = 'cat3' ) AND ( mt2.meta_key = 'featured' AND mt2.meta_value = '1' ) AND mt1.meta_key = 'event_date' ) AND wp_posts.post_type = 'news' AND ((wp_posts.post_status = 'publish')) GROUP BY wp_posts.ID ORDER BY CAST(mt1.meta_value AS CHAR) DESC, wp_posts.ID DESC LIMIT 0, 20
+1179
+729
+279
+1899
+1449
+999
+549
+99
+1719
+1269
+819
+369
+1989
+1539
+1089
+639
+189
+1809
+1359
+909
+
+-- SELECT FOUND_ROWS()
+23
+
+-- SELECT SQL_CALC_FOUND_ROWS wp_posts.ID FROM wp_posts INNER JOIN wp_postmeta ON ( wp_posts.ID = wp_postmeta.post_id ) INNER JOIN wp_postmeta AS mt1 ON ( wp_posts.ID = mt1.post_id ) INNER JOIN wp_postmeta AS mt2 ON ( wp_posts.ID = mt2.post_id ) WHERE 1=1 AND ( wp_postmeta.meta_key = 'event_date' AND ( ( mt1.meta_key = 'event_date' AND CAST(mt1.meta_value AS SIGNED) >= '20240301' ) AND ( mt2.meta_key = 'event_date' AND CAST(mt2.meta_value AS SIGNED) <= '20240531' ) ) ) AND wp_posts.post_type = 'news' AND ((wp_posts.post_status = 'publish')) GROUP BY wp_posts.ID ORDER BY wp_postmeta.meta_value ASC, wp_posts.ID DESC LIMIT 0, 20
+1970
+1240
+510
+1577
+847
+117
+1914
+1184
+454
+1521
+791
+61
+1858
+1128
+398
+1465
+735
+5
+1802
+1072
+
+-- SELECT FOUND_ROWS()
+255
+
+-- ALTER TABLE wp_postmeta ADD INDEX key_value (meta_key(191), meta_value(64)), ADD INDEX post_key (post_id, meta_key(191))
+ok
+-- ANALYZE TABLE wp_postmeta
+ok affected=0 insert_id=0
+-- SELECT SQL_CALC_FOUND_ROWS wp_posts.ID FROM wp_posts INNER JOIN wp_postmeta ON ( wp_posts.ID = wp_postmeta.post_id ) INNER JOIN wp_postmeta AS mt1 ON ( wp_posts.ID = mt1.post_id ) INNER JOIN wp_postmeta AS mt2 ON ( wp_posts.ID = mt2.post_id ) WHERE 1=1 AND ( ( wp_postmeta.meta_key = 'category' AND wp_postmeta.meta_value = 'cat3' ) AND ( mt1.meta_key = 'featured' AND mt1.meta_value = '1' ) AND mt2.meta_key = 'event_date' ) AND wp_posts.post_type = 'news' AND ((wp_posts.post_status = 'publish')) GROUP BY wp_posts.ID ORDER BY CAST(mt2.meta_value AS CHAR) DESC, wp_posts.ID DESC LIMIT 0, 20
+1179
+729
+279
+1899
+1449
+999
+549
+99
+1719
+1269
+819
+369
+1989
+1539
+1089
+639
+189
+1809
+1359
+909
+
+-- SELECT FOUND_ROWS()
+23
+
+-- SELECT SQL_CALC_FOUND_ROWS wp_posts.ID FROM wp_posts INNER JOIN wp_postmeta ON ( wp_posts.ID = wp_postmeta.post_id ) INNER JOIN wp_postmeta AS mt1 ON ( wp_posts.ID = mt1.post_id ) INNER JOIN wp_postmeta AS mt2 ON ( wp_posts.ID = mt2.post_id ) WHERE 1=1 AND ( ( wp_postmeta.meta_key = 'category' AND wp_postmeta.meta_value = 'cat3' ) AND ( mt1.meta_key = 'featured' AND mt1.meta_value = '0' ) AND mt2.meta_key = 'event_date' ) AND wp_posts.post_type = 'news' AND ((wp_posts.post_status = 'publish')) GROUP BY wp_posts.ID ORDER BY CAST(mt2.meta_value AS CHAR) DESC, wp_posts.ID DESC LIMIT 20, 20
+499
+1509
+779
+49
+1789
+1059
+329
+1339
+609
+1619
+889
+159
+1169
+439
+719
+1729
+269
+1279
+1559
+829
+
+-- SELECT FOUND_ROWS()
+177
+
+-- SELECT SQL_CALC_FOUND_ROWS wp_posts.ID FROM wp_posts INNER JOIN wp_postmeta ON ( wp_posts.ID = wp_postmeta.post_id ) INNER JOIN wp_postmeta AS mt1 ON ( wp_posts.ID = mt1.post_id ) INNER JOIN wp_postmeta AS mt2 ON ( wp_posts.ID = mt2.post_id ) WHERE 1=1 AND ( ( wp_postmeta.meta_key = 'category' AND wp_postmeta.meta_value = 'cat3' ) AND ( mt2.meta_key = 'featured' AND mt2.meta_value = '1' ) AND mt1.meta_key = 'event_date' ) AND wp_posts.post_type = 'news' AND ((wp_posts.post_status = 'publish')) GROUP BY wp_posts.ID ORDER BY CAST(mt1.meta_value AS CHAR) DESC, wp_posts.ID DESC LIMIT 0, 20
+1179
+729
+279
+1899
+1449
+999
+549
+99
+1719
+1269
+819
+369
+1989
+1539
+1089
+639
+189
+1809
+1359
+909
+
+-- SELECT FOUND_ROWS()
+23
+
+-- SELECT SQL_CALC_FOUND_ROWS wp_posts.ID FROM wp_posts INNER JOIN wp_postmeta ON ( wp_posts.ID = wp_postmeta.post_id ) INNER JOIN wp_postmeta AS mt1 ON ( wp_posts.ID = mt1.post_id ) INNER JOIN wp_postmeta AS mt2 ON ( wp_posts.ID = mt2.post_id ) WHERE 1=1 AND ( wp_postmeta.meta_key = 'event_date' AND ( ( mt1.meta_key = 'event_date' AND CAST(mt1.meta_value AS SIGNED) >= '20240301' ) AND ( mt2.meta_key = 'event_date' AND CAST(mt2.meta_value AS SIGNED) <= '20240531' ) ) ) AND wp_posts.post_type = 'news' AND ((wp_posts.post_status = 'publish')) GROUP BY wp_posts.ID ORDER BY wp_postmeta.meta_value ASC, wp_posts.ID DESC LIMIT 0, 20
+1970
+1240
+510
+1577
+847
+117
+1914
+1184
+454
+1521
+791
+61
+1858
+1128
+398
+1465
+735
+5
+1802
+1072
+
+-- SELECT FOUND_ROWS()
+255
+

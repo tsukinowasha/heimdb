@@ -1,0 +1,15 @@
+#!/bin/sh
+# wordpress-develop のディレクトリで、PHPUnit 用のコンテナ（php:8.3-cli + mysqli、zip、gd、Composer）を使ってコマンドを実行する。
+#
+#   scripts/wpphp vendor/bin/phpunit --group option --log-junit fake-option.xml
+#   scripts/wpphp env WP_TESTS_DB_HOST=host.docker.internal:3307 WP_TESTS_DB_PASSWORD=root vendor/bin/phpunit ...
+#
+# WP_DEVELOP_DIR で wordpress-develop の場所を、WPPHP_IMAGE でイメージを変えられる。
+# イメージは wordpress-develop の Dockerfile から作る: docker build -t wp-phpunit ../wordpress-develop
+set -eu
+dir="${WP_DEVELOP_DIR:-$(cd "$(dirname "$0")/../.." && pwd)/../wordpress-develop}"
+image="${WPPHP_IMAGE:-wp-phpunit:latest}"
+exec docker run --rm \
+  --add-host host.docker.internal:host-gateway \
+  -v "$dir":/app -w /app \
+  "$image" "$@"

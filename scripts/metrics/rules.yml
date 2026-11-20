@@ -1,0 +1,57 @@
+# HeimDB の指標で知らせる規則の例（Prometheus の形式。docs/operations.md の「指標」）。しきい値はサイトに合わせて変える。
+groups:
+  - name: heimdb
+    rules:
+      - alert: HeimDBDown
+        expr: up{job="heimdb"} == 0
+        for: 2m
+        annotations:
+          summary: "HeimDB の指標が読めない（プロセスか VM が止まっている）"
+      - alert: HeimDBMemoryNearLimit
+        expr: heimdb_memory_abort_bytes > 0 and heimdb_memory_live_bytes / heimdb_memory_abort_bytes > 0.9
+        for: 5m
+        annotations:
+          summary: "生きているヒープが、クエリを止める境目の 9 割を超えている"
+      - alert: HeimDBMemoryAborts
+        expr: increase(heimdb_memory_aborted_statements_total[10m]) > 0
+        annotations:
+          summary: "メモリの上限でクエリが止められた（エラー 1041）"
+      - alert: HeimDBLockWaitTimeouts
+        expr: increase(heimdb_statement_errors_total{code="1205"}[10m]) > 0
+        annotations:
+          summary: "書き込みのロックを待ちきれなかったクエリがある（エラー 1205）"
+      - alert: HeimDBWriteLockHeldLong
+        expr: heimdb_connection_write_lock_held_seconds > 60
+        annotations:
+          summary: "ブランチ {{ $labels.branch }} の書き込みのロックを 60 秒より長く持っている接続がある（本番だけを見るなら {branch=\"main\"} に絞る。heimdb_branch_write_lock_holder の接続を SHOW PROCESSLIST で見て KILL する）"
+      - alert: HeimDBOldSnapshot
+        expr: heimdb_oldest_snapshot_age_seconds > 3600
+        for: 10m
+        annotations:
+          summary: "1 時間より古いスナップショットのトランザクションが開いたまま（GC が進まない）"
+      - alert: HeimDBGCFailed
+        expr: heimdb_gc_last_failed == 1
+        annotations:
+          summary: "最後の GC が失敗した（ログの gc: を見る）"
+      - alert: HeimDBReplicaBehind
+        expr: heimdb_replica_behind_seconds > 60
+        for: 5m
+        annotations:
+          summary: "レプリカ {{ $labels.replica }} が 1 分より遅れている"
+      - alert: HeimDBReplicaGone
+        expr: heimdb_replica_last_seen_seconds > 300
+        annotations:
+          summary: "レプリカ {{ $labels.replica }} から 5 分より連絡がない"
+      - alert: HeimDBReplicationFailing
+        expr: heimdb_replication_failing == 1
+        for: 5m
+        annotations:
+          summary: "レプリカが本番から記録を受け取れていない（heimdb_status の replication_last_error）"
+      - alert: HeimDBCertExpiring
+        expr: heimdb_tls_cert_expiry_timestamp_seconds - time() < 14 * 86400
+        annotations:
+          summary: "TLS の証明書の期限まで 14 日を切った"
+      - alert: HeimDBRiskyChange
+        expr: increase(heimdb_watch_changes_total[10m]) > 0
+        annotations:
+          summary: "危ない変更の見張りが変更を見つけた（heimdb_status の watch_last_change）"

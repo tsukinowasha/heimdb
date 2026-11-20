@@ -1,0 +1,66 @@
+# heimdb に接続する WordPress。heimdb はホストの 3306 番で動かしておく。
+# ユーザーは root で作っておく（docs/plan.md の段階 14）。パスワードは WP_DB_PASSWORD と STAGING_DB_PASSWORD で渡す。
+#
+#   CREATE USER 'wordpress'@'%' IDENTIFIED BY '...'; GRANT ALL ON wordpress.* TO 'wordpress'@'%';
+#   CREATE USER 'staging'@'%' IDENTIFIED BY '...'; GRANT ALL ON `wordpress@staging`.* TO 'staging'@'%';
+#
+#   docker compose -f scripts/wordpress/docker-compose.yml up -d wordpress
+#   docker compose -f scripts/wordpress/docker-compose.yml run --rm cli wp core install ...
+name: heimdb-wp
+
+x-wp-env: &wp-env
+  WORDPRESS_DB_HOST: host.docker.internal:${HEIMDB_PORT:-3306}
+  WORDPRESS_DB_USER: ${WP_DB_USER:-wordpress}
+  WORDPRESS_DB_PASSWORD: ${WP_DB_PASSWORD:-}
+  WORDPRESS_DB_NAME: wordpress
+  # DB エラーを「どのクエリで失敗したか」付きで表示させる
+  WORDPRESS_DEBUG: "1"
+
+services:
+  wordpress:
+    image: wordpress:php8.3-apache
+    ports:
+      - "${WP_PORT:-18080}:80"
+    environment: *wp-env
+    extra_hosts:
+      # Linux では host.docker.internal を明示的に解決させる必要がある
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - wp:/var/www/html
+
+  # ステージング: 同じ heimdb の wordpress@<ブランチ> を使う WordPress（docs/plan.md の段階 6）。
+  # 先に CALL heimdb_branch_create('staging') でブランチを作っておく。URL は WP_HOME と WP_SITEURL で切り替える。
+  #   docker compose -f scripts/wordpress/docker-compose.yml --profile staging up -d staging
+  staging:
+    image: wordpress:php8.3-apache
+    profiles: ["staging"]
+    ports:
+      - "${STAGING_PORT:-18082}:80"
+    environment:
+      <<: *wp-env
+      WORDPRESS_DB_NAME: wordpress@${STAGING_BRANCH:-staging}
+      WORDPRESS_DB_USER: ${STAGING_DB_USER:-staging}
+      WORDPRESS_DB_PASSWORD: ${STAGING_DB_PASSWORD:-}
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_HOME', 'http://localhost:${STAGING_PORT:-18082}');
+        define('WP_SITEURL', 'http://localhost:${STAGING_PORT:-18082}');
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - wp-staging:/var/www/html
+
+  cli:
+    image: wordpress:cli
+    profiles: ["cli"]
+    user: "33:33"
+    environment: *wp-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - wp:/var/www/html
+    depends_on:
+      - wordpress
+
+volumes:
+  wp:
+  wp-staging:

@@ -1,0 +1,24 @@
+# HeimDB の指標を OpenTelemetry Collector で読み、New Relic に OTLP で送る設定の例（docs/operations.md の「指標」）。
+# ライセンスキーは環境変数 NEW_RELIC_LICENSE_KEY で渡す。EU のアカウントは https://otlp.eu01.nr-data.net。
+receivers:
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: heimdb
+          scrape_interval: 30s
+          static_configs:
+            - targets: ["db:9104"]
+processors:
+  batch: {}
+exporters:
+  otlphttp:
+    endpoint: https://otlp.nr-data.net
+    compression: gzip
+    headers:
+      api-key: ${env:NEW_RELIC_LICENSE_KEY}
+service:
+  pipelines:
+    metrics:
+      receivers: [prometheus]
+      processors: [batch]
+      exporters: [otlphttp]

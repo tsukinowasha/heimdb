@@ -1,0 +1,117 @@
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE sp (id int NOT NULL PRIMARY KEY, v varchar(10) NOT NULL)
+ok affected=0 insert_id=0
+-- START TRANSACTION
+ok affected=0 insert_id=0
+-- INSERT INTO sp VALUES (1, 'a')
+ok affected=1 insert_id=0
+-- SAVEPOINT a
+ok affected=0 insert_id=0
+-- INSERT INTO sp VALUES (2, 'b')
+ok affected=1 insert_id=0
+-- SAVEPOINT b
+ok affected=0 insert_id=0
+-- INSERT INTO sp VALUES (3, 'c')
+ok affected=1 insert_id=0
+-- ROLLBACK TO SAVEPOINT b
+ok affected=0 insert_id=0
+-- SELECT id, v FROM sp ORDER BY id
+1 | a
+2 | b
+
+-- ROLLBACK TO SAVEPOINT A
+ok affected=0 insert_id=0
+-- SELECT id, v FROM sp ORDER BY id
+1 | a
+
+-- ROLLBACK TO SAVEPOINT b
+error 1305
+-- INSERT INTO sp VALUES (4, 'd')
+ok affected=1 insert_id=0
+-- SAVEPOINT a
+ok affected=0 insert_id=0
+-- UPDATE sp SET v = 'x' WHERE id = 4
+ok affected=1 insert_id=0
+-- ROLLBACK TO a
+ok affected=0 insert_id=0
+-- SELECT id, v FROM sp ORDER BY id
+1 | a
+4 | d
+
+-- SAVEPOINT c
+ok affected=0 insert_id=0
+-- DELETE FROM sp WHERE id = 1
+ok affected=1 insert_id=0
+-- RELEASE SAVEPOINT a
+ok affected=0 insert_id=0
+-- ROLLBACK TO SAVEPOINT c
+error 1305
+-- ROLLBACK TO SAVEPOINT a
+error 1305
+-- SELECT id, v FROM sp ORDER BY id
+4 | d
+
+-- COMMIT
+ok affected=0 insert_id=0
+-- SELECT id, v FROM sp ORDER BY id
+4 | d
+
+-- SAVEPOINT x
+ok affected=0 insert_id=0
+-- ROLLBACK TO SAVEPOINT x
+error 1305
+-- BEGIN
+ok affected=0 insert_id=0
+-- INSERT INTO sp VALUES (5, 'e')
+ok affected=1 insert_id=0
+-- SAVEPOINT s
+ok affected=0 insert_id=0
+-- INSERT INTO sp VALUES (6, 'f')
+ok affected=1 insert_id=0
+-- ROLLBACK
+ok affected=0 insert_id=0
+-- SELECT COUNT(*) FROM sp WHERE id >= 5
+0
+
+-- CREATE TABLE spa (id bigint unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY, v varchar(10) NOT NULL)
+ok affected=0 insert_id=0
+-- BEGIN
+ok affected=0 insert_id=0
+-- INSERT INTO spa (v) VALUES ('one')
+ok affected=1 insert_id=1
+-- SAVEPOINT s
+ok affected=0 insert_id=0
+-- INSERT INTO spa (v) VALUES ('two')
+ok affected=1 insert_id=2
+-- ROLLBACK TO SAVEPOINT s
+ok affected=0 insert_id=0
+-- INSERT INTO spa (v) VALUES ('three')
+ok affected=1 insert_id=3
+-- COMMIT
+ok affected=0 insert_id=0
+-- SELECT id, v FROM spa ORDER BY id
+1 | one
+3 | three
+
+-- SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ
+ok
+-- START TRANSACTION /*!40100 WITH CONSISTENT SNAPSHOT */
+ok affected=0 insert_id=0
+-- SAVEPOINT sp
+ok affected=0 insert_id=0
+-- SELECT id, v FROM sp ORDER BY id
+4 | d
+
+-- ROLLBACK TO SAVEPOINT sp
+ok affected=0 insert_id=0
+-- SELECT id, v FROM spa ORDER BY id
+1 | one
+3 | three
+
+-- ROLLBACK TO SAVEPOINT sp
+ok affected=0 insert_id=0
+-- RELEASE SAVEPOINT sp
+ok affected=0 insert_id=0
+-- COMMIT
+ok affected=0 insert_id=0

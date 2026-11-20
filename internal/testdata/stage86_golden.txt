@@ -1,0 +1,442 @@
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE wp_termmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	term_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY term_id (term_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_terms (
+ term_id bigint(20) unsigned NOT NULL auto_increment,
+ name varchar(200) NOT NULL default '',
+ slug varchar(200) NOT NULL default '',
+ term_group bigint(10) NOT NULL default 0,
+ PRIMARY KEY  (term_id),
+ KEY slug (slug(191)),
+ KEY name (name(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_term_taxonomy (
+ term_taxonomy_id bigint(20) unsigned NOT NULL auto_increment,
+ term_id bigint(20) unsigned NOT NULL default 0,
+ taxonomy varchar(32) NOT NULL default '',
+ description longtext NOT NULL,
+ parent bigint(20) unsigned NOT NULL default 0,
+ count bigint(20) NOT NULL default 0,
+ PRIMARY KEY  (term_taxonomy_id),
+ UNIQUE KEY term_id_taxonomy (term_id,taxonomy),
+ KEY taxonomy (taxonomy)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_term_relationships (
+ object_id bigint(20) unsigned NOT NULL default 0,
+ term_taxonomy_id bigint(20) unsigned NOT NULL default 0,
+ term_order int(11) NOT NULL default 0,
+ PRIMARY KEY  (object_id,term_taxonomy_id),
+ KEY term_taxonomy_id (term_taxonomy_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_commentmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	comment_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY comment_id (comment_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_comments (
+	comment_ID bigint(20) unsigned NOT NULL auto_increment,
+	comment_post_ID bigint(20) unsigned NOT NULL default '0',
+	comment_author tinytext NOT NULL,
+	comment_author_email varchar(100) NOT NULL default '',
+	comment_author_url varchar(200) NOT NULL default '',
+	comment_author_IP varchar(100) NOT NULL default '',
+	comment_date datetime NOT NULL default '0000-00-00 00:00:00',
+	comment_date_gmt datetime NOT NULL default '0000-00-00 00:00:00',
+	comment_content text NOT NULL,
+	comment_karma int(11) NOT NULL default '0',
+	comment_approved varchar(20) NOT NULL default '1',
+	comment_agent varchar(255) NOT NULL default '',
+	comment_type varchar(20) NOT NULL default 'comment',
+	comment_parent bigint(20) unsigned NOT NULL default '0',
+	user_id bigint(20) unsigned NOT NULL default '0',
+	PRIMARY KEY  (comment_ID),
+	KEY comment_post_ID (comment_post_ID),
+	KEY comment_approved_date_gmt (comment_approved,comment_date_gmt),
+	KEY comment_date_gmt (comment_date_gmt),
+	KEY comment_parent (comment_parent),
+	KEY comment_author_email (comment_author_email(10))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_links (
+	link_id bigint(20) unsigned NOT NULL auto_increment,
+	link_url varchar(255) NOT NULL default '',
+	link_name varchar(255) NOT NULL default '',
+	link_image varchar(255) NOT NULL default '',
+	link_target varchar(25) NOT NULL default '',
+	link_description varchar(255) NOT NULL default '',
+	link_visible varchar(20) NOT NULL default 'Y',
+	link_owner bigint(20) unsigned NOT NULL default '1',
+	link_rating int(11) NOT NULL default '0',
+	link_updated datetime NOT NULL default '0000-00-00 00:00:00',
+	link_rel varchar(255) NOT NULL default '',
+	link_notes mediumtext NOT NULL,
+	link_rss varchar(255) NOT NULL default '',
+	PRIMARY KEY  (link_id),
+	KEY link_visible (link_visible)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_options (
+	option_id bigint(20) unsigned NOT NULL auto_increment,
+	option_name varchar(191) NOT NULL default '',
+	option_value longtext NOT NULL,
+	autoload varchar(20) NOT NULL default 'yes',
+	PRIMARY KEY  (option_id),
+	UNIQUE KEY option_name (option_name),
+	KEY autoload (autoload)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_postmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	post_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY post_id (post_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_posts (
+	ID bigint(20) unsigned NOT NULL auto_increment,
+	post_author bigint(20) unsigned NOT NULL default '0',
+	post_date datetime NOT NULL default '0000-00-00 00:00:00',
+	post_date_gmt datetime NOT NULL default '0000-00-00 00:00:00',
+	post_content longtext NOT NULL,
+	post_title text NOT NULL,
+	post_excerpt text NOT NULL,
+	post_status varchar(20) NOT NULL default 'publish',
+	comment_status varchar(20) NOT NULL default 'open',
+	ping_status varchar(20) NOT NULL default 'open',
+	post_password varchar(255) NOT NULL default '',
+	post_name varchar(200) NOT NULL default '',
+	to_ping text NOT NULL,
+	pinged text NOT NULL,
+	post_modified datetime NOT NULL default '0000-00-00 00:00:00',
+	post_modified_gmt datetime NOT NULL default '0000-00-00 00:00:00',
+	post_content_filtered longtext NOT NULL,
+	post_parent bigint(20) unsigned NOT NULL default '0',
+	guid varchar(255) NOT NULL default '',
+	menu_order int(11) NOT NULL default '0',
+	post_type varchar(20) NOT NULL default 'post',
+	post_mime_type varchar(100) NOT NULL default '',
+	comment_count bigint(20) NOT NULL default '0',
+	PRIMARY KEY  (ID),
+	KEY post_name (post_name(191)),
+	KEY type_status_date (post_type,post_status,post_date,ID),
+	KEY post_parent (post_parent),
+	KEY post_author (post_author),
+	KEY type_status_author (post_type,post_status,post_author)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_users (
+	ID bigint(20) unsigned NOT NULL auto_increment,
+	user_login varchar(60) NOT NULL default '',
+	user_pass varchar(255) NOT NULL default '',
+	user_nicename varchar(50) NOT NULL default '',
+	user_email varchar(100) NOT NULL default '',
+	user_url varchar(100) NOT NULL default '',
+	user_registered datetime NOT NULL default '0000-00-00 00:00:00',
+	user_activation_key varchar(255) NOT NULL default '',
+	user_status int(11) NOT NULL default '0',
+	display_name varchar(250) NOT NULL default '',
+	PRIMARY KEY  (ID),
+	KEY user_login_key (user_login),
+	KEY user_nicename (user_nicename),
+	KEY user_email (user_email)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_usermeta (
+	umeta_id bigint(20) unsigned NOT NULL auto_increment,
+	user_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (umeta_id),
+	KEY user_id (user_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_blogs (
+	blog_id bigint(20) unsigned NOT NULL auto_increment,
+	site_id bigint(20) unsigned NOT NULL default '0',
+	domain varchar(200) NOT NULL default '',
+	path varchar(100) NOT NULL default '',
+	registered datetime NOT NULL default '0000-00-00 00:00:00',
+	last_updated datetime NOT NULL default '0000-00-00 00:00:00',
+	public tinyint(2) NOT NULL default '1',
+	archived tinyint(2) NOT NULL default '0',
+	mature tinyint(2) NOT NULL default '0',
+	spam tinyint(2) NOT NULL default '0',
+	deleted tinyint(2) NOT NULL default '0',
+	lang_id int(11) NOT NULL default '0',
+	PRIMARY KEY  (blog_id),
+	KEY domain (domain(50),path(5)),
+	KEY lang_id (lang_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_blogmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	blog_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY meta_key (meta_key(191)),
+	KEY blog_id (blog_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_registration_log (
+	ID bigint(20) unsigned NOT NULL auto_increment,
+	email varchar(255) NOT NULL default '',
+	IP varchar(30) NOT NULL default '',
+	blog_id bigint(20) unsigned NOT NULL default '0',
+	date_registered datetime NOT NULL default '0000-00-00 00:00:00',
+	PRIMARY KEY  (ID),
+	KEY IP (IP)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_site (
+	id bigint(20) unsigned NOT NULL auto_increment,
+	domain varchar(200) NOT NULL default '',
+	path varchar(100) NOT NULL default '',
+	PRIMARY KEY  (id),
+	KEY domain (domain(140),path(51))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_sitemeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	site_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY meta_key (meta_key(191)),
+	KEY site_id (site_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_signups (
+	signup_id bigint(20) unsigned NOT NULL auto_increment,
+	domain varchar(200) NOT NULL default '',
+	path varchar(100) NOT NULL default '',
+	title longtext NOT NULL,
+	user_login varchar(60) NOT NULL default '',
+	user_email varchar(100) NOT NULL default '',
+	registered datetime NOT NULL default '0000-00-00 00:00:00',
+	activated datetime NOT NULL default '0000-00-00 00:00:00',
+	active tinyint(1) NOT NULL default '0',
+	activation_key varchar(50) NOT NULL default '',
+	meta longtext,
+	PRIMARY KEY  (signup_id),
+	KEY activation_key (activation_key),
+	KEY user_email (user_email),
+	KEY user_login_email (user_login,user_email),
+	KEY domain_path (domain(140),path(51))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- INSERT INTO wp_options (option_name, option_value, autoload) VALUES ('_transient_k0', 'v', 'off'), ('_transient_timeout_k0', '1000', 'off'), ('_site_transient_s0', 'v', 'off'), ('_site_transient_timeout_s0', '1000', 'off'), ('_transient_k1', 'v', 'off'), ('_transient_timeout_k1', '1100', 'off'), ('_site_transient_s1', 'v', 'off'), ('_site_transient_timeout_s1', '1100', 'off'), ('_transient_k2', 'v', 'off'), ('_transient_timeout_k2', '1200', 'off'), ('_site_transient_s2', 'v', 'off'), ('_site_transient_timeout_s2', '1200', 'off'), ('_transient_k3', 'v', 'off'), ('_transient_timeout_k3', '1300', 'off'), ('_site_transient_s3', 'v', 'off'), ('_site_transient_timeout_s3', '1300', 'off'), ('_transient_k4', 'v', 'off'), ('_transient_timeout_k4', '1400', 'off'), ('_site_transient_s4', 'v', 'off'), ('_site_transient_timeout_s4', '1400', 'off'), ('_transient_k5', 'v', 'off'), ('_transient_timeout_k5', '1500', 'off'), ('_site_transient_s5', 'v', 'off'), ('_site_transient_timeout_s5', '1500', 'off'), ('_transient_k6', 'v', 'off'), ('_transient_timeout_k6', '1600', 'off'), ('_site_transient_s6', 'v', 'off'), ('_site_transient_timeout_s6', '1600', 'off'), ('_transient_k7', 'v', 'off'), ('_transient_timeout_k7', '1700', 'off'), ('_site_transient_s7', 'v', 'off'), ('_site_transient_timeout_s7', '1700', 'off'), ('_transient_k8', 'v', 'off'), ('_transient_timeout_k8', '1800', 'off'), ('_site_transient_s8', 'v', 'off'), ('_site_transient_timeout_s8', '1800', 'off'), ('_transient_k9', 'v', 'off'), ('_transient_timeout_k9', '1900', 'off'), ('_site_transient_s9', 'v', 'off'), ('_site_transient_timeout_s9', '1900', 'off'), ('_transient_k10', 'v', 'off'), ('_transient_timeout_k10', '2000', 'off'), ('_site_transient_s10', 'v', 'off'), ('_site_transient_timeout_s10', '2000', 'off'), ('_transient_k11', 'v', 'off'), ('_transient_timeout_k11', '2100', 'off'), ('_site_transient_s11', 'v', 'off'), ('_site_transient_timeout_s11', '2100', 'off'), ('_transient_k12', 'v', 'off'), ('_transient_timeout_k12', '2200', 'off'), ('_site_transient_s12', 'v', 'off'), ('_site_transient_timeout_s12', '2200', 'off'), ('_transient_k13', 'v', 'off'), ('_transient_timeout_k13', '2300', 'off'), ('_site_transient_s13', 'v', 'off'), ('_site_transient_timeout_s13', '2300', 'off'), ('_transient_k14', 'v', 'off'), ('_transient_timeout_k14', '2400', 'off'), ('_site_transient_s14', 'v', 'off'), ('_site_transient_timeout_s14', '2400', 'off'), ('_transient_k15', 'v', 'off'), ('_transient_timeout_k15', '2500', 'off'), ('_site_transient_s15', 'v', 'off'), ('_site_transient_timeout_s15', '2500', 'off'), ('_transient_k16', 'v', 'off'), ('_transient_timeout_k16', '2600', 'off'), ('_site_transient_s16', 'v', 'off'), ('_site_transient_timeout_s16', '2600', 'off'), ('_transient_k17', 'v', 'off'), ('_transient_timeout_k17', '2700', 'off'), ('_site_transient_s17', 'v', 'off'), ('_site_transient_timeout_s17', '2700', 'off'), ('_transient_k18', 'v', 'off'), ('_transient_timeout_k18', '2800', 'off'), ('_site_transient_s18', 'v', 'off'), ('_site_transient_timeout_s18', '2800', 'off'), ('_transient_k19', 'v', 'off'), ('_transient_timeout_k19', '2900', 'off'), ('_site_transient_s19', 'v', 'off'), ('_site_transient_timeout_s19', '2900', 'off'), ('_transient_orphan', 'v', 'off'), ('_transient_timeout_lonely', '1', 'off'), ('_transient_timeout_', '1', 'off'), ('_transient_', 'v', 'off'), ('_transientx_k1', 'v', 'off'), ('_site_transient_timeout_k1', '1', 'off'), ('siteurl', 'http://example.com', 'off'), ('_transient_timeout_k0x', 'not-a-number', 'off'), ('_transient_k0x', 'v', 'off')
+ok affected=89 insert_id=1
+-- SELECT a.option_name, b.option_name FROM wp_options a, wp_options b WHERE a.option_name LIKE '\_transient\_%' AND a.option_name NOT LIKE '\_transient\_timeout\_%' AND b.option_name = CONCAT( '_transient_timeout_', SUBSTRING( a.option_name, 12 ) ) AND b.option_value < 2000 ORDER BY a.option_name
+_transient_ | _transient_timeout_
+_transient_k0 | _transient_timeout_k0
+_transient_k0x | _transient_timeout_k0x
+_transient_k1 | _transient_timeout_k1
+_transient_k2 | _transient_timeout_k2
+_transient_k3 | _transient_timeout_k3
+_transient_k4 | _transient_timeout_k4
+_transient_k5 | _transient_timeout_k5
+_transient_k6 | _transient_timeout_k6
+_transient_k7 | _transient_timeout_k7
+_transient_k8 | _transient_timeout_k8
+_transient_k9 | _transient_timeout_k9
+
+-- SELECT a.option_name, b.option_name FROM wp_options a, wp_options b WHERE a.option_name LIKE '\_site\_transient\_%' AND a.option_name NOT LIKE '\_site\_transient\_timeout\_%' AND b.option_name = CONCAT( '_site_transient_timeout_', SUBSTRING( a.option_name, 17 ) ) AND b.option_value < 2000 ORDER BY a.option_name
+_site_transient_s0 | _site_transient_timeout_s0
+_site_transient_s1 | _site_transient_timeout_s1
+_site_transient_s2 | _site_transient_timeout_s2
+_site_transient_s3 | _site_transient_timeout_s3
+_site_transient_s4 | _site_transient_timeout_s4
+_site_transient_s5 | _site_transient_timeout_s5
+_site_transient_s6 | _site_transient_timeout_s6
+_site_transient_s7 | _site_transient_timeout_s7
+_site_transient_s8 | _site_transient_timeout_s8
+_site_transient_s9 | _site_transient_timeout_s9
+
+-- DELETE a, b FROM wp_options a, wp_options b WHERE a.option_name LIKE '\_transient\_%' AND a.option_name NOT LIKE '\_transient\_timeout\_%' AND b.option_name = CONCAT( '_transient_timeout_', SUBSTRING( a.option_name, 12 ) ) AND b.option_value < 2000
+ok affected=24 insert_id=0
+-- SELECT option_name FROM wp_options ORDER BY option_name
+_site_transient_s0
+_site_transient_s1
+_site_transient_s10
+_site_transient_s11
+_site_transient_s12
+_site_transient_s13
+_site_transient_s14
+_site_transient_s15
+_site_transient_s16
+_site_transient_s17
+_site_transient_s18
+_site_transient_s19
+_site_transient_s2
+_site_transient_s3
+_site_transient_s4
+_site_transient_s5
+_site_transient_s6
+_site_transient_s7
+_site_transient_s8
+_site_transient_s9
+_site_transient_timeout_k1
+_site_transient_timeout_s0
+_site_transient_timeout_s1
+_site_transient_timeout_s10
+_site_transient_timeout_s11
+_site_transient_timeout_s12
+_site_transient_timeout_s13
+_site_transient_timeout_s14
+_site_transient_timeout_s15
+_site_transient_timeout_s16
+_site_transient_timeout_s17
+_site_transient_timeout_s18
+_site_transient_timeout_s19
+_site_transient_timeout_s2
+_site_transient_timeout_s3
+_site_transient_timeout_s4
+_site_transient_timeout_s5
+_site_transient_timeout_s6
+_site_transient_timeout_s7
+_site_transient_timeout_s8
+_site_transient_timeout_s9
+_transient_k10
+_transient_k11
+_transient_k12
+_transient_k13
+_transient_k14
+_transient_k15
+_transient_k16
+_transient_k17
+_transient_k18
+_transient_k19
+_transient_orphan
+_transient_timeout_k10
+_transient_timeout_k11
+_transient_timeout_k12
+_transient_timeout_k13
+_transient_timeout_k14
+_transient_timeout_k15
+_transient_timeout_k16
+_transient_timeout_k17
+_transient_timeout_k18
+_transient_timeout_k19
+_transient_timeout_lonely
+_transientx_k1
+siteurl
+
+-- DELETE a, b FROM wp_options a, wp_options b WHERE a.option_name LIKE '\_site\_transient\_%' AND a.option_name NOT LIKE '\_site\_transient\_timeout\_%' AND b.option_name = CONCAT( '_site_transient_timeout_', SUBSTRING( a.option_name, 17 ) ) AND b.option_value < 2000
+ok affected=20 insert_id=0
+-- SELECT option_name FROM wp_options ORDER BY option_name
+_site_transient_s10
+_site_transient_s11
+_site_transient_s12
+_site_transient_s13
+_site_transient_s14
+_site_transient_s15
+_site_transient_s16
+_site_transient_s17
+_site_transient_s18
+_site_transient_s19
+_site_transient_timeout_k1
+_site_transient_timeout_s10
+_site_transient_timeout_s11
+_site_transient_timeout_s12
+_site_transient_timeout_s13
+_site_transient_timeout_s14
+_site_transient_timeout_s15
+_site_transient_timeout_s16
+_site_transient_timeout_s17
+_site_transient_timeout_s18
+_site_transient_timeout_s19
+_transient_k10
+_transient_k11
+_transient_k12
+_transient_k13
+_transient_k14
+_transient_k15
+_transient_k16
+_transient_k17
+_transient_k18
+_transient_k19
+_transient_orphan
+_transient_timeout_k10
+_transient_timeout_k11
+_transient_timeout_k12
+_transient_timeout_k13
+_transient_timeout_k14
+_transient_timeout_k15
+_transient_timeout_k16
+_transient_timeout_k17
+_transient_timeout_k18
+_transient_timeout_k19
+_transient_timeout_lonely
+_transientx_k1
+siteurl
+
+-- DELETE a, b FROM wp_options a, wp_options b WHERE a.option_name LIKE '\_transient\_%' AND a.option_name NOT LIKE '\_transient\_timeout\_%' AND b.option_name = CONCAT( '_transient_timeout_', SUBSTRING( a.option_name, 12 ) ) AND b.option_value < 2000
+ok affected=0 insert_id=0
+-- DELETE a, b FROM wp_options a, wp_options b WHERE a.option_name LIKE '\_site\_transient\_%' AND a.option_name NOT LIKE '\_site\_transient\_timeout\_%' AND b.option_name = CONCAT( '_site_transient_timeout_', SUBSTRING( a.option_name, 17 ) ) AND b.option_value < 2000
+ok affected=0 insert_id=0
+-- INSERT INTO wp_options (option_name, option_value, autoload) VALUES ('m_a', 'x', 'off'), ('m_b', 'x', 'off'), ('m_c', 'x', 'off')
+ok affected=3 insert_id=90
+-- DELETE a, b FROM wp_options a, wp_options b WHERE a.option_name = 'siteurl' AND b.option_name LIKE 'm\_%'
+ok affected=4 insert_id=0
+-- SELECT option_name FROM wp_options WHERE option_name = 'siteurl' OR option_name LIKE 'm\_%'
+
+-- CREATE TABLE l1 (id int PRIMARY KEY, v int)
+ok affected=0 insert_id=0
+-- CREATE TABLE l2 (id int PRIMARY KEY, v int)
+ok affected=0 insert_id=0
+-- INSERT INTO l1 VALUES (1, 1), (2, 2), (3, 3)
+ok affected=3 insert_id=0
+-- INSERT INTO l2 VALUES (1, 1), (5, 5)
+ok affected=2 insert_id=0
+-- DELETE l1, l2 FROM l1 LEFT JOIN l2 ON l1.id = l2.id WHERE l1.v < 3
+ok affected=3 insert_id=0
+-- SELECT id FROM l1 ORDER BY id
+3
+
+-- SELECT id FROM l2 ORDER BY id
+5
+
+-- CREATE TABLE o (id int PRIMARY KEY, name varchar(50), val varchar(50))
+ok affected=0 insert_id=0
+-- INSERT INTO o VALUES (1, 'x', 'v'), (2, 'timeout_x', 'v'), (3, 'timeout_timeout_x', 'v')
+ok affected=3 insert_id=0
+-- DELETE a, b FROM o a, o b WHERE b.name = CONCAT('timeout_', a.name)
+ok affected=3 insert_id=0
+-- SELECT id FROM o ORDER BY id
+
+-- UPDATE wp_options a, wp_options b SET a.option_value = 'renewed' WHERE a.option_name LIKE '\_transient\_%' AND a.option_name NOT LIKE '\_transient\_timeout\_%' AND b.option_name = CONCAT( '_transient_timeout_', SUBSTRING( a.option_name, 12 ) )
+ok affected=10 insert_id=0
+-- SELECT option_name, option_value FROM wp_options WHERE option_value = 'renewed' ORDER BY option_name
+_transient_k10 | renewed
+_transient_k11 | renewed
+_transient_k12 | renewed
+_transient_k13 | renewed
+_transient_k14 | renewed
+_transient_k15 | renewed
+_transient_k16 | renewed
+_transient_k17 | renewed
+_transient_k18 | renewed
+_transient_k19 | renewed
+

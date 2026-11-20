@@ -1,0 +1,20 @@
+# compare.sh が docker-compose.yml に重ねる、本物の MySQL 8.0（docs/plugins.md）。WordPress と wp-cli のつなぎ先を
+# HeimDB から db に替える。エラーになった文は performance_schema の events_statements_history_long から読む。
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${HEIMDB_ROOT_PASSWORD:-plugin-check}
+      MYSQL_DATABASE: wordpress
+    command:
+      - --performance-schema-consumer-events-statements-history-long=ON
+      - --performance-schema-events-statements-history-long-size=200000
+
+  wordpress:
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+    depends_on: [db]
+
+  cli:
+    environment:
+      WORDPRESS_DB_HOST: db:3306

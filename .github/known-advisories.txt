@@ -1,0 +1,7 @@
+# フォークした go-mysql-server と vitess（internal/sqlengine）の GitHub の advisory のうち、確かめたもの。
+# .github/workflows/vuln.yml の advisories のジョブが、ここにない advisory で落ちる。確かめ方は
+# docs/operations.md の「脆弱性の確かめ方」。1 行に 1 つ、GHSA の ID の後に確かめた日と結論を書く。
+#
+#   GHSA-xxxx-xxxx-xxxx 2026-11-19 フォークに当たらない（直した経路を v0.20.0 の前に取り込み済み）
+#
+# 2026-11-19（段階 127）: 2 つのモジュールとも 0 件。

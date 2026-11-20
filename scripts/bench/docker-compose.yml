@@ -1,0 +1,73 @@
+# 本物の MySQL と heimdb の上の WordPress の性能を比べる（docs/bench.md）。
+# 同じ WordPress を 2 つ立て、接続先だけを替える。キャッシュは使わない。
+#
+#   mysql:  host.docker.internal:3307（mysql:8.0 のコンテナ realmysql）、データベース wpbench
+#   HeimDB: host.docker.internal:3316（ホストで動かす heimdb -db wpbench）
+name: heimdb-bench
+
+x-wp: &wp
+  image: wordpress:php8.3-apache
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  volumes:
+    - ./mu-plugins:/var/www/html/wp-content/mu-plugins:ro
+
+x-cli: &cli
+  image: wordpress:cli
+  profiles: ["cli"]
+  user: "33:33"
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+services:
+  wp-mysql:
+    <<: *wp
+    ports: ["18181:80"]
+    environment: &env-mysql
+      WORDPRESS_DB_HOST: host.docker.internal:3307
+      WORDPRESS_DB_USER: root
+      WORDPRESS_DB_PASSWORD: root
+      WORDPRESS_DB_NAME: wpbench
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_HOME', 'http://localhost:18181');
+        define('WP_SITEURL', 'http://localhost:18181');
+        define('SAVEQUERIES', true);
+    volumes:
+      - wp-mysql:/var/www/html
+      - ./mu-plugins:/var/www/html/wp-content/mu-plugins:ro
+
+  wp-heimdb:
+    <<: *wp
+    ports: ["18182:80"]
+    environment: &env-heimdb
+      WORDPRESS_DB_HOST: host.docker.internal:3316
+      WORDPRESS_DB_USER: root
+      WORDPRESS_DB_PASSWORD: rootpw
+      WORDPRESS_DB_NAME: wpbench
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_HOME', 'http://localhost:18182');
+        define('WP_SITEURL', 'http://localhost:18182');
+        define('SAVEQUERIES', true);
+    volumes:
+      - wp-heimdb:/var/www/html
+      - ./mu-plugins:/var/www/html/wp-content/mu-plugins:ro
+
+  cli-mysql:
+    <<: *cli
+    environment: *env-mysql
+    volumes:
+      - wp-mysql:/var/www/html
+      - ./mu-plugins:/var/www/html/wp-content/mu-plugins:ro
+    depends_on: [wp-mysql]
+
+  cli-heimdb:
+    <<: *cli
+    environment: *env-heimdb
+    volumes:
+      - wp-heimdb:/var/www/html
+      - ./mu-plugins:/var/www/html/wp-content/mu-plugins:ro
+    depends_on: [wp-heimdb]
+
+volumes:
+  wp-mysql:
+  wp-heimdb:

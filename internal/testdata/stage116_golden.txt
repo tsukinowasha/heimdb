@@ -1,0 +1,5651 @@
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE s8 (id INT PRIMARY KEY, d DECIMAL(26,4), i INT, b BIGINT, bu BIGINT UNSIGNED, dec1 DECIMAL(10,2), f DOUBLE, ti TINYINT, y YEAR)
+ok affected=0 insert_id=0
+-- INSERT INTO s8 VALUES (1, 99999.5000, 999999, 9007199254740993, 18446744073709551615, 10.50, 1.5, 1, 2024), (2, 900000.2500, 1, 1, 1, 0.30, 2.5, 2, 2025), (3, 9000000.1234, 2147483647, 9007199254740993, 2, 1.00, 3.5, 3, 2026)
+ok affected=3 insert_id=0
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE wp_wc_order_stats (order_id BIGINT UNSIGNED NOT NULL PRIMARY KEY, parent_id BIGINT UNSIGNED NOT NULL DEFAULT 0, date_created DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', num_items_sold INT NOT NULL DEFAULT 0, total_sales DOUBLE NOT NULL DEFAULT 0, net_total DOUBLE NOT NULL DEFAULT 0, returning_customer TINYINT(1) DEFAULT NULL, status VARCHAR(200) NOT NULL, customer_id BIGINT UNSIGNED NOT NULL, KEY date_created (date_created), KEY status (status(191)))
+ok affected=0 insert_id=0
+-- INSERT INTO wp_wc_order_stats VALUES (10, 0, '2024-01-01 10:00:00', 2, 30.1, 25.1, 0, 'wc-completed', 1), (11, 0, '2024-01-02 10:00:00', 1, 0.2, 0.1, 1, 'wc-completed', 1), (12, 0, '2024-01-02 11:00:00', 3, 1234567.89, 1234567.79, 0, 'wc-processing', 2)
+ok affected=3 insert_id=0
+-- CREATE TABLE wp_wc_product_meta_lookup (product_id BIGINT NOT NULL PRIMARY KEY, min_price DECIMAL(19,4) NULL DEFAULT NULL, max_price DECIMAL(19,4) NULL DEFAULT NULL, total_sales BIGINT NULL DEFAULT 0, stock_quantity DOUBLE NULL DEFAULT NULL, KEY min_max_price (min_price, max_price))
+ok affected=0 insert_id=0
+-- INSERT INTO wp_wc_product_meta_lookup VALUES (1, 10.0000, 12.5000, 3, 5), (2, 9.9950, 9.9950, 0, NULL), (3, 12345678901234.5678, 12345678901234.5678, 9007199254740993, 1)
+ok affected=3 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT SUM(d) FROM s8 WHERE id = 1
+99999.5000
+
+-- SELECT SUM(d) FROM s8 WHERE id = 3
+9000000.1234
+
+-- SELECT SUM(d), SUM(i), SUM(b), SUM(bu), SUM(dec1), SUM(f), SUM(ti), SUM(y) FROM s8
+9999999.8734 | 2148483647 | 18014398509481987 | 18446744073709551618 | 11.80 | 7.5 | 6 | 6075
+
+-- SELECT AVG(d), AVG(i), AVG(b), AVG(bu), AVG(dec1), AVG(f), AVG(ti) FROM s8
+3333333.29113333 | 716161215.6667 | 6004799503160662.3333 | 6148914691236517206.0000 | 3.933333 | 2.5 | 2.0000
+
+-- SELECT id, SUM(d), SUM(i), AVG(dec1) FROM s8 GROUP BY id ORDER BY id
+1 | 99999.5000 | 999999 | 10.500000
+2 | 900000.2500 | 1 | 0.300000
+3 | 9000000.1234 | 2147483647 | 1.000000
+
+-- SELECT id, SUM(d) FROM s8 GROUP BY id HAVING SUM(d) > 9000000 ORDER BY id
+3 | 9000000.1234
+
+-- SELECT ROUND(SUM(d), 2), ROUND(SUM(d), 0), SUM(d) * 1, SUM(d) + 0, CAST(SUM(d) AS DECIMAL(26,4)), SUM(d) = 9999999.8734, CAST(SUM(d) AS CHAR), CONCAT(SUM(dec1)), CONCAT(AVG(dec1)) FROM s8
+9999999.87 | 10000000 | 9999999.8734 | 9999999.8734 | 9999999.8734 | 1 | 9999999.8734 | 11.80 | 3.933333
+
+-- SELECT SUM(i) + 1, SUM(i) / 2, SUM(i) DIV 2, SUM(i) / COUNT(*), SUM(i) * 1.5, ROUND(AVG(i)), FLOOR(AVG(dec1)), FORMAT(SUM(d), 2) FROM s8
+2148483648 | 1074241823.5000 | 1074241823 | 716161215.6667 | 3222725470.5 | 716161216 | 3 | 9,999,999.87
+
+-- SELECT MAX(d), MIN(d), SUM(DISTINCT d), AVG(DISTINCT i), SUM(DISTINCT b) FROM s8
+9000000.1234 | 99999.5000 | 9999999.8734 | 716161215.6667 | 9007199254740994
+
+-- SELECT SUM(CAST(d AS CHAR)), SUM(id * 1.5), SUM(id) / 3, SUM(id > 1), AVG(id > 1), SUM(IF(id > 1, 1, 0)), SUM(CASE WHEN id > 1 THEN 1 ELSE 0 END) FROM s8
+9.9999998734e+06 | 9.0 | 2.0000 | 2 | 0.6667 | 2 | 2
+
+-- SELECT SUM(NULL), AVG(NULL), SUM(i), AVG(d) FROM s8 WHERE id > 100
+NULL | NULL | NULL | NULL
+
+-- SELECT SUM(x), AVG(x) FROM (SELECT 9223372036854775807 AS x UNION ALL SELECT 9223372036854775807 UNION ALL SELECT -5) q
+18446744073709551609 | 6148914691236517203.0000
+
+-- SELECT SUM(x) FROM (SELECT -9223372036854775807 AS x UNION ALL SELECT -9223372036854775807 UNION ALL SELECT -9) q
+-18446744073709551623
+
+-- SELECT SUM(x) FROM (SELECT d AS x FROM s8 UNION ALL SELECT dec1 FROM s8) q
+10000011.6734
+
+-- SELECT SUM(x) FROM (SELECT 1234567890.1000 AS x UNION ALL SELECT 10.5) q
+1234567900.6000
+
+-- SELECT x FROM (SELECT dec1 AS x FROM s8 WHERE id = 1 UNION ALL SELECT d FROM s8 WHERE id = 1 UNION ALL SELECT i FROM s8 WHERE id = 2) q ORDER BY x
+1.0000
+10.5000
+99999.5000
+
+-- SELECT id, SUM(d) OVER (), SUM(dec1) OVER (ORDER BY id), AVG(dec1) OVER (ORDER BY id), SUM(i) OVER (ORDER BY id), AVG(i) OVER (), SUM(bu) OVER (), SUM(f) OVER () FROM s8 ORDER BY id
+1 | 9999999.8734 | 10.50 | 10.500000 | 999999 | 716161215.6667 | 18446744073709551618 | 7.5
+2 | 9999999.8734 | 10.80 | 5.400000 | 1000000 | 716161215.6667 | 18446744073709551618 | 7.5
+3 | 9999999.8734 | 11.80 | 3.933333 | 2148483647 | 716161215.6667 | 18446744073709551618 | 7.5
+
+-- SELECT id, SUM(dec1) OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW), AVG(d) OVER (PARTITION BY id), SUM(b) OVER (ORDER BY id) FROM s8 ORDER BY id
+1 | 10.50 | 99999.50000000 | 9007199254740993
+2 | 10.80 | 900000.25000000 | 9007199254740994
+3 | 1.30 | 9000000.12340000 | 18014398509481987
+
+-- SELECT SUM(num_items_sold) AS items_sold, SUM(net_total) AS net_revenue, AVG(net_total) AS avg_order_value, COUNT(*) AS orders_count, SUM(total_sales) FROM wp_wc_order_stats WHERE status NOT IN ('wc-trash', 'wc-pending', 'wc-failed', 'wc-cancelled')
+6 | 1.23459299e+06 | 411530.99666666664 | 3 | 1.23459819e+06
+
+-- SELECT DATE(date_created) AS d, SUM(num_items_sold), SUM(net_total), AVG(num_items_sold), SUM(returning_customer) FROM wp_wc_order_stats GROUP BY d ORDER BY d
+2024-01-01 | 2 | 25.1 | 2.0000 | 0
+2024-01-02 | 4 | 1.2345678900000001e+06 | 2.0000 | 1
+
+-- SELECT SUM(min_price), AVG(max_price), SUM(total_sales), AVG(total_sales), SUM(stock_quantity), MAX(min_price) FROM wp_wc_product_meta_lookup
+12345678901254.5628 | 4115226300419.02093333 | 9007199254740996 | 3002399751580332.0000 | 6 | 12345678901234.5678
+
+-- SELECT product_id, SUM(max_price) - SUM(min_price), AVG(min_price) FROM wp_wc_product_meta_lookup GROUP BY product_id ORDER BY product_id
+1 | 2.5000 | 10.00000000
+2 | 0.0000 | 9.99500000
+3 | 0.0000 | 12345678901234.56780000
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT SUM(d) FROM s8 WHERE id = 1
+99999.5000
+
+-- SELECT SUM(d) FROM s8 WHERE id = 3
+9000000.1234
+
+-- SELECT SUM(d), SUM(i), SUM(b), SUM(bu), SUM(dec1), SUM(f), SUM(ti), SUM(y) FROM s8
+9999999.8734 | 2148483647 | 18014398509481987 | 18446744073709551618 | 11.80 | 7.5 | 6 | 6075
+
+-- SELECT AVG(d), AVG(i), AVG(b), AVG(bu), AVG(dec1), AVG(f), AVG(ti) FROM s8
+3333333.29113333 | 716161215.6667 | 6004799503160662.3333 | 6148914691236517206.0000 | 3.933333 | 2.5 | 2.0000
+
+-- SELECT id, SUM(d), SUM(i), AVG(dec1) FROM s8 GROUP BY id ORDER BY id
+1 | 99999.5000 | 999999 | 10.500000
+2 | 900000.2500 | 1 | 0.300000
+3 | 9000000.1234 | 2147483647 | 1.000000
+
+-- SELECT id, SUM(d) FROM s8 GROUP BY id HAVING SUM(d) > 9000000 ORDER BY id
+3 | 9000000.1234
+
+-- SELECT ROUND(SUM(d), 2), ROUND(SUM(d), 0), SUM(d) * 1, SUM(d) + 0, CAST(SUM(d) AS DECIMAL(26,4)), SUM(d) = 9999999.8734, CAST(SUM(d) AS CHAR), CONCAT(SUM(dec1)), CONCAT(AVG(dec1)) FROM s8
+9999999.87 | 10000000 | 9999999.8734 | 9999999.8734 | 9999999.8734 | 1 | 9999999.8734 | 11.80 | 3.933333
+
+-- SELECT SUM(i) + 1, SUM(i) / 2, SUM(i) DIV 2, SUM(i) / COUNT(*), SUM(i) * 1.5, ROUND(AVG(i)), FLOOR(AVG(dec1)), FORMAT(SUM(d), 2) FROM s8
+2148483648 | 1074241823.5000 | 1074241823 | 716161215.6667 | 3222725470.5 | 716161216 | 3 | 9,999,999.87
+
+-- SELECT MAX(d), MIN(d), SUM(DISTINCT d), AVG(DISTINCT i), SUM(DISTINCT b) FROM s8
+9000000.1234 | 99999.5000 | 9999999.8734 | 716161215.6667 | 9007199254740994
+
+-- SELECT SUM(CAST(d AS CHAR)), SUM(id * 1.5), SUM(id) / 3, SUM(id > 1), AVG(id > 1), SUM(IF(id > 1, 1, 0)), SUM(CASE WHEN id > 1 THEN 1 ELSE 0 END) FROM s8
+9.9999998734e+06 | 9.0 | 2.0000 | 2 | 0.6667 | 2 | 2
+
+-- SELECT SUM(NULL), AVG(NULL), SUM(i), AVG(d) FROM s8 WHERE id > 100
+NULL | NULL | NULL | NULL
+
+-- SELECT SUM(x), AVG(x) FROM (SELECT 9223372036854775807 AS x UNION ALL SELECT 9223372036854775807 UNION ALL SELECT -5) q
+18446744073709551609 | 6148914691236517203.0000
+
+-- SELECT SUM(x) FROM (SELECT -9223372036854775807 AS x UNION ALL SELECT -9223372036854775807 UNION ALL SELECT -9) q
+-18446744073709551623
+
+-- SELECT SUM(x) FROM (SELECT d AS x FROM s8 UNION ALL SELECT dec1 FROM s8) q
+10000011.6734
+
+-- SELECT SUM(x) FROM (SELECT 1234567890.1000 AS x UNION ALL SELECT 10.5) q
+1234567900.6000
+
+-- SELECT x FROM (SELECT dec1 AS x FROM s8 WHERE id = 1 UNION ALL SELECT d FROM s8 WHERE id = 1 UNION ALL SELECT i FROM s8 WHERE id = 2) q ORDER BY x
+1.0000
+10.5000
+99999.5000
+
+-- SELECT id, SUM(d) OVER (), SUM(dec1) OVER (ORDER BY id), AVG(dec1) OVER (ORDER BY id), SUM(i) OVER (ORDER BY id), AVG(i) OVER (), SUM(bu) OVER (), SUM(f) OVER () FROM s8 ORDER BY id
+1 | 9999999.8734 | 10.50 | 10.500000 | 999999 | 716161215.6667 | 18446744073709551618 | 7.5
+2 | 9999999.8734 | 10.80 | 5.400000 | 1000000 | 716161215.6667 | 18446744073709551618 | 7.5
+3 | 9999999.8734 | 11.80 | 3.933333 | 2148483647 | 716161215.6667 | 18446744073709551618 | 7.5
+
+-- SELECT id, SUM(dec1) OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW), AVG(d) OVER (PARTITION BY id), SUM(b) OVER (ORDER BY id) FROM s8 ORDER BY id
+1 | 10.50 | 99999.50000000 | 9007199254740993
+2 | 10.80 | 900000.25000000 | 9007199254740994
+3 | 1.30 | 9000000.12340000 | 18014398509481987
+
+-- SELECT SUM(num_items_sold) AS items_sold, SUM(net_total) AS net_revenue, AVG(net_total) AS avg_order_value, COUNT(*) AS orders_count, SUM(total_sales) FROM wp_wc_order_stats WHERE status NOT IN ('wc-trash', 'wc-pending', 'wc-failed', 'wc-cancelled')
+6 | 1.23459299e+06 | 411530.99666666664 | 3 | 1.23459819e+06
+
+-- SELECT DATE(date_created) AS d, SUM(num_items_sold), SUM(net_total), AVG(num_items_sold), SUM(returning_customer) FROM wp_wc_order_stats GROUP BY d ORDER BY d
+2024-01-01 | 2 | 25.1 | 2.0000 | 0
+2024-01-02 | 4 | 1.2345678900000001e+06 | 2.0000 | 1
+
+-- SELECT SUM(min_price), AVG(max_price), SUM(total_sales), AVG(total_sales), SUM(stock_quantity), MAX(min_price) FROM wp_wc_product_meta_lookup
+12345678901254.5628 | 4115226300419.02093333 | 9007199254740996 | 3002399751580332.0000 | 6 | 12345678901234.5678
+
+-- SELECT product_id, SUM(max_price) - SUM(min_price), AVG(min_price) FROM wp_wc_product_meta_lookup GROUP BY product_id ORDER BY product_id
+1 | 2.5000 | 10.00000000
+2 | 0.0000 | 9.99500000
+3 | 0.0000 | 12345678901234.56780000
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- CREATE TABLE ty AS SELECT SUM(i) a, SUM(b) bb, SUM(d) c, AVG(d) dd, AVG(i) e, AVG(b) f, SUM(bu) g, SUM(dec1) h, AVG(dec1) k, SUM(f) l, AVG(f) m, SUM(ti) n, SUM(y) o, SUM(CAST(id AS CHAR)) p, SUM(1.5) q, AVG(1.5) r FROM s8
+ok affected=1 insert_id=0
+-- SHOW COLUMNS FROM ty
+a | decimal(32,0) | YES |  | NULL | 
+bb | decimal(41,0) | YES |  | NULL | 
+c | decimal(48,4) | YES |  | NULL | 
+dd | decimal(30,8) | YES |  | NULL | 
+e | decimal(14,4) | YES |  | NULL | 
+f | decimal(23,4) | YES |  | NULL | 
+g | decimal(42,0) | YES |  | NULL | 
+h | decimal(32,2) | YES |  | NULL | 
+k | decimal(14,6) | YES |  | NULL | 
+l | double | YES |  | NULL | 
+m | double | YES |  | NULL | 
+n | decimal(25,0) | YES |  | NULL | 
+o | decimal(26,0) | YES |  | NULL | 
+p | double | YES |  | NULL | 
+q | decimal(24,1) | YES |  | NULL | 
+r | decimal(6,5) | YES |  | NULL | 
+
+-- DROP TABLE ty
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE wp_wc_product_meta_lookup
+ok affected=0 insert_id=0
+-- DROP TABLE wp_wc_order_stats
+ok affected=0 insert_id=0
+-- DROP TABLE s8
+ok affected=0 insert_id=0
+-- CREATE TABLE n4 (id INT PRIMARY KEY, i INT, u INT UNSIGNED, ti TINYINT, bu BIGINT UNSIGNED, dec1 DECIMAL(10,2), dec2 DECIMAL(26,4), f DOUBLE, s VARCHAR(20))
+ok affected=0 insert_id=0
+-- INSERT INTO n4 VALUES (1, 1, 1, 1, 1, 10.50, 10.5000, 2.55, '2.55'), (2, 2, 2, 2, 2, 0.30, 1234567890.1000, 1.005, '1.005'), (3, 3, 3, 3, 3, 1.00, 2.0000, 2.45, 'x')
+ok affected=3 insert_id=0
+-- CREATE TABLE wp_postmeta (meta_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, post_id BIGINT UNSIGNED NOT NULL DEFAULT 0, meta_key VARCHAR(255) DEFAULT NULL, meta_value LONGTEXT, KEY post_id (post_id), KEY meta_key (meta_key(191))) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- INSERT INTO wp_postmeta (post_id, meta_key, meta_value) VALUES (1, '_price', '2.55'), (2, '_price', '10.005'), (3, '_price', '19.995'), (1, '_wc_average_rating', '4.45'), (2, '_wc_average_rating', '3.5')
+ok affected=5 insert_id=1
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT ROUND('2.55', 1), ROUND(2.55e0, 1), ROUND(2.55, 1), ROUND('2.45', 1), ROUND(2.45e0, 1), ROUND('1.005', 2), ROUND(1.005e0, 2), ROUND('2.5'), ROUND(2.5e0), ROUND(-2.5e0), ROUND('-2.55', 1), ROUND(0.285e0, 2), ROUND('0.285', 2)
+2.6 | 2.6 | 2.6 | 2.4 | 2.4 | 1 | 1 | 2 | 2 | -2 | -2.6 | 0.28 | 0.28
+
+-- SELECT ROUND(f, 1), ROUND(s, 1), ROUND(dec1, 1), ROUND(f, 2), ROUND(s, 2), ROUND(f), ROUND(f * 10) FROM n4 ORDER BY id
+2.6 | 2.6 | 10.5 | 2.55 | 2.55 | 3 | 26
+1 | 1 | 0.3 | 1 | 1 | 1 | 10
+2.4 | 0 | 1.0 | 2.45 | 0 | 2 | 24
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect DOUBLE value: 'x'
+Warning | 1292 | Truncated incorrect DOUBLE value: 'x'
+
+-- SELECT ROUND(2.675e0, 2), ROUND(1.15e0, 1), ROUND(1.25e0, 1), ROUND(1.35e0, 1), ROUND(5.015e0, 2), ROUND(1e15 + 0.5), ROUND(123.456e0, -1), ROUND('123.456', -2), ROUND(2.55e0 * 100) / 100
+2.68 | 1.2 | 1.2 | 1.4 | 5.01 | 1e+15 | 120 | 100 | 2.55
+
+-- SELECT ROUND(dec2, 2), ROUND(dec2, -2), ROUND(i, -1), ROUND(bu, 1), ROUND(dec1), ROUND(dec1, 5), ROUND(i, 2), ROUND(ti, -5) FROM n4 ORDER BY id
+10.50 | 0 | 0 | 1 | 11 | 10.50 | 1 | 0
+1234567890.10 | 1234567900 | 0 | 2 | 0 | 0.30 | 2 | 0
+2.00 | 0 | 0 | 3 | 1 | 1.00 | 3 | 0
+
+-- SELECT ROUND(f, id), ROUND(dec1, id), ROUND(s, id), ROUND(i, id - 2), ROUND(dec2, id - 3) FROM n4 ORDER BY id
+2.6 | 10.50 | 2.6 | 0 | 0.0000
+1 | 0.30 | 1 | 2 | 1234567890.0000
+2.45 | 1.00 | 0 | 3 | 2.0000
+
+-- SELECT ROUND(NULL), ROUND(1.5, NULL), ROUND('abc', 1), ROUND('', 1), ROUND(' 2.55 ', 1), ROUND('2.55x', 1), ROUND(9.995, 2), ROUND(-9.995, 2), ROUND(0.5), ROUND(-0.5), ROUND(1.5e0), ROUND(0.5e0)
+NULL | NULL | 0 | 0 | 2.6 | 2.6 | 10.00 | -10.00 | 1 | -1 | 2 | 0
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect DOUBLE value: 'abc'
+Warning | 1292 | Truncated incorrect DOUBLE value: '2.55x'
+
+-- SELECT ROUND(2.55, 1) + 0, ROUND('2.55', 1) + 0, CONCAT(ROUND(2.5e0)), CONCAT(ROUND(f, 1)), CONCAT(ROUND(dec2, 1)), ROUND(1e308, 2), ROUND(1.5e300, -300), ROUND(123.45e0, 400) FROM n4 WHERE id = 1
+2.6 | 2.6 | 2 | 2.6 | 10.5 | 1e+308 | 2e+300 | 123.45
+
+-- SELECT TRUNCATE(1.235, 2), TRUNCATE(-1.235, 2), TRUNCATE(123.456, -1), TRUNCATE(1.999, 0), TRUNCATE('1.999', 1), TRUNCATE(1.999e0, 1), TRUNCATE(10, 2), TRUNCATE(NULL, 1), TRUNCATE(1.5, NULL)
+1.23 | -1.23 | 120 | 1 | 1.9 | 1.9 | 10 | NULL | NULL
+
+-- SELECT TRUNCATE(dec1, 1), TRUNCATE(f, 1), TRUNCATE(s, 1), TRUNCATE(i, 0), TRUNCATE(i, -1), TRUNCATE(dec2, 2) FROM n4 ORDER BY id
+10.5 | 2.5 | 2.5 | 1 | 0 | 10.50
+0.3 | 1 | 1 | 2 | 0 | 1234567890.10
+1.0 | 2.4 | 0 | 3 | 0 | 2.00
+
+-- SELECT TRUNCATE(f, id), TRUNCATE(dec2, -2), TRUNCATE(bu, -1), TRUNCATE(-2.999e0, 2), TRUNCATE(1e20, -5), TRUNCATE(0.1 + 0.2, 20), TRUNCATE(123.4567e0, 3), TRUNCATE(-123.4567, -2), TRUNCATE(dec1, id) FROM n4 ORDER BY id
+2.5 | 0 | 0 | -2.99 | 1e+20 | 0.3 | 123.456 | -100 | 10.50
+1 | 1234567800 | 0 | -2.99 | 1e+20 | 0.3 | 123.456 | -100 | 0.30
+2.45 | 0 | 0 | -2.99 | 1e+20 | 0.3 | 123.456 | -100 | 1.00
+
+-- SELECT post_id, ROUND(meta_value, 2), ROUND(meta_value, 1), ROUND(meta_value), TRUNCATE(meta_value, 1) FROM wp_postmeta WHERE meta_key = '_price' ORDER BY post_id
+1 | 2.55 | 2.6 | 3 | 2.5
+2 | 10.01 | 10 | 10 | 10
+3 | 20 | 20 | 20 | 19.9
+
+-- SELECT ROUND(AVG(meta_value), 1), ROUND(AVG(CAST(meta_value AS DECIMAL(10,2))), 2), ROUND(SUM(meta_value), 2) FROM wp_postmeta WHERE meta_key = '_wc_average_rating'
+4 | 3.98 | 7.95
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT ROUND('2.55', 1), ROUND(2.55e0, 1), ROUND(2.55, 1), ROUND('2.45', 1), ROUND(2.45e0, 1), ROUND('1.005', 2), ROUND(1.005e0, 2), ROUND('2.5'), ROUND(2.5e0), ROUND(-2.5e0), ROUND('-2.55', 1), ROUND(0.285e0, 2), ROUND('0.285', 2)
+2.6 | 2.6 | 2.6 | 2.4 | 2.4 | 1 | 1 | 2 | 2 | -2 | -2.6 | 0.28 | 0.28
+
+-- SELECT ROUND(f, 1), ROUND(s, 1), ROUND(dec1, 1), ROUND(f, 2), ROUND(s, 2), ROUND(f), ROUND(f * 10) FROM n4 ORDER BY id
+2.6 | 2.6 | 10.5 | 2.55 | 2.55 | 3 | 26
+1 | 1 | 0.3 | 1 | 1 | 1 | 10
+2.4 | 0 | 1.0 | 2.45 | 0 | 2 | 24
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect DOUBLE value: 'x'
+Warning | 1292 | Truncated incorrect DOUBLE value: 'x'
+
+-- SELECT ROUND(2.675e0, 2), ROUND(1.15e0, 1), ROUND(1.25e0, 1), ROUND(1.35e0, 1), ROUND(5.015e0, 2), ROUND(1e15 + 0.5), ROUND(123.456e0, -1), ROUND('123.456', -2), ROUND(2.55e0 * 100) / 100
+2.68 | 1.2 | 1.2 | 1.4 | 5.01 | 1e+15 | 120 | 100 | 2.55
+
+-- SELECT ROUND(dec2, 2), ROUND(dec2, -2), ROUND(i, -1), ROUND(bu, 1), ROUND(dec1), ROUND(dec1, 5), ROUND(i, 2), ROUND(ti, -5) FROM n4 ORDER BY id
+10.50 | 0 | 0 | 1 | 11 | 10.50 | 1 | 0
+1234567890.10 | 1234567900 | 0 | 2 | 0 | 0.30 | 2 | 0
+2.00 | 0 | 0 | 3 | 1 | 1.00 | 3 | 0
+
+-- SELECT ROUND(f, id), ROUND(dec1, id), ROUND(s, id), ROUND(i, id - 2), ROUND(dec2, id - 3) FROM n4 ORDER BY id
+2.6 | 10.50 | 2.6 | 0 | 0.0000
+1 | 0.30 | 1 | 2 | 1234567890.0000
+2.45 | 1.00 | 0 | 3 | 2.0000
+
+-- SELECT ROUND(NULL), ROUND(1.5, NULL), ROUND('abc', 1), ROUND('', 1), ROUND(' 2.55 ', 1), ROUND('2.55x', 1), ROUND(9.995, 2), ROUND(-9.995, 2), ROUND(0.5), ROUND(-0.5), ROUND(1.5e0), ROUND(0.5e0)
+NULL | NULL | 0 | 0 | 2.6 | 2.6 | 10.00 | -10.00 | 1 | -1 | 2 | 0
+
+-- SHOW WARNINGS
+Warning | 1292 | Truncated incorrect DOUBLE value: 'abc'
+Warning | 1292 | Truncated incorrect DOUBLE value: '2.55x'
+
+-- SELECT ROUND(2.55, 1) + 0, ROUND('2.55', 1) + 0, CONCAT(ROUND(2.5e0)), CONCAT(ROUND(f, 1)), CONCAT(ROUND(dec2, 1)), ROUND(1e308, 2), ROUND(1.5e300, -300), ROUND(123.45e0, 400) FROM n4 WHERE id = 1
+2.6 | 2.6 | 2 | 2.6 | 10.5 | 1e+308 | 2e+300 | 123.45
+
+-- SELECT TRUNCATE(1.235, 2), TRUNCATE(-1.235, 2), TRUNCATE(123.456, -1), TRUNCATE(1.999, 0), TRUNCATE('1.999', 1), TRUNCATE(1.999e0, 1), TRUNCATE(10, 2), TRUNCATE(NULL, 1), TRUNCATE(1.5, NULL)
+1.23 | -1.23 | 120 | 1 | 1.9 | 1.9 | 10 | NULL | NULL
+
+-- SELECT TRUNCATE(dec1, 1), TRUNCATE(f, 1), TRUNCATE(s, 1), TRUNCATE(i, 0), TRUNCATE(i, -1), TRUNCATE(dec2, 2) FROM n4 ORDER BY id
+10.5 | 2.5 | 2.5 | 1 | 0 | 10.50
+0.3 | 1 | 1 | 2 | 0 | 1234567890.10
+1.0 | 2.4 | 0 | 3 | 0 | 2.00
+
+-- SELECT TRUNCATE(f, id), TRUNCATE(dec2, -2), TRUNCATE(bu, -1), TRUNCATE(-2.999e0, 2), TRUNCATE(1e20, -5), TRUNCATE(0.1 + 0.2, 20), TRUNCATE(123.4567e0, 3), TRUNCATE(-123.4567, -2), TRUNCATE(dec1, id) FROM n4 ORDER BY id
+2.5 | 0 | 0 | -2.99 | 1e+20 | 0.3 | 123.456 | -100 | 10.50
+1 | 1234567800 | 0 | -2.99 | 1e+20 | 0.3 | 123.456 | -100 | 0.30
+2.45 | 0 | 0 | -2.99 | 1e+20 | 0.3 | 123.456 | -100 | 1.00
+
+-- SELECT post_id, ROUND(meta_value, 2), ROUND(meta_value, 1), ROUND(meta_value), TRUNCATE(meta_value, 1) FROM wp_postmeta WHERE meta_key = '_price' ORDER BY post_id
+1 | 2.55 | 2.6 | 3 | 2.5
+2 | 10.01 | 10 | 10 | 10
+3 | 20 | 20 | 20 | 19.9
+
+-- SELECT ROUND(AVG(meta_value), 1), ROUND(AVG(CAST(meta_value AS DECIMAL(10,2))), 2), ROUND(SUM(meta_value), 2) FROM wp_postmeta WHERE meta_key = '_wc_average_rating'
+4 | 3.98 | 7.95
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE ty AS SELECT ROUND(s, 1) a, ROUND(dec1, 1) b, ROUND(dec2, -2) c, ROUND(f, 1) d, ROUND(i, -1) e, TRUNCATE(dec2, 2) f, TRUNCATE(s, 1) g, ROUND(dec1, id) h FROM n4
+ok affected=3 insert_id=0
+-- SHOW COLUMNS FROM ty
+a | double | YES |  | NULL | 
+b | decimal(10,1) | YES |  | NULL | 
+c | decimal(23,0) | YES |  | NULL | 
+d | double | YES |  | NULL | 
+e | bigint | YES |  | NULL | 
+f | decimal(24,2) | YES |  | NULL | 
+g | double | YES |  | NULL | 
+h | decimal(10,2) | YES |  | NULL | 
+
+-- DROP TABLE ty
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE wp_postmeta
+ok affected=0 insert_id=0
+-- DROP TABLE n4
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE p (ID BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, post_date DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', dd DATE, PRIMARY KEY (ID), KEY pd (post_date), KEY dd (dd))
+ok affected=0 insert_id=0
+-- CREATE TABLE pn (ID INT PRIMARY KEY, post_date DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', dd DATE)
+ok affected=0 insert_id=0
+-- CREATE TABLE pm (meta_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, post_id BIGINT UNSIGNED NOT NULL DEFAULT 0, meta_key VARCHAR(255), meta_value LONGTEXT, PRIMARY KEY (meta_id), KEY post_id (post_id))
+ok affected=0 insert_id=0
+-- CREATE TABLE u32 (id INT UNSIGNED NOT NULL PRIMARY KEY, i INT NOT NULL, ti TINYINT UNSIGNED NOT NULL, KEY i (i), KEY ti (ti))
+ok affected=0 insert_id=0
+-- INSERT INTO p (post_date, dd) VALUES ('2024-01-01 10:00:00', '2024-01-01'), ('0000-00-00 00:00:00', '0000-00-00'), ('2024-06-01 00:00:00', '2024-06-01')
+ok affected=3 insert_id=1
+-- INSERT INTO pn VALUES (1, '2024-01-01 10:00:00', '2024-01-01'), (2, '0000-00-00 00:00:00', '0000-00-00'), (3, '2024-06-01 00:00:00', '2024-06-01')
+ok affected=3 insert_id=0
+-- INSERT INTO pm (post_id, meta_key, meta_value) VALUES (1, 'a', ''), (2, 'b', '4294967295'), (3, 'c', '1.0000000000000000001'), (0, 'd', 'x'), (1, 'e', '1'), (2, 'f', '-1'), (3, 'g', '1.5'), (1, 'h', '255'), (1, 'i', '256'), (1, 'j', ' 2 '), (1, 'k', '2abc'), (1, 'l', '1e0'), (1, 'm', '4294967296'), (1, 'n', '0.0')
+ok affected=14 insert_id=1
+-- INSERT INTO u32 VALUES (0, 0, 0), (1, 1, 1), (2, 2, 2), (4294967295, -1, 255)
+ok affected=4 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT meta_id FROM pm WHERE post_id = '' ORDER BY meta_id
+4
+
+-- SELECT meta_id FROM pm IGNORE INDEX (post_id) WHERE post_id = '' ORDER BY meta_id
+4
+
+-- SELECT COUNT(*) FROM pm WHERE post_id IN ('', '1')
+10
+
+-- SELECT COUNT(*) FROM pm WHERE post_id <> ''
+13
+
+-- SELECT meta_id FROM pm WHERE post_id > '' ORDER BY meta_id
+1
+2
+3
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+
+-- SELECT meta_id FROM pm WHERE post_id = ' ' ORDER BY meta_id
+4
+
+-- SELECT meta_id FROM pm WHERE post_id = 'abc' ORDER BY meta_id
+4
+
+-- SELECT id FROM u32 WHERE id = '' ORDER BY id
+0
+
+-- SELECT id FROM u32 WHERE ti = '' ORDER BY id
+0
+
+-- SELECT id FROM u32 WHERE id IN ('', 'x', '2') ORDER BY id
+0
+2
+
+-- SELECT /*+ LOOKUP_JOIN(pm, u32) */ pm.meta_id, u32.id FROM pm JOIN u32 ON u32.id = pm.meta_value ORDER BY pm.meta_id
+1 | 0
+2 | 4294967295
+3 | 1
+4 | 0
+5 | 1
+10 | 2
+11 | 2
+12 | 1
+14 | 0
+
+-- SELECT /*+ HASH_JOIN(pm, u32) */ pm.meta_id, u32.id FROM pm JOIN u32 ON u32.id = pm.meta_value ORDER BY pm.meta_id
+1 | 0
+2 | 4294967295
+3 | 1
+4 | 0
+5 | 1
+10 | 2
+11 | 2
+12 | 1
+14 | 0
+
+-- SELECT /*+ LOOKUP_JOIN(pm, u32) */ pm.meta_id, u32.id FROM pm JOIN u32 ON u32.id = pm.meta_value + 0.0 ORDER BY pm.meta_id
+1 | 0
+2 | 4294967295
+3 | 1
+4 | 0
+5 | 1
+10 | 2
+11 | 2
+12 | 1
+14 | 0
+
+-- SELECT /*+ LOOKUP_JOIN(pm, u32) */ pm.meta_id, u32.id FROM pm JOIN u32 ON u32.i = pm.meta_value ORDER BY pm.meta_id
+1 | 0
+3 | 1
+4 | 0
+5 | 1
+6 | 4294967295
+10 | 2
+11 | 2
+12 | 1
+14 | 0
+
+-- SELECT /*+ HASH_JOIN(pm, u32) */ pm.meta_id, u32.id FROM pm JOIN u32 ON u32.i = pm.meta_value ORDER BY pm.meta_id
+1 | 0
+3 | 1
+4 | 0
+5 | 1
+6 | 4294967295
+10 | 2
+11 | 2
+12 | 1
+14 | 0
+
+-- SELECT /*+ LOOKUP_JOIN(pm, u32) */ pm.meta_id, u32.id FROM pm JOIN u32 ON u32.ti = pm.meta_value ORDER BY pm.meta_id
+1 | 0
+3 | 1
+4 | 0
+5 | 1
+8 | 4294967295
+10 | 2
+11 | 2
+12 | 1
+14 | 0
+
+-- SELECT /*+ LOOKUP_JOIN(pm, u32) */ pm.meta_id, u32.id FROM pm JOIN u32 ON u32.id = CAST(pm.meta_value AS DOUBLE) ORDER BY pm.meta_id
+1 | 0
+2 | 4294967295
+3 | 1
+4 | 0
+5 | 1
+10 | 2
+11 | 2
+12 | 1
+14 | 0
+
+-- SELECT /*+ HASH_JOIN(pm, u32) */ pm.meta_id, u32.id FROM pm JOIN u32 ON u32.id = CAST(pm.meta_value AS DOUBLE) ORDER BY pm.meta_id
+1 | 0
+2 | 4294967295
+3 | 1
+4 | 0
+5 | 1
+10 | 2
+11 | 2
+12 | 1
+14 | 0
+
+-- SELECT /*+ LOOKUP_JOIN(pm, p) */ pm.meta_id, p.ID FROM pm JOIN p ON p.ID = pm.meta_value ORDER BY pm.meta_id
+3 | 1
+5 | 1
+10 | 2
+11 | 2
+12 | 1
+
+-- SELECT /*+ LOOKUP_JOIN(pm, p) */ pm.meta_id, p.ID FROM pm LEFT JOIN p ON p.ID = pm.meta_value ORDER BY pm.meta_id
+1 | NULL
+2 | NULL
+3 | 1
+4 | NULL
+5 | 1
+6 | NULL
+7 | NULL
+8 | NULL
+9 | NULL
+10 | 2
+11 | 2
+12 | 1
+13 | NULL
+14 | NULL
+
+-- SELECT meta_id FROM pm WHERE meta_value IN (SELECT id FROM u32) ORDER BY meta_id
+1
+2
+3
+4
+5
+10
+11
+12
+14
+
+-- SELECT id FROM u32 WHERE id IN (SELECT meta_value FROM pm) ORDER BY id
+0
+1
+2
+4294967295
+
+-- SELECT meta_id FROM pm WHERE EXISTS (SELECT 1 FROM u32 WHERE u32.id = pm.meta_value) ORDER BY meta_id
+1
+2
+3
+4
+5
+10
+11
+12
+14
+
+-- SELECT ID FROM p WHERE post_date IN ('garbage', '2024-01-01 10:00:00') ORDER BY ID
+1
+2
+
+-- SELECT ID FROM p IGNORE INDEX (pd) WHERE post_date IN ('garbage', '2024-01-01 10:00:00') ORDER BY ID
+1
+2
+
+-- SELECT ID FROM pn WHERE post_date IN ('garbage', '2024-01-01 10:00:00') ORDER BY ID
+1
+2
+
+-- SELECT ID FROM p WHERE post_date IN ('2024-01-01 10:00:00', '') ORDER BY ID
+1
+2
+
+-- SELECT ID FROM pn WHERE post_date IN ('', '2024-06-01') ORDER BY ID
+2
+3
+
+-- SELECT ID FROM p WHERE post_date NOT IN ('garbage', '2024-01-01 10:00:00') ORDER BY ID
+3
+
+-- SELECT ID FROM pn WHERE post_date NOT IN ('garbage', '2024-01-01 10:00:00') ORDER BY ID
+3
+
+-- SELECT ID FROM p WHERE dd IN ('garbage', '2024-01-01') ORDER BY ID
+1
+2
+
+-- SELECT ID FROM pn WHERE dd IN ('garbage', '2024-01-01') ORDER BY ID
+1
+2
+
+-- SELECT ID FROM p WHERE post_date IN ('garbage', 'junk') ORDER BY ID
+2
+
+-- SELECT ID FROM p WHERE post_date IN ('2024-01-01 10:00:00x', '2024-06-01') ORDER BY ID
+1
+3
+
+-- SELECT ID, post_date IN ('garbage', '2024-01-01 10:00:00'), post_date NOT IN ('', 'x') FROM pn ORDER BY ID
+1 | 1 | 1
+2 | 1 | 0
+3 | 0 | 1
+
+-- SELECT ID FROM pn WHERE post_date BETWEEN 'garbage' AND '2024-01-01 10:00:00' ORDER BY ID
+1
+2
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT meta_id FROM pm WHERE post_id = '' ORDER BY meta_id
+4
+
+-- SELECT meta_id FROM pm IGNORE INDEX (post_id) WHERE post_id = '' ORDER BY meta_id
+4
+
+-- SELECT COUNT(*) FROM pm WHERE post_id IN ('', '1')
+10
+
+-- SELECT COUNT(*) FROM pm WHERE post_id <> ''
+13
+
+-- SELECT meta_id FROM pm WHERE post_id > '' ORDER BY meta_id
+1
+2
+3
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+
+-- SELECT meta_id FROM pm WHERE post_id = ' ' ORDER BY meta_id
+4
+
+-- SELECT meta_id FROM pm WHERE post_id = 'abc' ORDER BY meta_id
+4
+
+-- SELECT id FROM u32 WHERE id = '' ORDER BY id
+0
+
+-- SELECT id FROM u32 WHERE ti = '' ORDER BY id
+0
+
+-- SELECT id FROM u32 WHERE id IN ('', 'x', '2') ORDER BY id
+0
+2
+
+-- SELECT /*+ LOOKUP_JOIN(pm, u32) */ pm.meta_id, u32.id FROM pm JOIN u32 ON u32.id = pm.meta_value ORDER BY pm.meta_id
+1 | 0
+2 | 4294967295
+3 | 1
+4 | 0
+5 | 1
+10 | 2
+11 | 2
+12 | 1
+14 | 0
+
+-- SELECT /*+ HASH_JOIN(pm, u32) */ pm.meta_id, u32.id FROM pm JOIN u32 ON u32.id = pm.meta_value ORDER BY pm.meta_id
+1 | 0
+2 | 4294967295
+3 | 1
+4 | 0
+5 | 1
+10 | 2
+11 | 2
+12 | 1
+14 | 0
+
+-- SELECT /*+ LOOKUP_JOIN(pm, u32) */ pm.meta_id, u32.id FROM pm JOIN u32 ON u32.id = pm.meta_value + 0.0 ORDER BY pm.meta_id
+1 | 0
+2 | 4294967295
+3 | 1
+4 | 0
+5 | 1
+10 | 2
+11 | 2
+12 | 1
+14 | 0
+
+-- SELECT /*+ LOOKUP_JOIN(pm, u32) */ pm.meta_id, u32.id FROM pm JOIN u32 ON u32.i = pm.meta_value ORDER BY pm.meta_id
+1 | 0
+3 | 1
+4 | 0
+5 | 1
+6 | 4294967295
+10 | 2
+11 | 2
+12 | 1
+14 | 0
+
+-- SELECT /*+ HASH_JOIN(pm, u32) */ pm.meta_id, u32.id FROM pm JOIN u32 ON u32.i = pm.meta_value ORDER BY pm.meta_id
+1 | 0
+3 | 1
+4 | 0
+5 | 1
+6 | 4294967295
+10 | 2
+11 | 2
+12 | 1
+14 | 0
+
+-- SELECT /*+ LOOKUP_JOIN(pm, u32) */ pm.meta_id, u32.id FROM pm JOIN u32 ON u32.ti = pm.meta_value ORDER BY pm.meta_id
+1 | 0
+3 | 1
+4 | 0
+5 | 1
+8 | 4294967295
+10 | 2
+11 | 2
+12 | 1
+14 | 0
+
+-- SELECT /*+ LOOKUP_JOIN(pm, u32) */ pm.meta_id, u32.id FROM pm JOIN u32 ON u32.id = CAST(pm.meta_value AS DOUBLE) ORDER BY pm.meta_id
+1 | 0
+2 | 4294967295
+3 | 1
+4 | 0
+5 | 1
+10 | 2
+11 | 2
+12 | 1
+14 | 0
+
+-- SELECT /*+ HASH_JOIN(pm, u32) */ pm.meta_id, u32.id FROM pm JOIN u32 ON u32.id = CAST(pm.meta_value AS DOUBLE) ORDER BY pm.meta_id
+1 | 0
+2 | 4294967295
+3 | 1
+4 | 0
+5 | 1
+10 | 2
+11 | 2
+12 | 1
+14 | 0
+
+-- SELECT /*+ LOOKUP_JOIN(pm, p) */ pm.meta_id, p.ID FROM pm JOIN p ON p.ID = pm.meta_value ORDER BY pm.meta_id
+3 | 1
+5 | 1
+10 | 2
+11 | 2
+12 | 1
+
+-- SELECT /*+ LOOKUP_JOIN(pm, p) */ pm.meta_id, p.ID FROM pm LEFT JOIN p ON p.ID = pm.meta_value ORDER BY pm.meta_id
+1 | NULL
+2 | NULL
+3 | 1
+4 | NULL
+5 | 1
+6 | NULL
+7 | NULL
+8 | NULL
+9 | NULL
+10 | 2
+11 | 2
+12 | 1
+13 | NULL
+14 | NULL
+
+-- SELECT meta_id FROM pm WHERE meta_value IN (SELECT id FROM u32) ORDER BY meta_id
+1
+2
+3
+4
+5
+10
+11
+12
+14
+
+-- SELECT id FROM u32 WHERE id IN (SELECT meta_value FROM pm) ORDER BY id
+0
+1
+2
+4294967295
+
+-- SELECT meta_id FROM pm WHERE EXISTS (SELECT 1 FROM u32 WHERE u32.id = pm.meta_value) ORDER BY meta_id
+1
+2
+3
+4
+5
+10
+11
+12
+14
+
+-- SELECT ID FROM p WHERE post_date IN ('garbage', '2024-01-01 10:00:00') ORDER BY ID
+1
+2
+
+-- SELECT ID FROM p IGNORE INDEX (pd) WHERE post_date IN ('garbage', '2024-01-01 10:00:00') ORDER BY ID
+1
+2
+
+-- SELECT ID FROM pn WHERE post_date IN ('garbage', '2024-01-01 10:00:00') ORDER BY ID
+1
+2
+
+-- SELECT ID FROM p WHERE post_date IN ('2024-01-01 10:00:00', '') ORDER BY ID
+1
+2
+
+-- SELECT ID FROM pn WHERE post_date IN ('', '2024-06-01') ORDER BY ID
+2
+3
+
+-- SELECT ID FROM p WHERE post_date NOT IN ('garbage', '2024-01-01 10:00:00') ORDER BY ID
+3
+
+-- SELECT ID FROM pn WHERE post_date NOT IN ('garbage', '2024-01-01 10:00:00') ORDER BY ID
+3
+
+-- SELECT ID FROM p WHERE dd IN ('garbage', '2024-01-01') ORDER BY ID
+1
+2
+
+-- SELECT ID FROM pn WHERE dd IN ('garbage', '2024-01-01') ORDER BY ID
+1
+2
+
+-- SELECT ID FROM p WHERE post_date IN ('garbage', 'junk') ORDER BY ID
+2
+
+-- SELECT ID FROM p WHERE post_date IN ('2024-01-01 10:00:00x', '2024-06-01') ORDER BY ID
+1
+3
+
+-- SELECT ID, post_date IN ('garbage', '2024-01-01 10:00:00'), post_date NOT IN ('', 'x') FROM pn ORDER BY ID
+1 | 1 | 1
+2 | 1 | 0
+3 | 0 | 1
+
+-- SELECT ID FROM pn WHERE post_date BETWEEN 'garbage' AND '2024-01-01 10:00:00' ORDER BY ID
+1
+2
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE u32
+ok affected=0 insert_id=0
+-- DROP TABLE pm
+ok affected=0 insert_id=0
+-- DROP TABLE pn
+ok affected=0 insert_id=0
+-- DROP TABLE p
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE dt (id INT PRIMARY KEY, d DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', d6 DATETIME(6), dd DATE, ts TIMESTAMP NULL, KEY d (d), KEY d6x (d6), KEY dd (dd), KEY ts (ts))
+ok affected=0 insert_id=0
+-- CREATE TABLE dn (id INT PRIMARY KEY, d DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', d6 DATETIME(6), dd DATE, ts TIMESTAMP NULL)
+ok affected=0 insert_id=0
+-- INSERT INTO dt VALUES (1, '2024-01-01 10:00:00', '2024-01-01 10:00:00.500000', '2024-01-01', '2024-01-01 10:00:00'), (2, '0000-00-00 00:00:00', NULL, '0000-00-00', NULL), (3, '2024-06-01 00:00:01', '2024-06-01 00:00:00.999999', '2024-06-01', '2024-06-01 00:00:01'), (4, '2024-01-01 10:00:01', '2024-01-01 10:00:01.000000', '2024-01-02', '2024-01-01 10:00:01')
+ok affected=4 insert_id=0
+-- INSERT INTO dn SELECT * FROM dt
+ok affected=4 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT id, d > 0, d < 0, d = 0, d <> 0, d >= 0, d <= 0, d > 0.0, d > 0e0, d > -1, d > 1, d > 20240101100000, d > 19000101000000 FROM dt ORDER BY id
+1 | 1 | 0 | 0 | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 0 | 1
+2 | 0 | 0 | 1 | 0 | 1 | 1 | 0 | 0 | 1 | 0 | 0 | 0
+3 | 1 | 0 | 0 | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 1 | 1
+4 | 1 | 0 | 0 | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 1 | 1
+
+-- SELECT id, dd > 0, dd = 0, dd > 20240101, dd >= 20240101, dd = 20240101.5, d = 20240101100000.6, d = 20240101100000.4, d6 = 20240101100000.5, d6 > 20240101100000.4999995, ts > 0, ts = 20240101100000 FROM dt ORDER BY id
+1 | 1 | 0 | 0 | 1 | 1 | 0 | 1 | 1 | 0 | 1 | 1
+2 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | NULL | NULL | NULL | NULL
+3 | 1 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 1 | 1 | 0
+4 | 1 | 0 | 1 | 1 | 0 | 1 | 0 | 0 | 1 | 1 | 0
+
+-- SELECT id FROM dt WHERE d > 0 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dn WHERE d > 0 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d = 0 ORDER BY id
+2
+
+-- SELECT id FROM dt WHERE d <> 0 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d > 20240101 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d >= 20240101100000 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d = 20240101100000 ORDER BY id
+1
+
+-- SELECT id FROM dn WHERE d = 20240101100000 ORDER BY id
+1
+
+-- SELECT id FROM dt WHERE d < 1 ORDER BY id
+2
+
+-- SELECT id FROM dn WHERE d < 1 ORDER BY id
+2
+
+-- SELECT id FROM dt WHERE d > 20241301 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d < 20240100 ORDER BY id
+2
+
+-- SELECT id FROM dt WHERE d > 99999999999999 ORDER BY id
+
+-- SELECT id FROM dt WHERE d > 991231 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d > 240101 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE dd > 0 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE dd = 20240101 ORDER BY id
+1
+
+-- SELECT id FROM dt WHERE dd > 20240101 ORDER BY id
+3
+4
+
+-- SELECT id FROM dt WHERE dd = 20240101.5 ORDER BY id
+1
+
+-- SELECT id FROM dn WHERE dd = 20240101.5 ORDER BY id
+1
+
+-- SELECT id FROM dt WHERE d = 20240101100000.6 ORDER BY id
+4
+
+-- SELECT id FROM dn WHERE d = 20240101100000.6 ORDER BY id
+4
+
+-- SELECT id FROM dt WHERE d = 20240101100000.4 ORDER BY id
+1
+
+-- SELECT id FROM dt WHERE d6 > 0 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE ts > 0 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE ts > 20240101100000 ORDER BY id
+3
+4
+
+-- SELECT id FROM dt WHERE d > 0 + 0 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d > 20240101100000 + 0 ORDER BY id
+3
+4
+
+-- SELECT id FROM dt WHERE d > (SELECT 0) ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d > id - id ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE 0 < d ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d > 0 AND id > 0 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE IF(d > 0, 1, 0) = 1 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE DATE(d) > 0 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d > 0 OR d IS NULL ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d BETWEEN 20240101 AND 20240102 ORDER BY id
+1
+4
+
+-- SELECT id FROM dt WHERE d IN (20240101100000, 0) ORDER BY id
+1
+2
+
+-- SELECT id FROM dt WHERE dd IN (20240101, 20240601) ORDER BY id
+1
+3
+
+-- SELECT id FROM dt WHERE d > CAST(0 AS DATETIME) ORDER BY id
+
+-- SELECT CAST(0 AS DATETIME), CAST(20240101 AS DATETIME), CAST(20240101100000 AS DATETIME), CAST(1 AS DATETIME), CAST(20240101.5 AS DATE), DATE(20240101), CAST(0 AS DATE)
+NULL | 2024-01-01 00:00:00 | 2024-01-01 10:00:00 | NULL | 2024-01-01 | 2024-01-01 | NULL
+
+-- SELECT CAST(20240101 AS DATE), CAST(240101 AS DATE), CAST(991231 AS DATE), CAST(700101 AS DATE), CAST(691231 AS DATE), CAST(101 AS DATE), CAST(100 AS DATE), CAST(20241301 AS DATE), CAST(20240230 AS DATE), CAST(-1 AS DATE)
+2024-01-01 | 2024-01-01 | 1999-12-31 | 1970-01-01 | 2069-12-31 | 2000-01-01 | NULL | NULL | NULL | NULL
+
+-- SELECT CAST(20240101103000 AS DATETIME), CAST(240101103000 AS DATETIME), CAST(20240101103000.123456 AS DATETIME(6)), CAST(20240101103000.5 AS DATETIME), CAST(20240101.5e0 AS DATETIME(1)), CAST(1e20 AS DATETIME), CAST(10000101 AS DATE), CAST(9991231 AS DATE)
+2024-01-01 10:30:00 | 2024-01-01 10:30:00 | 2024-01-01 10:30:00.123456 | 2024-01-01 10:30:01 | 2024-01-01 00:00:00.0 | NULL | 1000-01-01 | 0999-12-31
+
+-- SELECT DATE(20240101), DATE(20240101103000), DATE(20240101.5), DATE_FORMAT(20240101.5, '%Y-%m-%d'), DATEDIFF(20240102.5, 20240101), DATE_FORMAT(20240101103000, '%H:%i'), YEAR(20240101), MONTH(240315), DAYOFWEEK(20240101), UNIX_TIMESTAMP(20240101)
+2024-01-01 | 2024-01-01 | 2024-01-01 | 2024-01-01 | 1 | 10:30 | 2024 | 3 | 2 | 1704067200
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT id, d > 0, d < 0, d = 0, d <> 0, d >= 0, d <= 0, d > 0.0, d > 0e0, d > -1, d > 1, d > 20240101100000, d > 19000101000000 FROM dt ORDER BY id
+1 | 1 | 0 | 0 | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 0 | 1
+2 | 0 | 0 | 1 | 0 | 1 | 1 | 0 | 0 | 1 | 0 | 0 | 0
+3 | 1 | 0 | 0 | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 1 | 1
+4 | 1 | 0 | 0 | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 1 | 1
+
+-- SELECT id, dd > 0, dd = 0, dd > 20240101, dd >= 20240101, dd = 20240101.5, d = 20240101100000.6, d = 20240101100000.4, d6 = 20240101100000.5, d6 > 20240101100000.4999995, ts > 0, ts = 20240101100000 FROM dt ORDER BY id
+1 | 1 | 0 | 0 | 1 | 1 | 0 | 1 | 1 | 0 | 1 | 1
+2 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | NULL | NULL | NULL | NULL
+3 | 1 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 1 | 1 | 0
+4 | 1 | 0 | 1 | 1 | 0 | 1 | 0 | 0 | 1 | 1 | 0
+
+-- SELECT id FROM dt WHERE d > 0 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dn WHERE d > 0 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d = 0 ORDER BY id
+2
+
+-- SELECT id FROM dt WHERE d <> 0 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d > 20240101 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d >= 20240101100000 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d = 20240101100000 ORDER BY id
+1
+
+-- SELECT id FROM dn WHERE d = 20240101100000 ORDER BY id
+1
+
+-- SELECT id FROM dt WHERE d < 1 ORDER BY id
+2
+
+-- SELECT id FROM dn WHERE d < 1 ORDER BY id
+2
+
+-- SELECT id FROM dt WHERE d > 20241301 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d < 20240100 ORDER BY id
+2
+
+-- SELECT id FROM dt WHERE d > 99999999999999 ORDER BY id
+
+-- SELECT id FROM dt WHERE d > 991231 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d > 240101 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE dd > 0 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE dd = 20240101 ORDER BY id
+1
+
+-- SELECT id FROM dt WHERE dd > 20240101 ORDER BY id
+3
+4
+
+-- SELECT id FROM dt WHERE dd = 20240101.5 ORDER BY id
+1
+
+-- SELECT id FROM dn WHERE dd = 20240101.5 ORDER BY id
+1
+
+-- SELECT id FROM dt WHERE d = 20240101100000.6 ORDER BY id
+4
+
+-- SELECT id FROM dn WHERE d = 20240101100000.6 ORDER BY id
+4
+
+-- SELECT id FROM dt WHERE d = 20240101100000.4 ORDER BY id
+1
+
+-- SELECT id FROM dt WHERE d6 > 0 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE ts > 0 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE ts > 20240101100000 ORDER BY id
+3
+4
+
+-- SELECT id FROM dt WHERE d > 0 + 0 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d > 20240101100000 + 0 ORDER BY id
+3
+4
+
+-- SELECT id FROM dt WHERE d > (SELECT 0) ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d > id - id ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE 0 < d ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d > 0 AND id > 0 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE IF(d > 0, 1, 0) = 1 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE DATE(d) > 0 ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d > 0 OR d IS NULL ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dt WHERE d BETWEEN 20240101 AND 20240102 ORDER BY id
+1
+4
+
+-- SELECT id FROM dt WHERE d IN (20240101100000, 0) ORDER BY id
+1
+2
+
+-- SELECT id FROM dt WHERE dd IN (20240101, 20240601) ORDER BY id
+1
+3
+
+-- SELECT id FROM dt WHERE d > CAST(0 AS DATETIME) ORDER BY id
+1
+3
+4
+
+-- SELECT CAST(0 AS DATETIME), CAST(20240101 AS DATETIME), CAST(20240101100000 AS DATETIME), CAST(1 AS DATETIME), CAST(20240101.5 AS DATE), DATE(20240101), CAST(0 AS DATE)
+0000-00-00 00:00:00 | 2024-01-01 00:00:00 | 2024-01-01 10:00:00 | NULL | 2024-01-01 | 2024-01-01 | 0000-00-00
+
+-- SELECT CAST(20240101 AS DATE), CAST(240101 AS DATE), CAST(991231 AS DATE), CAST(700101 AS DATE), CAST(691231 AS DATE), CAST(101 AS DATE), CAST(100 AS DATE), CAST(20241301 AS DATE), CAST(20240230 AS DATE), CAST(-1 AS DATE)
+2024-01-01 | 2024-01-01 | 1999-12-31 | 1970-01-01 | 2069-12-31 | 2000-01-01 | NULL | NULL | NULL | NULL
+
+-- SELECT CAST(20240101103000 AS DATETIME), CAST(240101103000 AS DATETIME), CAST(20240101103000.123456 AS DATETIME(6)), CAST(20240101103000.5 AS DATETIME), CAST(20240101.5e0 AS DATETIME(1)), CAST(1e20 AS DATETIME), CAST(10000101 AS DATE), CAST(9991231 AS DATE)
+2024-01-01 10:30:00 | 2024-01-01 10:30:00 | 2024-01-01 10:30:00.123456 | 2024-01-01 10:30:01 | 2024-01-01 00:00:00.0 | NULL | 1000-01-01 | 0999-12-31
+
+-- SELECT DATE(20240101), DATE(20240101103000), DATE(20240101.5), DATE_FORMAT(20240101.5, '%Y-%m-%d'), DATEDIFF(20240102.5, 20240101), DATE_FORMAT(20240101103000, '%H:%i'), YEAR(20240101), MONTH(240315), DAYOFWEEK(20240101), UNIX_TIMESTAMP(20240101)
+2024-01-01 | 2024-01-01 | 2024-01-01 | 2024-01-01 | 1 | 10:30 | 2024 | 3 | 2 | 1704067200
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT id FROM dt WHERE d = '0000-00-00 00:00:00x' ORDER BY id
+2
+
+-- SELECT id FROM dn WHERE d = '0000-00-00 00:00:00x' ORDER BY id
+2
+
+-- SELECT id FROM dt WHERE d = '0000-00-00x' ORDER BY id
+2
+
+-- SELECT id FROM dt WHERE dd = '0000-00-00x' ORDER BY id
+2
+
+-- SELECT id FROM dn WHERE dd = '0000-00-00x' ORDER BY id
+2
+
+-- SELECT id FROM dt WHERE d IN ('0000-00-00 00:00:00x', '2024-01-01 10:00:00') ORDER BY id
+1
+2
+
+-- SELECT id FROM dt WHERE d > '0000-00-00 00:00:00x' ORDER BY id
+1
+3
+4
+
+-- SELECT id FROM dn WHERE d > '0000-00-00 00:00:00x' ORDER BY id
+1
+3
+4
+
+-- SELECT DATE(0), CAST(0.0 AS DATE), CAST(0 AS DATETIME)
+0000-00-00 | 0000-00-00 | 0000-00-00 00:00:00
+
+-- SELECT CAST('0000-00-00 00:00:00x' AS DATETIME), CAST('0000-00-00x' AS DATE), DATE('0000-00-00 00:00:00x'), '0000-00-00 00:00:00x' = CAST('0000-00-00' AS DATETIME)
+0000-00-00 00:00:00 | 0000-00-00 | 0000-00-00 | 1
+
+-- SELECT '0000-00-00 00:00:00x' = d FROM dt WHERE id = 2
+1
+
+-- SELECT CAST('0000-00-00 00:00:00 ' AS DATETIME), CAST(' 0000-00-00' AS DATE), CAST('0000-00-00 00:00' AS DATETIME), CAST('0000-00-00 10:00:00' AS DATETIME), CAST('0000-00-001' AS DATE)
+0000-00-00 00:00:00 | 0000-00-00 | 0000-00-00 00:00:00 | NULL | NULL
+
+-- CREATE TABLE di (id INT PRIMARY KEY, d DATETIME, dd DATE)
+ok affected=0 insert_id=0
+-- INSERT INTO di VALUES (1, 20240101103000, 20240101), (2, 240101, 991231), (3, 20240101103000.5, 20240101.5), (4, 0, 0)
+ok affected=4 insert_id=0
+-- SELECT * FROM di ORDER BY id
+1 | 2024-01-01 10:30:00 | 2024-01-01
+2 | 2024-01-01 00:00:00 | 1999-12-31
+3 | 2024-01-01 10:30:01 | 2024-01-01
+4 | 0000-00-00 00:00:00 | 0000-00-00
+
+-- INSERT INTO di VALUES (5, 1, 100)
+ok affected=1 insert_id=0
+-- SELECT * FROM di ORDER BY id
+1 | 2024-01-01 10:30:00 | 2024-01-01
+2 | 2024-01-01 00:00:00 | 1999-12-31
+3 | 2024-01-01 10:30:01 | 2024-01-01
+4 | 0000-00-00 00:00:00 | 0000-00-00
+5 | 0000-00-00 00:00:00 | 0000-00-00
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- INSERT INTO di VALUES (6, 20240102, 20240103)
+ok affected=1 insert_id=0
+-- INSERT INTO di VALUES (7, 1, NULL)
+error 1292
+-- SELECT * FROM di ORDER BY id
+1 | 2024-01-01 10:30:00 | 2024-01-01
+2 | 2024-01-01 00:00:00 | 1999-12-31
+3 | 2024-01-01 10:30:01 | 2024-01-01
+4 | 0000-00-00 00:00:00 | 0000-00-00
+5 | 0000-00-00 00:00:00 | 0000-00-00
+6 | 2024-01-02 00:00:00 | 2024-01-03
+
+-- DROP TABLE di
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE dn
+ok affected=0 insert_id=0
+-- DROP TABLE dt
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE v3 (id INT PRIMARY KEY, d DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', dd DATE, d3 DATETIME(3), t TIME, e ENUM('a','b','c') NOT NULL DEFAULT 'a', s VARCHAR(10))
+ok affected=0 insert_id=0
+-- INSERT INTO v3 VALUES (1, '2024-01-01 10:00:00', '2024-01-01', '2024-01-01 10:00:00.250', '13:04:05', 'b', 'x'), (2, '0000-00-00 00:00:00', '0000-00-00', '0000-00-00 00:00:00', '-01:00:00', 'c', NULL)
+ok affected=2 insert_id=0
+-- CREATE TABLE wp_posts (ID BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, post_date DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', post_date_gmt DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', post_status VARCHAR(20) NOT NULL DEFAULT 'publish')
+ok affected=0 insert_id=0
+-- INSERT INTO wp_posts (post_date, post_date_gmt, post_status) VALUES ('2024-01-01 10:00:00', '2024-01-01 01:00:00', 'publish'), ('2024-02-01 10:00:00', '0000-00-00 00:00:00', 'draft')
+ok affected=2 insert_id=1
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT CONCAT(d), CAST(d AS CHAR), CONCAT(dd), CAST(dd AS CHAR), CONCAT(d, ''), CONCAT(d3), CAST(d3 AS CHAR) FROM v3 ORDER BY id
+2024-01-01 10:00:00 | 2024-01-01 10:00:00 | 2024-01-01 | 2024-01-01 | 2024-01-01 10:00:00 | 2024-01-01 10:00:00.250 | 2024-01-01 10:00:00.250
+0000-00-00 00:00:00 | 0000-00-00 00:00:00 | 0000-00-00 | 0000-00-00 | 0000-00-00 00:00:00 | 0000-00-00 00:00:00.000 | 0000-00-00 00:00:00.000
+
+-- SELECT CONCAT('x', d), LENGTH(d), LENGTH(dd), UPPER(dd), LEFT(d, 10), LEFT(dd, 4), REPLACE(dd, '-', ''), CHAR_LENGTH(d3) FROM v3 ORDER BY id
+x2024-01-01 10:00:00 | 19 | 10 | 2024-01-01 | 2024-01-01 | 2024 | 20240101 | 23
+x0000-00-00 00:00:00 | 19 | 10 | 0000-00-00 | 0000-00-00 | 0000 | 00000000 | 23
+
+-- SELECT CONCAT(DATE(d)), CONCAT(TIME(d)), CONCAT(t), DATE_FORMAT(d, '%Y-%m-%d %H:%i:%s') FROM v3 ORDER BY id
+2024-01-01 | 10:00:00 | 13:04:05 | 2024-01-01 10:00:00
+0000-00-00 | 00:00:00 | -01:00:00 | 0000-00-00 00:00:00
+
+-- SELECT d LIKE '2024%', dd LIKE '2024-01-01', d LIKE '0000%', dd LIKE '%-00' FROM v3 ORDER BY id
+1 | 1 | 0 | 0
+0 | 0 | 1 | 1
+
+-- SELECT GROUP_CONCAT(dd ORDER BY id), GROUP_CONCAT(d ORDER BY id), GROUP_CONCAT(e ORDER BY id), GROUP_CONCAT(d3 ORDER BY id) FROM v3
+2024-01-01,0000-00-00 | 2024-01-01 10:00:00,0000-00-00 00:00:00 | b,c | 2024-01-01 10:00:00.250,0000-00-00 00:00:00.000
+
+-- SELECT COALESCE(dd, 'x'), IFNULL(dd, 'x'), CASE WHEN id = 1 THEN dd ELSE 'x' END, CASE WHEN id = 2 THEN d ELSE 'x' END FROM v3 ORDER BY id
+2024-01-01 | 2024-01-01 | 2024-01-01 | x
+0000-00-00 | 0000-00-00 | x | 0000-00-00 00:00:00
+
+-- SELECT dd FROM v3 UNION ALL SELECT 'x'
+2024-01-01
+0000-00-00
+x
+
+-- SELECT d FROM v3 UNION ALL SELECT 'x'
+2024-01-01 10:00:00
+0000-00-00 00:00:00
+x
+
+-- SELECT dd FROM v3 UNION SELECT d FROM v3
+2024-01-01 00:00:00
+0000-00-00 00:00:00
+2024-01-01 10:00:00
+
+-- SELECT CONCAT(t), CONCAT('x', t), CAST(t AS CHAR), LENGTH(t), CONCAT(TIME('13:04:05')), TIME('13:04:05'), TIME('-01:00:00'), TIME('2024-01-01 13:04:05') FROM v3 ORDER BY id
+13:04:05 | x13:04:05 | 13:04:05 | 8 | 13:04:05 | 13:04:05 | -01:00:00 | 13:04:05
+-01:00:00 | x-01:00:00 | -01:00:00 | 9 | 13:04:05 | 13:04:05 | -01:00:00 | 13:04:05
+
+-- SELECT CONCAT_WS(',', d, dd), REPLACE(d, ' ', 'T'), SUBSTRING(dd, 1, 7), RIGHT(d, 8), INSTR(dd, '-01'), LOCATE('00:00', d), HEX(dd), REVERSE(dd), LPAD(dd, 12, '*') FROM v3 ORDER BY id
+2024-01-01 10:00:00,2024-01-01 | 2024-01-01T10:00:00 | 2024-01 | 10:00:00 | 5 | 15 | 323032342D30312D3031 | 10-10-4202 | **2024-01-01
+0000-00-00 00:00:00,0000-00-00 | 0000-00-00T00:00:00 | 0000-00 | 00:00:00 | 0 | 12 | 303030302D30302D3030 | 00-00-0000 | **0000-00-00
+
+-- SELECT IFNULL(NULL, dd), NULLIF(dd, '2024-01-01'), CONCAT(IFNULL(dd, '')) FROM v3 ORDER BY id
+2024-01-01 | NULL | 2024-01-01
+0000-00-00 | 0000-00-00 | 0000-00-00
+
+-- SELECT ID, CONCAT(post_date_gmt), LEFT(post_date_gmt, 4), post_date_gmt LIKE '0000%' FROM wp_posts ORDER BY ID
+1 | 2024-01-01 01:00:00 | 2024 | 0
+2 | 0000-00-00 00:00:00 | 0000 | 1
+
+-- SELECT ID FROM wp_posts WHERE post_date_gmt LIKE '0000-00-00%' ORDER BY ID
+2
+
+-- SELECT ID, CONCAT(post_status, ':', post_date_gmt) FROM wp_posts ORDER BY ID
+1 | publish:2024-01-01 01:00:00
+2 | draft:0000-00-00 00:00:00
+
+-- SELECT YEAR(post_date), GROUP_CONCAT(post_date_gmt ORDER BY ID) FROM wp_posts GROUP BY YEAR(post_date)
+2024 | 2024-01-01 01:00:00,0000-00-00 00:00:00
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT CONCAT(d), CAST(d AS CHAR), CONCAT(dd), CAST(dd AS CHAR), CONCAT(d, ''), CONCAT(d3), CAST(d3 AS CHAR) FROM v3 ORDER BY id
+2024-01-01 10:00:00 | 2024-01-01 10:00:00 | 2024-01-01 | 2024-01-01 | 2024-01-01 10:00:00 | 2024-01-01 10:00:00.250 | 2024-01-01 10:00:00.250
+0000-00-00 00:00:00 | 0000-00-00 00:00:00 | 0000-00-00 | 0000-00-00 | 0000-00-00 00:00:00 | 0000-00-00 00:00:00.000 | 0000-00-00 00:00:00.000
+
+-- SELECT CONCAT('x', d), LENGTH(d), LENGTH(dd), UPPER(dd), LEFT(d, 10), LEFT(dd, 4), REPLACE(dd, '-', ''), CHAR_LENGTH(d3) FROM v3 ORDER BY id
+x2024-01-01 10:00:00 | 19 | 10 | 2024-01-01 | 2024-01-01 | 2024 | 20240101 | 23
+x0000-00-00 00:00:00 | 19 | 10 | 0000-00-00 | 0000-00-00 | 0000 | 00000000 | 23
+
+-- SELECT CONCAT(DATE(d)), CONCAT(TIME(d)), CONCAT(t), DATE_FORMAT(d, '%Y-%m-%d %H:%i:%s') FROM v3 ORDER BY id
+2024-01-01 | 10:00:00 | 13:04:05 | 2024-01-01 10:00:00
+0000-00-00 | 00:00:00 | -01:00:00 | 0000-00-00 00:00:00
+
+-- SELECT d LIKE '2024%', dd LIKE '2024-01-01', d LIKE '0000%', dd LIKE '%-00' FROM v3 ORDER BY id
+1 | 1 | 0 | 0
+0 | 0 | 1 | 1
+
+-- SELECT GROUP_CONCAT(dd ORDER BY id), GROUP_CONCAT(d ORDER BY id), GROUP_CONCAT(e ORDER BY id), GROUP_CONCAT(d3 ORDER BY id) FROM v3
+2024-01-01,0000-00-00 | 2024-01-01 10:00:00,0000-00-00 00:00:00 | b,c | 2024-01-01 10:00:00.250,0000-00-00 00:00:00.000
+
+-- SELECT COALESCE(dd, 'x'), IFNULL(dd, 'x'), CASE WHEN id = 1 THEN dd ELSE 'x' END, CASE WHEN id = 2 THEN d ELSE 'x' END FROM v3 ORDER BY id
+2024-01-01 | 2024-01-01 | 2024-01-01 | x
+0000-00-00 | 0000-00-00 | x | 0000-00-00 00:00:00
+
+-- SELECT dd FROM v3 UNION ALL SELECT 'x'
+2024-01-01
+0000-00-00
+x
+
+-- SELECT d FROM v3 UNION ALL SELECT 'x'
+2024-01-01 10:00:00
+0000-00-00 00:00:00
+x
+
+-- SELECT dd FROM v3 UNION SELECT d FROM v3
+2024-01-01 00:00:00
+0000-00-00 00:00:00
+2024-01-01 10:00:00
+
+-- SELECT CONCAT(t), CONCAT('x', t), CAST(t AS CHAR), LENGTH(t), CONCAT(TIME('13:04:05')), TIME('13:04:05'), TIME('-01:00:00'), TIME('2024-01-01 13:04:05') FROM v3 ORDER BY id
+13:04:05 | x13:04:05 | 13:04:05 | 8 | 13:04:05 | 13:04:05 | -01:00:00 | 13:04:05
+-01:00:00 | x-01:00:00 | -01:00:00 | 9 | 13:04:05 | 13:04:05 | -01:00:00 | 13:04:05
+
+-- SELECT CONCAT_WS(',', d, dd), REPLACE(d, ' ', 'T'), SUBSTRING(dd, 1, 7), RIGHT(d, 8), INSTR(dd, '-01'), LOCATE('00:00', d), HEX(dd), REVERSE(dd), LPAD(dd, 12, '*') FROM v3 ORDER BY id
+2024-01-01 10:00:00,2024-01-01 | 2024-01-01T10:00:00 | 2024-01 | 10:00:00 | 5 | 15 | 323032342D30312D3031 | 10-10-4202 | **2024-01-01
+0000-00-00 00:00:00,0000-00-00 | 0000-00-00T00:00:00 | 0000-00 | 00:00:00 | 0 | 12 | 303030302D30302D3030 | 00-00-0000 | **0000-00-00
+
+-- SELECT IFNULL(NULL, dd), NULLIF(dd, '2024-01-01'), CONCAT(IFNULL(dd, '')) FROM v3 ORDER BY id
+2024-01-01 | NULL | 2024-01-01
+0000-00-00 | 0000-00-00 | 0000-00-00
+
+-- SELECT ID, CONCAT(post_date_gmt), LEFT(post_date_gmt, 4), post_date_gmt LIKE '0000%' FROM wp_posts ORDER BY ID
+1 | 2024-01-01 01:00:00 | 2024 | 0
+2 | 0000-00-00 00:00:00 | 0000 | 1
+
+-- SELECT ID FROM wp_posts WHERE post_date_gmt LIKE '0000-00-00%' ORDER BY ID
+2
+
+-- SELECT ID, CONCAT(post_status, ':', post_date_gmt) FROM wp_posts ORDER BY ID
+1 | publish:2024-01-01 01:00:00
+2 | draft:0000-00-00 00:00:00
+
+-- SELECT YEAR(post_date), GROUP_CONCAT(post_date_gmt ORDER BY ID) FROM wp_posts GROUP BY YEAR(post_date)
+2024 | 2024-01-01 01:00:00,0000-00-00 00:00:00
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE wp_posts
+ok affected=0 insert_id=0
+-- DROP TABLE v3
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE v6 (id INT PRIMARY KEY, d DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', dd DATE, d3 DATETIME(3), t TIME)
+ok affected=0 insert_id=0
+-- INSERT INTO v6 VALUES (1, '2024-01-01 10:00:00', '2024-01-01', '2024-01-01 10:00:00.250', '13:04:05'), (2, '0000-00-00 00:00:00', '0000-00-00', '0000-00-00 00:00:00', '-01:00:00')
+ok affected=2 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT ABS(DATE(d)), ABS(dd), ABS(t), ABS(d), -dd, -t FROM v6 WHERE id = 1
+2.0240101e+07 | 2.0240101e+07 | 130405 | 2.02401011e+13 | -2.0240101e+07 | -130405
+
+-- SELECT CAST(d AS SIGNED), CAST(dd AS SIGNED), CAST(t AS SIGNED), CAST(d AS UNSIGNED), CAST(DATE(d) AS SIGNED), CAST(t AS DECIMAL(10,2)), CAST(d AS DECIMAL(20,2)), CAST(d3 AS DECIMAL(20,3)), CAST(dd AS DOUBLE) FROM v6 ORDER BY id
+20240101100000 | 20240101 | 130405 | 20240101100000 | 20240101 | 130405.00 | 20240101100000.00 | 20240101100000.250 | 2.0240101e+07
+0 | 0 | -10000 | 0 | 0 | -10000.00 | 0.00 | 0.000 | 0
+
+-- SELECT d + 0, dd + 0, t + 0, t + 1, dd * 1, d / 1, t - 1, FLOOR(t), ROUND(t), t DIV 1, t MOD 7, d3 + 0 FROM v6 ORDER BY id
+20240101100000 | 20240101 | 130405 | 130406 | 20240101 | 20240101100000.0000 | 130404 | 130405 | 130405 | 130405 | 2 | 20240101100000.250
+0 | 0 | -10000 | -9999 | 0 | 0.0000 | -10001 | -10000 | -10000 | -10000 | -4 | 0.000
+
+-- SELECT CAST('13:04:05' AS SIGNED), CAST(TIME('13:04:05') AS SIGNED), ABS(TIME('13:04:05')), TIME('13:04:05') + 0, CAST(DATE('2024-01-01') AS SIGNED), ABS(DATE('2024-01-01'))
+13 | 130405 | 130405 | 130405 | 20240101 | 2.0240101e+07
+
+-- SELECT -t, CAST(dd AS DECIMAL(10,2)), CAST(t AS DOUBLE), dd + 0.5, t * 2, d - 1, YEAR(d) + 0, CAST(NOW() AS SIGNED) > 20240101000000, d - INTERVAL 1 HOUR FROM v6 ORDER BY id
+-130405 | 20240101.00 | 130405 | 20240101.5 | 260810 | 20240101099999 | 2024 | 1 | 2024-01-01 09:00:00
+10000 | 0.00 | -10000 | 0.5 | -20000 | -1 | 0 | 1 | NULL
+
+-- SELECT id FROM v6 WHERE d + 0 > 20240101000000 ORDER BY id
+1
+
+-- SELECT id FROM v6 WHERE CAST(dd AS SIGNED) = 20240101 ORDER BY id
+1
+
+-- SELECT SUM(d + 0), SUM(dd + 0), MAX(d + 0) FROM v6
+20240101100000 | 20240101 | 20240101100000
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT ABS(DATE(d)), ABS(dd), ABS(t), ABS(d), -dd, -t FROM v6 WHERE id = 1
+2.0240101e+07 | 2.0240101e+07 | 130405 | 2.02401011e+13 | -2.0240101e+07 | -130405
+
+-- SELECT CAST(d AS SIGNED), CAST(dd AS SIGNED), CAST(t AS SIGNED), CAST(d AS UNSIGNED), CAST(DATE(d) AS SIGNED), CAST(t AS DECIMAL(10,2)), CAST(d AS DECIMAL(20,2)), CAST(d3 AS DECIMAL(20,3)), CAST(dd AS DOUBLE) FROM v6 ORDER BY id
+20240101100000 | 20240101 | 130405 | 20240101100000 | 20240101 | 130405.00 | 20240101100000.00 | 20240101100000.250 | 2.0240101e+07
+0 | 0 | -10000 | 0 | 0 | -10000.00 | 0.00 | 0.000 | 0
+
+-- SELECT d + 0, dd + 0, t + 0, t + 1, dd * 1, d / 1, t - 1, FLOOR(t), ROUND(t), t DIV 1, t MOD 7, d3 + 0 FROM v6 ORDER BY id
+20240101100000 | 20240101 | 130405 | 130406 | 20240101 | 20240101100000.0000 | 130404 | 130405 | 130405 | 130405 | 2 | 20240101100000.250
+0 | 0 | -10000 | -9999 | 0 | 0.0000 | -10001 | -10000 | -10000 | -10000 | -4 | 0.000
+
+-- SELECT CAST('13:04:05' AS SIGNED), CAST(TIME('13:04:05') AS SIGNED), ABS(TIME('13:04:05')), TIME('13:04:05') + 0, CAST(DATE('2024-01-01') AS SIGNED), ABS(DATE('2024-01-01'))
+13 | 130405 | 130405 | 130405 | 20240101 | 2.0240101e+07
+
+-- SELECT -t, CAST(dd AS DECIMAL(10,2)), CAST(t AS DOUBLE), dd + 0.5, t * 2, d - 1, YEAR(d) + 0, CAST(NOW() AS SIGNED) > 20240101000000, d - INTERVAL 1 HOUR FROM v6 ORDER BY id
+-130405 | 20240101.00 | 130405 | 20240101.5 | 260810 | 20240101099999 | 2024 | 1 | 2024-01-01 09:00:00
+10000 | 0.00 | -10000 | 0.5 | -20000 | -1 | 0 | 1 | NULL
+
+-- SELECT id FROM v6 WHERE d + 0 > 20240101000000 ORDER BY id
+1
+
+-- SELECT id FROM v6 WHERE CAST(dd AS SIGNED) = 20240101 ORDER BY id
+1
+
+-- SELECT SUM(d + 0), SUM(dd + 0), MAX(d + 0) FROM v6
+20240101100000 | 20240101 | 20240101100000
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE v6
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE v7 (id INT PRIMARY KEY, d DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', dd DATE, t TIME, e ENUM('a','b','c') NOT NULL DEFAULT 'a', s VARCHAR(10), dec1 DECIMAL(10,2))
+ok affected=0 insert_id=0
+-- INSERT INTO v7 VALUES (1, '2024-01-01 10:00:00', '2024-01-01', '13:04:05', 'b', 'x', 10.50), (2, '0000-00-00 00:00:00', '0000-00-00', '-01:00:00', 'c', NULL, 0.30)
+ok affected=2 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT IF(id = 1, d, 0), IF(id = 1, 0, d), IF(id = 1, dd, 1), IF(id = 1, e, 1), IF(id = 1, 1, e), IF(id = 1, e, 'z'), IF(id = 1, d, 'z'), IF(id = 1, t, 0) FROM v7 ORDER BY id
+2024-01-01 10:00:00 | 0 | 2024-01-01 | b | 1 | b | 2024-01-01 10:00:00 | 13:04:05
+0 | 0000-00-00 00:00:00 | 1 | 1 | c | z | z | 0
+
+-- SELECT IF(1, '2024-01-01 10:00:00', 0), IF(0, '2024-01-01 10:00:00', 0), IF(0, NOW(), 0), IF(1, CURDATE(), 0) = CURDATE(), IF(0, CURDATE(), 0)
+2024-01-01 10:00:00 | 0 | 0 | 1 | 0
+
+-- SELECT IF(id = 2, d, 0), IF(id = 2, dd, 0), IF(id = 1, d, NULL), IF(id = 1, d, dd) FROM v7 ORDER BY id
+0 | 0 | 2024-01-01 10:00:00 | 2024-01-01 10:00:00
+0000-00-00 00:00:00 | 0000-00-00 | NULL | 0000-00-00 00:00:00
+
+-- SELECT CASE WHEN id = 1 THEN d ELSE 0 END, CASE WHEN id = 1 THEN e ELSE 1 END, CASE WHEN id = 1 THEN dd ELSE 'x' END, COALESCE(e, 1), COALESCE(d, 0), COALESCE(NULL, e, 1) FROM v7 ORDER BY id
+2024-01-01 10:00:00 | b | 2024-01-01 | b | 2024-01-01 10:00:00 | b
+0 | 1 | x | c | 0000-00-00 00:00:00 | c
+
+-- SELECT IFNULL(s, d), IFNULL(s, e), IFNULL(s, 1), IF(s IS NULL, e, s), NULLIF(e, 'b'), GREATEST(e, 1), LEAST(e, 'b'), GREATEST(e, 'b') FROM v7 ORDER BY id
+x | x | x | x | NULL | b | b | b
+0000-00-00 00:00:00 | c | 1 | c | c | c | b | c
+
+-- SELECT SUM(CASE WHEN id > 1 THEN dd ELSE 0 END), SUM(CASE WHEN id > 0 THEN 1.5 ELSE 0 END), CASE WHEN id = 1 THEN 1.50 ELSE 10 END, SUM(CASE WHEN id > 1 THEN dec1 ELSE 0 END), CASE WHEN id = 2 THEN dec1 ELSE 100 END FROM v7 GROUP BY id ORDER BY id
+0 | 1.5 | 1.50 | 0.00 | 100
+0 | 1.5 | 10 | 0.30 | 0.30
+
+-- SELECT SUM(CASE WHEN id > 0 THEN dec1 ELSE 0 END), SUM(IF(id > 0, dec1, 0)), SUM(COALESCE(dec1, 0)) FROM v7
+10.80 | 10.80 | 10.80
+
+-- SELECT id FROM v7 WHERE IF(id = 1, e, 1) = 'b' ORDER BY id
+1
+
+-- SELECT id FROM v7 WHERE COALESCE(e, 1) = 'c' ORDER BY id
+2
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT IF(id = 1, d, 0), IF(id = 1, 0, d), IF(id = 1, dd, 1), IF(id = 1, e, 1), IF(id = 1, 1, e), IF(id = 1, e, 'z'), IF(id = 1, d, 'z'), IF(id = 1, t, 0) FROM v7 ORDER BY id
+2024-01-01 10:00:00 | 0 | 2024-01-01 | b | 1 | b | 2024-01-01 10:00:00 | 13:04:05
+0 | 0000-00-00 00:00:00 | 1 | 1 | c | z | z | 0
+
+-- SELECT IF(1, '2024-01-01 10:00:00', 0), IF(0, '2024-01-01 10:00:00', 0), IF(0, NOW(), 0), IF(1, CURDATE(), 0) = CURDATE(), IF(0, CURDATE(), 0)
+2024-01-01 10:00:00 | 0 | 0 | 1 | 0
+
+-- SELECT IF(id = 2, d, 0), IF(id = 2, dd, 0), IF(id = 1, d, NULL), IF(id = 1, d, dd) FROM v7 ORDER BY id
+0 | 0 | 2024-01-01 10:00:00 | 2024-01-01 10:00:00
+0000-00-00 00:00:00 | 0000-00-00 | NULL | 0000-00-00 00:00:00
+
+-- SELECT CASE WHEN id = 1 THEN d ELSE 0 END, CASE WHEN id = 1 THEN e ELSE 1 END, CASE WHEN id = 1 THEN dd ELSE 'x' END, COALESCE(e, 1), COALESCE(d, 0), COALESCE(NULL, e, 1) FROM v7 ORDER BY id
+2024-01-01 10:00:00 | b | 2024-01-01 | b | 2024-01-01 10:00:00 | b
+0 | 1 | x | c | 0000-00-00 00:00:00 | c
+
+-- SELECT IFNULL(s, d), IFNULL(s, e), IFNULL(s, 1), IF(s IS NULL, e, s), NULLIF(e, 'b'), GREATEST(e, 1), LEAST(e, 'b'), GREATEST(e, 'b') FROM v7 ORDER BY id
+x | x | x | x | NULL | b | b | b
+0000-00-00 00:00:00 | c | 1 | c | c | c | b | c
+
+-- SELECT SUM(CASE WHEN id > 1 THEN dd ELSE 0 END), SUM(CASE WHEN id > 0 THEN 1.5 ELSE 0 END), CASE WHEN id = 1 THEN 1.50 ELSE 10 END, SUM(CASE WHEN id > 1 THEN dec1 ELSE 0 END), CASE WHEN id = 2 THEN dec1 ELSE 100 END FROM v7 GROUP BY id ORDER BY id
+0 | 1.5 | 1.50 | 0.00 | 100
+0 | 1.5 | 10 | 0.30 | 0.30
+
+-- SELECT SUM(CASE WHEN id > 0 THEN dec1 ELSE 0 END), SUM(IF(id > 0, dec1, 0)), SUM(COALESCE(dec1, 0)) FROM v7
+10.80 | 10.80 | 10.80
+
+-- SELECT id FROM v7 WHERE IF(id = 1, e, 1) = 'b' ORDER BY id
+1
+
+-- SELECT id FROM v7 WHERE COALESCE(e, 1) = 'c' ORDER BY id
+2
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE v7
+ok affected=0 insert_id=0
+-- CREATE TABLE v8 (id INT PRIMARY KEY, d DATETIME, t TIME, s VARCHAR(30))
+ok affected=0 insert_id=0
+-- INSERT INTO v8 VALUES (1, '2024-01-01 13:04:05', '13:04:05', '2024-02-30'), (2, NULL, '-01:00:00', '30/04/2024')
+ok affected=2 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT STR_TO_DATE('2024-01-01 10', '%Y-%m-%d %H'), STR_TO_DATE('10:04', '%H:%i'), STR_TO_DATE('2024-01-01x', '%Y-%m-%d'), STR_TO_DATE('2024-13-01', '%Y-%m-%d'), STR_TO_DATE('2024-02-30', '%Y-%m-%d'), STR_TO_DATE(NULL, '%Y'), STR_TO_DATE('2024', NULL)
+2024-01-01 10:00:00 | 10:04:00 | 2024-01-01 | NULL | NULL | NULL | NULL
+
+-- SELECT STR_TO_DATE('2024-02-30', '%Y-%m-%d'), STR_TO_DATE('2024-04-31', '%Y-%m-%d'), STR_TO_DATE('2023-02-29', '%Y-%m-%d'), STR_TO_DATE('2024-02-29', '%Y-%m-%d'), STR_TO_DATE('2024-02-30 10:00:00', '%Y-%m-%d %H:%i:%s'), STR_TO_DATE('2024-00-10', '%Y-%m-%d'), STR_TO_DATE('2024-02-00', '%Y-%m-%d')
+NULL | NULL | NULL | 2024-02-29 | NULL | NULL | NULL
+
+-- SELECT STR_TO_DATE('31/02/2024', '%d/%m/%Y'), STR_TO_DATE('30 Feb 2024', '%d %b %Y'), STR_TO_DATE('31 Dec 2024', '%d %b %Y'), DATE('2024-02-30'), CAST('2024-02-30' AS DATE)
+NULL | NULL | 2024-12-31 | NULL | NULL
+
+-- SELECT id, STR_TO_DATE(s, '%Y-%m-%d'), STR_TO_DATE(s, '%d/%m/%Y') FROM v8 ORDER BY id
+1 | NULL | NULL
+2 | NULL | 2024-04-30
+
+-- SELECT MICROSECOND('13:04:05.5'), MICROSECOND('13:04:05.123456'), MICROSECOND('2024-01-01 13:04:05.5'), MICROSECOND('13:04:05'), MICROSECOND(t), MICROSECOND(d), MICROSECOND('13:04:05.1234567'), MICROSECOND('x') FROM v8 ORDER BY id
+500000 | 123456 | 500000 | 0 | 0 | 0 | 123457 | NULL
+500000 | 123456 | 500000 | 0 | 0 | NULL | 123457 | NULL
+
+-- SELECT SECOND('13:04:05.5'), MINUTE('13:04:05.5'), HOUR('13:04:05.5'), TIME_FORMAT('13:04:05.5', '%f'), TIME_TO_SEC('13:04:05.5'), TIME_TO_SEC('-01:00:00'), TIME_TO_SEC(t) FROM v8 ORDER BY id
+5 | 4 | 13 | 500000 | 47045 | -3600 | 47045
+5 | 4 | 13 | 500000 | 47045 | -3600 | -3600
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT STR_TO_DATE('2024-01-01 10', '%Y-%m-%d %H'), STR_TO_DATE('10:04', '%H:%i'), STR_TO_DATE('2024-01-01x', '%Y-%m-%d'), STR_TO_DATE('2024-13-01', '%Y-%m-%d'), STR_TO_DATE('2024-02-30', '%Y-%m-%d'), STR_TO_DATE(NULL, '%Y'), STR_TO_DATE('2024', NULL)
+2024-01-01 10:00:00 | 10:04:00 | 2024-01-01 | NULL | NULL | NULL | NULL
+
+-- SELECT STR_TO_DATE('2024-02-30', '%Y-%m-%d'), STR_TO_DATE('2024-04-31', '%Y-%m-%d'), STR_TO_DATE('2023-02-29', '%Y-%m-%d'), STR_TO_DATE('2024-02-29', '%Y-%m-%d'), STR_TO_DATE('2024-02-30 10:00:00', '%Y-%m-%d %H:%i:%s'), STR_TO_DATE('2024-00-10', '%Y-%m-%d'), STR_TO_DATE('2024-02-00', '%Y-%m-%d')
+NULL | NULL | NULL | 2024-02-29 | NULL | NULL | NULL
+
+-- SELECT STR_TO_DATE('31/02/2024', '%d/%m/%Y'), STR_TO_DATE('30 Feb 2024', '%d %b %Y'), STR_TO_DATE('31 Dec 2024', '%d %b %Y'), DATE('2024-02-30'), CAST('2024-02-30' AS DATE)
+NULL | NULL | 2024-12-31 | NULL | NULL
+
+-- SELECT id, STR_TO_DATE(s, '%Y-%m-%d'), STR_TO_DATE(s, '%d/%m/%Y') FROM v8 ORDER BY id
+1 | NULL | NULL
+2 | NULL | 2024-04-30
+
+-- SELECT MICROSECOND('13:04:05.5'), MICROSECOND('13:04:05.123456'), MICROSECOND('2024-01-01 13:04:05.5'), MICROSECOND('13:04:05'), MICROSECOND(t), MICROSECOND(d), MICROSECOND('13:04:05.1234567'), MICROSECOND('x') FROM v8 ORDER BY id
+500000 | 123456 | 500000 | 0 | 0 | 0 | 123457 | NULL
+500000 | 123456 | 500000 | 0 | 0 | NULL | 123457 | NULL
+
+-- SELECT SECOND('13:04:05.5'), MINUTE('13:04:05.5'), HOUR('13:04:05.5'), TIME_FORMAT('13:04:05.5', '%f'), TIME_TO_SEC('13:04:05.5'), TIME_TO_SEC('-01:00:00'), TIME_TO_SEC(t) FROM v8 ORDER BY id
+5 | 4 | 13 | 500000 | 47045 | -3600 | 47045
+5 | 4 | 13 | 500000 | 47045 | -3600 | -3600
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT STR_TO_DATE('x', 'x'), STR_TO_DATE('x', '%Y'), STR_TO_DATE('2024', 'x'), STR_TO_DATE('', ''), STR_TO_DATE('abc', 'abc'), STR_TO_DATE('2024-01-01', '%Y-%m-%d'), STR_TO_DATE('01/02/2024', '%m/%d/%Y')
+0000-00-00 | NULL | NULL | 0000-00-00 | 0000-00-00 | 2024-01-01 | 2024-01-02
+
+-- SELECT STR_TO_DATE('x', 'x') IS NULL, DATE(STR_TO_DATE('x', 'x')), CONCAT(STR_TO_DATE('x', 'x'))
+0 | 0000-00-00 | 0000-00-00
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE v8
+ok affected=0 insert_id=0
+-- CREATE TABLE n9 (id INT PRIMARY KEY, i INT, u INT UNSIGNED, ti TINYINT, bu BIGINT UNSIGNED, dec1 DECIMAL(10,2), dec2 DECIMAL(26,4), f DOUBLE, s VARCHAR(20), KEY dec1 (dec1))
+ok affected=0 insert_id=0
+-- INSERT INTO n9 VALUES (1, 1, 1, 1, 1, 10.50, 10.5000, 2.55, '2.55'), (2, 2, 2, 2, 2, 0.30, 1234567890.1000, 1.005, '1.005'), (3, 3, 3, 3, 3, 1.00, 2.0000, 2.45, 'x')
+ok affected=3 insert_id=0
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE wp_wc_product_meta_lookup (product_id BIGINT NOT NULL PRIMARY KEY, min_price DECIMAL(19,4) NULL DEFAULT NULL, max_price DECIMAL(19,4) NULL DEFAULT NULL, KEY min_max_price (min_price, max_price))
+ok affected=0 insert_id=0
+-- INSERT INTO wp_wc_product_meta_lookup VALUES (1, 10.0000, 12.5000), (2, 9.9950, 9.9950), (3, 0.0000, 100.1000)
+ok affected=3 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT CONCAT(dec1), CONCAT(dec2), CONCAT(dec1, '-', dec2), CAST(dec2 AS CHAR), dec2, LENGTH(dec2), FORMAT(dec2, 2), CONCAT(MAX(dec1)) FROM n9 GROUP BY id ORDER BY id
+10.50 | 10.5000 | 10.50-10.5000 | 10.5000 | 10.5000 | 7 | 10.50 | 10.50
+0.30 | 1234567890.1000 | 0.30-1234567890.1000 | 1234567890.1000 | 1234567890.1000 | 15 | 1,234,567,890.10 | 0.30
+1.00 | 2.0000 | 1.00-2.0000 | 2.0000 | 2.0000 | 6 | 2.00 | 1.00
+
+-- SELECT dec1 FROM n9 WHERE id = 1 UNION ALL SELECT 'x'
+10.50
+x
+
+-- SELECT dec1 FROM n9 WHERE id = 1 UNION ALL SELECT dec2 FROM n9 WHERE id = 3
+10.5000
+2.0000
+
+-- SELECT dec1 * 2, dec1 + 1, dec1 / 2, -dec1, dec1 FROM n9 ORDER BY id
+21.00 | 11.50 | 5.250000 | -10.50 | 10.50
+0.60 | 1.30 | 0.150000 | -0.30 | 0.30
+2.00 | 2.00 | 0.500000 | -1.00 | 1.00
+
+-- SELECT id, dec1 FROM n9 WHERE dec1 >= 1 ORDER BY dec1
+3 | 1.00
+1 | 10.50
+
+-- SELECT product_id, CONCAT(min_price, '-', max_price), CONCAT('$', max_price) FROM wp_wc_product_meta_lookup ORDER BY product_id
+1 | 10.0000-12.5000 | $12.5000
+2 | 9.9950-9.9950 | $9.9950
+3 | 0.0000-100.1000 | $100.1000
+
+-- SELECT IF('nan', 1, 0), IF('inf', 1, 0), IF('-inf', 1, 0), IF('infinity', 1, 0), IF('NaN', 1, 0), 'nan' IS TRUE, 'inf' IS TRUE, NOT 'nan', 'nan' = 0, 'inf' + 0, 'nan' + 0, 'inf' AND 1, CASE WHEN 'nan' THEN 1 ELSE 0 END
+0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0
+
+-- SELECT IF('1x', 1, 0), IF('x', 1, 0), IF('0.0', 1, 0), IF(' 1', 1, 0), IF('-0', 1, 0), IF('.', 1, 0), IF('e', 1, 0), IF('n', 1, 0), IF('i', 1, 0), '0x10' + 0, '1e3' + 0
+1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1000
+
+-- SELECT id FROM n9 WHERE 'nan' ORDER BY id
+
+-- SELECT id FROM n9 WHERE 'inf' ORDER BY id
+
+-- SELECT 1e308 * 10
+error 1690
+-- SELECT 1e308 + 1e308
+error 1690
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT CONCAT(dec1), CONCAT(dec2), CONCAT(dec1, '-', dec2), CAST(dec2 AS CHAR), dec2, LENGTH(dec2), FORMAT(dec2, 2), CONCAT(MAX(dec1)) FROM n9 GROUP BY id ORDER BY id
+10.50 | 10.5000 | 10.50-10.5000 | 10.5000 | 10.5000 | 7 | 10.50 | 10.50
+0.30 | 1234567890.1000 | 0.30-1234567890.1000 | 1234567890.1000 | 1234567890.1000 | 15 | 1,234,567,890.10 | 0.30
+1.00 | 2.0000 | 1.00-2.0000 | 2.0000 | 2.0000 | 6 | 2.00 | 1.00
+
+-- SELECT dec1 FROM n9 WHERE id = 1 UNION ALL SELECT 'x'
+10.50
+x
+
+-- SELECT dec1 FROM n9 WHERE id = 1 UNION ALL SELECT dec2 FROM n9 WHERE id = 3
+10.5000
+2.0000
+
+-- SELECT dec1 * 2, dec1 + 1, dec1 / 2, -dec1, dec1 FROM n9 ORDER BY id
+21.00 | 11.50 | 5.250000 | -10.50 | 10.50
+0.60 | 1.30 | 0.150000 | -0.30 | 0.30
+2.00 | 2.00 | 0.500000 | -1.00 | 1.00
+
+-- SELECT id, dec1 FROM n9 WHERE dec1 >= 1 ORDER BY dec1
+3 | 1.00
+1 | 10.50
+
+-- SELECT product_id, CONCAT(min_price, '-', max_price), CONCAT('$', max_price) FROM wp_wc_product_meta_lookup ORDER BY product_id
+1 | 10.0000-12.5000 | $12.5000
+2 | 9.9950-9.9950 | $9.9950
+3 | 0.0000-100.1000 | $100.1000
+
+-- SELECT IF('nan', 1, 0), IF('inf', 1, 0), IF('-inf', 1, 0), IF('infinity', 1, 0), IF('NaN', 1, 0), 'nan' IS TRUE, 'inf' IS TRUE, NOT 'nan', 'nan' = 0, 'inf' + 0, 'nan' + 0, 'inf' AND 1, CASE WHEN 'nan' THEN 1 ELSE 0 END
+0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0
+
+-- SELECT IF('1x', 1, 0), IF('x', 1, 0), IF('0.0', 1, 0), IF(' 1', 1, 0), IF('-0', 1, 0), IF('.', 1, 0), IF('e', 1, 0), IF('n', 1, 0), IF('i', 1, 0), '0x10' + 0, '1e3' + 0
+1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1000
+
+-- SELECT id FROM n9 WHERE 'nan' ORDER BY id
+
+-- SELECT id FROM n9 WHERE 'inf' ORDER BY id
+
+-- SELECT 1e308 * 10
+error 1690
+-- SELECT 1e308 + 1e308
+error 1690
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- UPDATE n9 SET i = 99999999999 WHERE id = 1
+error 1264
+-- UPDATE n9 SET ti = 300 WHERE id = 1
+error 1264
+-- UPDATE n9 SET u = -1 WHERE id = 1
+error 1264
+-- UPDATE n9 SET bu = -1 WHERE id = 1
+error 1264
+-- UPDATE n9 SET dec1 = 123456789.12 WHERE id = 1
+error 1264
+-- UPDATE n9 SET i = '99999999999' WHERE id = 1
+error 1264
+-- UPDATE n9 SET i = i + 2147483647 WHERE id = 1
+error 1264
+-- UPDATE n9 SET i = 1.0e20 WHERE id = 1
+error 1264
+-- UPDATE n9 SET i = 99999999999, ti = 1 WHERE id = 2
+error 1264
+-- SELECT id, i, u, ti, bu, dec1 FROM n9 ORDER BY id
+1 | 1 | 1 | 1 | 1 | 10.50
+2 | 2 | 2 | 2 | 2 | 0.30
+3 | 3 | 3 | 3 | 3 | 1.00
+
+-- UPDATE IGNORE n9 SET i = 99999999999 WHERE id = 1
+ok affected=1 insert_id=0
+-- SELECT id, i FROM n9 WHERE id = 1
+1 | 2147483647
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- UPDATE n9 SET ti = 300 WHERE id = 3
+ok affected=1 insert_id=0
+-- UPDATE n9 SET dec1 = 123456789.12 WHERE id = 3
+ok affected=1 insert_id=0
+-- SELECT id, ti, dec1 FROM n9 WHERE id = 3
+3 | 127 | 99999999.99
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE wp_wc_product_meta_lookup
+ok affected=0 insert_id=0
+-- DROP TABLE n9
+ok affected=0 insert_id=0
+-- CREATE TABLE e6 (id INT PRIMARY KEY, s VARCHAR(5), e ENUM('a','b','c') NOT NULL DEFAULT 'a', en ENUM('x','y') NULL, st SET('p','q')) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- INSERT INTO e6 VALUES (1, 'abc', 'a', 'x', 'p'), (2, 'de', 'b', 'y', 'q'), (3, 'f', 'c', NULL, 'p,q')
+ok affected=3 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT e COLLATE utf8mb4_bin, st COLLATE utf8mb4_bin FROM e6 ORDER BY id
+a | p
+b | q
+c | p,q
+
+-- SELECT id FROM e6 WHERE e COLLATE utf8mb4_bin = 'a' ORDER BY id
+1
+
+-- SELECT id FROM e6 ORDER BY e COLLATE utf8mb4_bin DESC, id
+3
+2
+1
+
+-- SELECT id FROM e6 WHERE e = 'a' COLLATE utf8mb4_bin ORDER BY id
+1
+
+-- SELECT id FROM e6 WHERE e LIKE 'a%' COLLATE utf8mb4_bin ORDER BY id
+1
+
+-- SELECT e COLLATE utf8mb4_general_ci = 'A', CONCAT(e COLLATE utf8mb4_bin, '!') FROM e6 ORDER BY id
+1 | a!
+0 | b!
+0 | c!
+
+-- SELECT e FROM e6 UNION ALL SELECT st FROM e6
+a
+b
+c
+p
+q
+p,q
+
+-- SELECT e FROM e6 UNION ALL SELECT en FROM e6
+a
+b
+c
+x
+y
+NULL
+
+-- SELECT e FROM e6 UNION ALL SELECT 'zz' FROM e6
+a
+b
+c
+zz
+zz
+zz
+
+-- SELECT x, COUNT(*) FROM (SELECT e AS x FROM e6 UNION ALL SELECT st FROM e6) q GROUP BY x ORDER BY x
+a | 1
+b | 1
+c | 1
+p | 1
+p,q | 1
+q | 1
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT e COLLATE utf8mb4_bin, st COLLATE utf8mb4_bin FROM e6 ORDER BY id
+a | p
+b | q
+c | p,q
+
+-- SELECT id FROM e6 WHERE e COLLATE utf8mb4_bin = 'a' ORDER BY id
+1
+
+-- SELECT id FROM e6 ORDER BY e COLLATE utf8mb4_bin DESC, id
+3
+2
+1
+
+-- SELECT id FROM e6 WHERE e = 'a' COLLATE utf8mb4_bin ORDER BY id
+1
+
+-- SELECT id FROM e6 WHERE e LIKE 'a%' COLLATE utf8mb4_bin ORDER BY id
+1
+
+-- SELECT e COLLATE utf8mb4_general_ci = 'A', CONCAT(e COLLATE utf8mb4_bin, '!') FROM e6 ORDER BY id
+1 | a!
+0 | b!
+0 | c!
+
+-- SELECT e FROM e6 UNION ALL SELECT st FROM e6
+a
+b
+c
+p
+q
+p,q
+
+-- SELECT e FROM e6 UNION ALL SELECT en FROM e6
+a
+b
+c
+x
+y
+NULL
+
+-- SELECT e FROM e6 UNION ALL SELECT 'zz' FROM e6
+a
+b
+c
+zz
+zz
+zz
+
+-- SELECT x, COUNT(*) FROM (SELECT e AS x FROM e6 UNION ALL SELECT st FROM e6) q GROUP BY x ORDER BY x
+a | 1
+b | 1
+c | 1
+p | 1
+p,q | 1
+q | 1
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- UPDATE e6 SET e = 'z' WHERE id = 2
+ok affected=1 insert_id=0
+-- UPDATE e6 SET e = '' WHERE id = 3
+ok affected=1 insert_id=0
+-- UPDATE e6 SET st = 'r' WHERE id = 2
+ok affected=1 insert_id=0
+-- UPDATE e6 SET en = 'z' WHERE id = 1
+ok affected=1 insert_id=0
+-- SELECT id, s, e, en, st FROM e6 ORDER BY id
+1 | abc | a |  | p
+2 | de |  | y | 
+3 | f |  | NULL | p,q
+
+-- INSERT INTO e6 (id, e) VALUES (4, 'z')
+ok affected=1 insert_id=0
+-- INSERT INTO e6 (id, e) VALUES (5, '')
+ok affected=1 insert_id=0
+-- INSERT INTO e6 (id, e) VALUES (6, 4)
+ok affected=1 insert_id=0
+-- INSERT INTO e6 (id, en) VALUES (7, 'z')
+ok affected=1 insert_id=0
+-- INSERT INTO e6 (id, st) VALUES (8, 'r')
+ok affected=1 insert_id=0
+-- INSERT INTO e6 (id, e) VALUES (9, 'a'), (10, '')
+ok affected=2 insert_id=0
+-- SELECT LAST_INSERT_ID(0)
+0
+
+-- INSERT IGNORE INTO e6 (id, e) VALUES (11, '')
+ok affected=1 insert_id=0
+-- REPLACE INTO e6 (id, e) VALUES (12, '')
+ok affected=1 insert_id=0
+-- INSERT INTO e6 (id, e) VALUES (13, 'a') ON DUPLICATE KEY UPDATE e = ''
+ok affected=1 insert_id=0
+-- INSERT INTO e6 (id, e) VALUES (13, 'a') ON DUPLICATE KEY UPDATE e = ''
+ok affected=2 insert_id=0
+-- SELECT id, e, en, st, e + 0, e = '', e IS NULL, CONCAT(e), LENGTH(e) FROM e6 ORDER BY id
+1 | a |  | p | 1 | 0 | 0 | a | 1
+2 |  | y |  | 0 | 1 | 0 |  | 0
+3 |  | NULL | p,q | 0 | 1 | 0 |  | 0
+4 |  | NULL | NULL | 0 | 1 | 0 |  | 0
+5 |  | NULL | NULL | 0 | 1 | 0 |  | 0
+6 |  | NULL | NULL | 0 | 1 | 0 |  | 0
+7 | a |  | NULL | 1 | 0 | 0 | a | 1
+8 | a | NULL |  | 1 | 0 | 0 | a | 1
+9 | a | NULL | NULL | 1 | 0 | 0 | a | 1
+10 |  | NULL | NULL | 0 | 1 | 0 |  | 0
+11 |  | NULL | NULL | 0 | 1 | 0 |  | 0
+12 |  | NULL | NULL | 0 | 1 | 0 |  | 0
+13 |  | NULL | NULL | 0 | 1 | 0 |  | 0
+
+-- SELECT id FROM e6 WHERE e = '' ORDER BY id
+2
+3
+4
+5
+6
+10
+11
+12
+13
+
+-- SELECT e, COUNT(*) FROM e6 GROUP BY e ORDER BY e
+ | 9
+a | 4
+
+-- SELECT e FROM e6 WHERE id = 1 UNION ALL SELECT e FROM e6 WHERE id = 2
+a
+
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE e6
+ok affected=0 insert_id=0
+-- CREATE TABLE t6 (id INT PRIMARY KEY, k INT, v INT, name VARCHAR(20), KEY k (k))
+ok affected=0 insert_id=0
+-- CREATE TABLE t7 (id INT PRIMARY KEY, k INT, q INT, name VARCHAR(20), x INT)
+ok affected=0 insert_id=0
+-- INSERT INTO t6 VALUES (1, 1, 10, 'a'), (2, 1, 20, 'b'), (3, 2, 30, '5'), (4, 2, 40, '10'), (5, 3, 50, 'c')
+ok affected=5 insert_id=0
+-- INSERT INTO t7 VALUES (1, 1, 1, 'a', 7), (2, 2, 2, 'b', 8), (3, 3, 3, 'c', 9)
+ok affected=3 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT k, SUM(v) AS v FROM t6 GROUP BY k HAVING v > 35 ORDER BY k
+2 | 70
+3 | 50
+
+-- SELECT k, SUM(v) AS v FROM t6 GROUP BY k HAVING v > 50 ORDER BY k
+2 | 70
+
+-- SELECT k, COUNT(*) AS k FROM t6 GROUP BY k HAVING k > 1 ORDER BY 1
+2 | 2
+3 | 1
+
+-- SELECT k AS kk, SUM(v) AS v FROM t6 GROUP BY k HAVING v > 35 ORDER BY kk
+2 | 70
+3 | 50
+
+-- SELECT name, COUNT(*) AS name FROM t6 GROUP BY name HAVING name > 'b' ORDER BY 1
+c | 1
+
+-- SELECT k, MAX(v) AS v FROM t6 GROUP BY k HAVING v = 20 ORDER BY k
+1 | 20
+
+-- SELECT k, v + 100 AS v FROM t6 GROUP BY k, v HAVING v > 135 ORDER BY k, v
+
+-- SELECT k, SUM(v) AS v FROM t6 GROUP BY k HAVING v > 35 AND k > 0 ORDER BY k
+2 | 70
+3 | 50
+
+-- SELECT k, SUM(v) AS v FROM t6 GROUP BY k HAVING v IN (50, 70) ORDER BY k
+2 | 70
+3 | 50
+
+-- SELECT k, SUM(v) AS v FROM t6 GROUP BY k HAVING SUM(v) > 35 ORDER BY k
+2 | 70
+3 | 50
+
+-- SELECT k, SUM(v) AS total FROM t6 GROUP BY k HAVING total > 35 ORDER BY k
+2 | 70
+3 | 50
+
+-- SELECT k, v FROM t6 GROUP BY k, v HAVING v > 35 ORDER BY k, v
+2 | 40
+3 | 50
+
+-- SELECT k, SUM(v) v FROM t6 WHERE v > 15 GROUP BY k HAVING v > 35 ORDER BY k
+2 | 70
+3 | 50
+
+-- SELECT DISTINCT k + 1 FROM t6 ORDER BY 1
+2
+3
+4
+
+-- SELECT DISTINCT k + 1 FROM t6 ORDER BY 1 DESC
+4
+3
+2
+
+-- SELECT DISTINCT k + 1 AS kk FROM t6 ORDER BY 1
+2
+3
+4
+
+-- SELECT DISTINCT k + 1 FROM t6 ORDER BY k + 1
+2
+3
+4
+
+-- SELECT DISTINCT CONCAT(name, 'x') FROM t6 ORDER BY 1
+10x
+5x
+ax
+bx
+cx
+
+-- SELECT DISTINCT k, v + 1 FROM t6 ORDER BY 2, 1
+1 | 11
+1 | 21
+2 | 31
+2 | 41
+3 | 51
+
+-- SELECT DISTINCT UPPER(name) FROM t6 ORDER BY 1 LIMIT 2
+10
+5
+
+-- SELECT DISTINCT k * 2 FROM t6 GROUP BY k ORDER BY 1
+2
+4
+6
+
+-- SELECT id, name FROM t6 WHERE name BETWEEN 1 AND 7 ORDER BY id
+3 | 5
+
+-- SELECT id, name FROM t6 WHERE name BETWEEN '1' AND 7 ORDER BY id
+3 | 5
+
+-- SELECT id, name FROM t6 WHERE name BETWEEN 1 AND '7' ORDER BY id
+3 | 5
+
+-- SELECT id, name FROM t6 WHERE name BETWEEN '1' AND '7' ORDER BY id
+3 | 5
+4 | 10
+
+-- SELECT id, name FROM t6 WHERE name BETWEEN 'a' AND 7 ORDER BY id
+1 | a
+2 | b
+3 | 5
+5 | c
+
+-- SELECT id, name FROM t6 WHERE name BETWEEN 0 AND 'b' ORDER BY id
+1 | a
+2 | b
+5 | c
+
+-- SELECT id, name FROM t6 WHERE name NOT BETWEEN '1' AND 7 ORDER BY id
+1 | a
+2 | b
+4 | 10
+5 | c
+
+-- SELECT id, name FROM t6 WHERE name BETWEEN 1.5 AND '9' ORDER BY id
+3 | 5
+
+-- SELECT name BETWEEN '1' AND 7, name BETWEEN 1 AND 7, name BETWEEN '1' AND '7' FROM t6 ORDER BY id
+0 | 0 | 0
+0 | 0 | 0
+1 | 1 | 1
+0 | 0 | 1
+0 | 0 | 0
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT k, SUM(v) AS v FROM t6 GROUP BY k HAVING v > 35 ORDER BY k
+2 | 70
+3 | 50
+
+-- SELECT k, SUM(v) AS v FROM t6 GROUP BY k HAVING v > 50 ORDER BY k
+2 | 70
+
+-- SELECT k, COUNT(*) AS k FROM t6 GROUP BY k HAVING k > 1 ORDER BY 1
+2 | 2
+3 | 1
+
+-- SELECT k AS kk, SUM(v) AS v FROM t6 GROUP BY k HAVING v > 35 ORDER BY kk
+2 | 70
+3 | 50
+
+-- SELECT name, COUNT(*) AS name FROM t6 GROUP BY name HAVING name > 'b' ORDER BY 1
+c | 1
+
+-- SELECT k, MAX(v) AS v FROM t6 GROUP BY k HAVING v = 20 ORDER BY k
+1 | 20
+
+-- SELECT k, v + 100 AS v FROM t6 GROUP BY k, v HAVING v > 135 ORDER BY k, v
+
+-- SELECT k, SUM(v) AS v FROM t6 GROUP BY k HAVING v > 35 AND k > 0 ORDER BY k
+2 | 70
+3 | 50
+
+-- SELECT k, SUM(v) AS v FROM t6 GROUP BY k HAVING v IN (50, 70) ORDER BY k
+2 | 70
+3 | 50
+
+-- SELECT k, SUM(v) AS v FROM t6 GROUP BY k HAVING SUM(v) > 35 ORDER BY k
+2 | 70
+3 | 50
+
+-- SELECT k, SUM(v) AS total FROM t6 GROUP BY k HAVING total > 35 ORDER BY k
+2 | 70
+3 | 50
+
+-- SELECT k, v FROM t6 GROUP BY k, v HAVING v > 35 ORDER BY k, v
+2 | 40
+3 | 50
+
+-- SELECT k, SUM(v) v FROM t6 WHERE v > 15 GROUP BY k HAVING v > 35 ORDER BY k
+2 | 70
+3 | 50
+
+-- SELECT DISTINCT k + 1 FROM t6 ORDER BY 1
+2
+3
+4
+
+-- SELECT DISTINCT k + 1 FROM t6 ORDER BY 1 DESC
+4
+3
+2
+
+-- SELECT DISTINCT k + 1 AS kk FROM t6 ORDER BY 1
+2
+3
+4
+
+-- SELECT DISTINCT k + 1 FROM t6 ORDER BY k + 1
+2
+3
+4
+
+-- SELECT DISTINCT CONCAT(name, 'x') FROM t6 ORDER BY 1
+10x
+5x
+ax
+bx
+cx
+
+-- SELECT DISTINCT k, v + 1 FROM t6 ORDER BY 2, 1
+1 | 11
+1 | 21
+2 | 31
+2 | 41
+3 | 51
+
+-- SELECT DISTINCT UPPER(name) FROM t6 ORDER BY 1 LIMIT 2
+10
+5
+
+-- SELECT DISTINCT k * 2 FROM t6 GROUP BY k ORDER BY 1
+2
+4
+6
+
+-- SELECT id, name FROM t6 WHERE name BETWEEN 1 AND 7 ORDER BY id
+3 | 5
+
+-- SELECT id, name FROM t6 WHERE name BETWEEN '1' AND 7 ORDER BY id
+3 | 5
+
+-- SELECT id, name FROM t6 WHERE name BETWEEN 1 AND '7' ORDER BY id
+3 | 5
+
+-- SELECT id, name FROM t6 WHERE name BETWEEN '1' AND '7' ORDER BY id
+3 | 5
+4 | 10
+
+-- SELECT id, name FROM t6 WHERE name BETWEEN 'a' AND 7 ORDER BY id
+1 | a
+2 | b
+3 | 5
+5 | c
+
+-- SELECT id, name FROM t6 WHERE name BETWEEN 0 AND 'b' ORDER BY id
+1 | a
+2 | b
+5 | c
+
+-- SELECT id, name FROM t6 WHERE name NOT BETWEEN '1' AND 7 ORDER BY id
+1 | a
+2 | b
+4 | 10
+5 | c
+
+-- SELECT id, name FROM t6 WHERE name BETWEEN 1.5 AND '9' ORDER BY id
+3 | 5
+
+-- SELECT name BETWEEN '1' AND 7, name BETWEEN 1 AND 7, name BETWEEN '1' AND '7' FROM t6 ORDER BY id
+0 | 0 | 0
+0 | 0 | 0
+1 | 1 | 1
+0 | 0 | 1
+0 | 0 | 0
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- UPDATE t6 SET v = v + 1 WHERE id IN (SELECT id FROM t6 WHERE k = 1)
+error 1093
+-- UPDATE t6 SET v = v + 1 WHERE k = (SELECT MAX(k) FROM t6)
+error 1093
+-- UPDATE t6 SET v = (SELECT MAX(v) FROM t6) WHERE id = 1
+error 1093
+-- DELETE FROM t6 WHERE id IN (SELECT id FROM t6 WHERE k = 9)
+error 1093
+-- DELETE FROM t6 WHERE v < (SELECT AVG(v) FROM t6) AND k = 99
+error 1093
+-- DELETE FROM t6 WHERE id IN (SELECT t.id FROM t6 t WHERE t.k = 9)
+error 1093
+-- UPDATE t6 SET v = 1 WHERE EXISTS (SELECT 1 FROM t6 b WHERE b.id = t6.id AND b.k = 99)
+error 1093
+-- UPDATE t6 SET v = 1 WHERE id IN (SELECT t7.id FROM t7 JOIN t6 ON t6.k = t7.k WHERE t7.q = 99)
+error 1093
+-- UPDATE t6 SET v = v + 1 WHERE id IN (SELECT id FROM (SELECT id FROM t6 WHERE k = 1) q)
+ok affected=2 insert_id=0
+-- UPDATE t6 SET v = v + 1 WHERE id IN (SELECT id FROM t7 WHERE k = 1)
+ok affected=1 insert_id=0
+-- DELETE t6 FROM t6 JOIN (SELECT id FROM t6 WHERE k = 99) q ON q.id = t6.id
+ok affected=0 insert_id=0
+-- SELECT id, v FROM t6 ORDER BY id
+1 | 12
+2 | 21
+3 | 30
+4 | 40
+5 | 50
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE t7
+ok affected=0 insert_id=0
+-- DROP TABLE t6
+ok affected=0 insert_id=0
+-- CREATE TABLE e5 (id INT PRIMARY KEY, s VARCHAR(5), c CHAR(3), e ENUM('a','b','c') NOT NULL DEFAULT 'a', en ENUM('x','y') NULL, st SET('p','q'), b VARBINARY(3)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- INSERT INTO e5 (id) VALUES (1)
+ok affected=1 insert_id=0
+-- CREATE TABLE A (id INT PRIMARY KEY, ts INT)
+ok affected=0 insert_id=0
+-- INSERT INTO A VALUES (1, 1)
+ok affected=1 insert_id=0
+-- CREATE TABLE t6 (id INT PRIMARY KEY, k INT, v INT)
+ok affected=0 insert_id=0
+-- INSERT INTO t6 VALUES (1, 1, 10), (2, 1, 20), (3, 2, 30)
+ok affected=3 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT A.version FROM A
+error 1054
+-- SELECT A.ts FROM nope A
+error 1146
+-- SELECT A.timestamp FROM A
+error 1054
+-- SELECT @@nonexistent_var
+error 1193
+-- SET @@nonexistent_var = 1
+error 1193
+-- SET SESSION nonexistent_var = 1
+error 1193
+-- SET GLOBAL nonexistent_var = 1
+error 1193
+-- SELECT 1e400
+error 1367
+-- SELECT -1e400
+error 1367
+-- SELECT 1e400 + 0
+error 1367
+-- SELECT k FROM t6 GROUP BY k HAVING v > 1
+error 1054
+-- SELECT k FROM t6 GROUP BY k HAVING nope > 1
+error 1054
+-- SELECT k FROM t6 GROUP BY k HAVING t7.v > 1
+error 1054
+-- SELECT k FROM t6 GROUP BY k HAVING MAX(nope) > 1
+error 1054
+-- SELECT (1, NULL) IN ((1, NULL)), (1, NULL) IN ((1, 2)), (1, NULL) = (1, NULL), (1, 2) = (1, 2), (1, 2) = (1, 3)
+NULL | NULL | NULL | 1 | 0
+
+-- SELECT (1, 2) IN ((1, NULL), (1, 2)), (1, 3) IN ((1, NULL), (1, 2)), (2, 3) IN ((1, NULL))
+1 | NULL | 0
+
+-- SELECT id FROM t6 WHERE (k, v) IN ((1, 10), (2, NULL)) ORDER BY id
+1
+
+-- SELECT id, (k, v) = (1, NULL), (k, v) IN ((2, NULL), (1, 20)) FROM t6 ORDER BY id
+1 | NULL | 0
+2 | NULL | 1
+3 | 0 | NULL
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT A.version FROM A
+error 1054
+-- SELECT A.ts FROM nope A
+error 1146
+-- SELECT A.timestamp FROM A
+error 1054
+-- SELECT @@nonexistent_var
+error 1193
+-- SET @@nonexistent_var = 1
+error 1193
+-- SET SESSION nonexistent_var = 1
+error 1193
+-- SET GLOBAL nonexistent_var = 1
+error 1193
+-- SELECT 1e400
+error 1367
+-- SELECT -1e400
+error 1367
+-- SELECT 1e400 + 0
+error 1367
+-- SELECT k FROM t6 GROUP BY k HAVING v > 1
+error 1054
+-- SELECT k FROM t6 GROUP BY k HAVING nope > 1
+error 1054
+-- SELECT k FROM t6 GROUP BY k HAVING t7.v > 1
+error 1054
+-- SELECT k FROM t6 GROUP BY k HAVING MAX(nope) > 1
+error 1054
+-- SELECT (1, NULL) IN ((1, NULL)), (1, NULL) IN ((1, 2)), (1, NULL) = (1, NULL), (1, 2) = (1, 2), (1, 2) = (1, 3)
+NULL | NULL | NULL | 1 | 0
+
+-- SELECT (1, 2) IN ((1, NULL), (1, 2)), (1, 3) IN ((1, NULL), (1, 2)), (2, 3) IN ((1, NULL))
+1 | NULL | 0
+
+-- SELECT id FROM t6 WHERE (k, v) IN ((1, 10), (2, NULL)) ORDER BY id
+1
+
+-- SELECT id, (k, v) = (1, NULL), (k, v) IN ((2, NULL), (1, 20)) FROM t6 ORDER BY id
+1 | NULL | 0
+2 | NULL | 1
+3 | 0 | NULL
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- INSERT INTO e5 (id, s) VALUES (2, 'abcdef')
+error 1406
+-- INSERT INTO e5 (id, c) VALUES (3, 'abcd')
+error 1406
+-- INSERT INTO e5 (id, e) VALUES (4, 'z')
+error 1265
+-- INSERT INTO e5 (id, e) VALUES (5, '')
+error 1265
+-- INSERT INTO e5 (id, e) VALUES (6, 4)
+error 1265
+-- INSERT INTO e5 (id, en) VALUES (7, 'z')
+error 1265
+-- INSERT INTO e5 (id, st) VALUES (8, 'r')
+error 1265
+-- INSERT INTO e5 (id, b) VALUES (9, 'abcd')
+error 1406
+-- INSERT INTO e5 (id, s) VALUES (10, 'あいうえおか')
+error 1406
+-- INSERT INTO e5 (id, s) VALUES (11, 'abcde  ')
+ok affected=1 insert_id=0
+-- INSERT INTO e5 (id, s) VALUES (12, 'abc  d')
+error 1406
+-- UPDATE e5 SET s = 'abcdef' WHERE id = 1
+error 1406
+-- UPDATE e5 SET e = 'z' WHERE id = 1
+error 1265
+-- UPDATE e5 SET e = '' WHERE id = 1
+error 1265
+-- UPDATE e5 SET st = 'r' WHERE id = 1
+error 1265
+-- UPDATE e5 SET s = CONCAT('ab', 'cdefg') WHERE id = 1
+error 1406
+-- SELECT id, s, c, e, en, st FROM e5 ORDER BY id
+1 | NULL | NULL | a | NULL | NULL
+11 | abcde | NULL | a | NULL | NULL
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE t6
+ok affected=0 insert_id=0
+-- DROP TABLE A
+ok affected=0 insert_id=0
+-- DROP TABLE e5
+ok affected=0 insert_id=0
+-- CREATE TABLE t8 (id INT PRIMARY KEY, i INT)
+ok affected=0 insert_id=0
+-- INSERT INTO t8 VALUES (1, 1), (2, 2), (3, -3), (4, NULL), (5, 1)
+ok affected=5 insert_id=0
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE wp_posts (ID BIGINT UNSIGNED PRIMARY KEY, post_author BIGINT UNSIGNED NOT NULL DEFAULT 0, post_date DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', post_date_gmt DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', post_title TEXT, comment_count BIGINT NOT NULL DEFAULT 0)
+ok affected=0 insert_id=0
+-- INSERT INTO wp_posts VALUES (1, 1, '2024-01-03 10:00:00', '2024-01-03 01:00:00', 'Hello world', 2), (2, 1, '2024-01-01 10:00:00', '0000-00-00 00:00:00', 'A much longer title', 0), (3, 2, '2024-01-02 10:00:00', '2024-01-02 01:00:00', 'Mid', 1), (4, 2, '2024-01-02 12:00:00', '0000-00-00 00:00:00', 'Draft post', 0), (5, 3, '2023-12-31 10:00:00', '2023-12-31 01:00:00', 'x', 0)
+ok affected=5 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT DISTINCT -i FROM t8 ORDER BY 1
+NULL
+-2
+-1
+3
+
+-- SELECT DISTINCT -i FROM t8 ORDER BY 1 DESC
+3
+-1
+-2
+NULL
+
+-- SELECT DISTINCT -i AS x FROM t8 ORDER BY 1
+NULL
+-2
+-1
+3
+
+-- SELECT DISTINCT -i FROM t8 ORDER BY -i
+NULL
+-2
+-1
+3
+
+-- SELECT DISTINCT -i FROM t8 ORDER BY -i DESC
+3
+-1
+-2
+NULL
+
+-- SELECT DISTINCT id % 2, -i FROM t8 ORDER BY 2, 1
+0 | NULL
+0 | -2
+1 | -1
+1 | 3
+
+-- SELECT DISTINCT i, -i FROM t8 ORDER BY 2
+NULL | NULL
+2 | -2
+1 | -1
+-3 | 3
+
+-- SELECT DISTINCT -i, i FROM t8 ORDER BY 1 DESC, 2
+3 | -3
+-1 | 1
+-2 | 2
+NULL | NULL
+
+-- SELECT DISTINCT -i FROM t8 ORDER BY 1 LIMIT 2
+NULL
+-2
+
+-- SELECT DISTINCT -i FROM t8 ORDER BY 1 LIMIT 1, 2
+-2
+-1
+
+-- SELECT DISTINCT -i FROM t8 WHERE i > 0 ORDER BY 1
+-2
+-1
+
+-- SELECT DISTINCT CONCAT('a', i) FROM t8 ORDER BY 1 DESC
+a2
+a1
+a-3
+NULL
+
+-- SELECT x FROM (SELECT DISTINCT -i AS x FROM t8 ORDER BY 1 LIMIT 3) q ORDER BY x
+NULL
+-2
+-1
+
+-- SELECT * FROM (SELECT DISTINCT -i FROM t8 ORDER BY 1 LIMIT 2) q
+NULL
+-2
+
+-- SELECT DISTINCT LENGTH(post_title) FROM wp_posts ORDER BY 1
+1
+3
+10
+11
+19
+
+-- SELECT DISTINCT LENGTH(post_title) FROM wp_posts ORDER BY 1 DESC
+19
+11
+10
+3
+1
+
+-- SELECT DISTINCT post_author, DATE(post_date) FROM wp_posts ORDER BY 2 DESC
+1 | 2024-01-03
+2 | 2024-01-02
+1 | 2024-01-01
+3 | 2023-12-31
+
+-- SELECT DISTINCT post_author, DATE(post_date) FROM wp_posts ORDER BY 2
+3 | 2023-12-31
+1 | 2024-01-01
+2 | 2024-01-02
+1 | 2024-01-03
+
+-- SELECT DISTINCT post_author, DATE(post_date) FROM wp_posts ORDER BY 1 DESC, 2 DESC
+3 | 2023-12-31
+2 | 2024-01-02
+1 | 2024-01-03
+1 | 2024-01-01
+
+-- SELECT DISTINCT YEAR(post_date), MONTH(post_date) FROM wp_posts ORDER BY 1 DESC, 2 DESC
+2024 | 1
+2023 | 12
+
+-- SELECT DISTINCT YEAR(post_date) AS year, MONTH(post_date) AS month FROM wp_posts ORDER BY 1 DESC, 2 DESC
+2024 | 1
+2023 | 12
+
+-- SELECT DISTINCT -post_author FROM wp_posts GROUP BY post_author ORDER BY 1
+-3
+-2
+-1
+
+-- SELECT DISTINCT COUNT(*) FROM wp_posts GROUP BY post_author ORDER BY 1
+1
+2
+
+-- SELECT DISTINCT -COUNT(*) FROM wp_posts GROUP BY post_author ORDER BY 1
+-2
+-1
+
+-- SELECT DISTINCT SUBSTRING(post_title, 2, 3) FROM wp_posts ORDER BY 1
+
+ mu
+ell
+id
+raf
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT DISTINCT -i FROM t8 ORDER BY 1
+NULL
+-2
+-1
+3
+
+-- SELECT DISTINCT -i FROM t8 ORDER BY 1 DESC
+3
+-1
+-2
+NULL
+
+-- SELECT DISTINCT -i AS x FROM t8 ORDER BY 1
+NULL
+-2
+-1
+3
+
+-- SELECT DISTINCT -i FROM t8 ORDER BY -i
+NULL
+-2
+-1
+3
+
+-- SELECT DISTINCT -i FROM t8 ORDER BY -i DESC
+3
+-1
+-2
+NULL
+
+-- SELECT DISTINCT id % 2, -i FROM t8 ORDER BY 2, 1
+0 | NULL
+0 | -2
+1 | -1
+1 | 3
+
+-- SELECT DISTINCT i, -i FROM t8 ORDER BY 2
+NULL | NULL
+2 | -2
+1 | -1
+-3 | 3
+
+-- SELECT DISTINCT -i, i FROM t8 ORDER BY 1 DESC, 2
+3 | -3
+-1 | 1
+-2 | 2
+NULL | NULL
+
+-- SELECT DISTINCT -i FROM t8 ORDER BY 1 LIMIT 2
+NULL
+-2
+
+-- SELECT DISTINCT -i FROM t8 ORDER BY 1 LIMIT 1, 2
+-2
+-1
+
+-- SELECT DISTINCT -i FROM t8 WHERE i > 0 ORDER BY 1
+-2
+-1
+
+-- SELECT DISTINCT CONCAT('a', i) FROM t8 ORDER BY 1 DESC
+a2
+a1
+a-3
+NULL
+
+-- SELECT x FROM (SELECT DISTINCT -i AS x FROM t8 ORDER BY 1 LIMIT 3) q ORDER BY x
+NULL
+-2
+-1
+
+-- SELECT * FROM (SELECT DISTINCT -i FROM t8 ORDER BY 1 LIMIT 2) q
+NULL
+-2
+
+-- SELECT DISTINCT LENGTH(post_title) FROM wp_posts ORDER BY 1
+1
+3
+10
+11
+19
+
+-- SELECT DISTINCT LENGTH(post_title) FROM wp_posts ORDER BY 1 DESC
+19
+11
+10
+3
+1
+
+-- SELECT DISTINCT post_author, DATE(post_date) FROM wp_posts ORDER BY 2 DESC
+1 | 2024-01-03
+2 | 2024-01-02
+1 | 2024-01-01
+3 | 2023-12-31
+
+-- SELECT DISTINCT post_author, DATE(post_date) FROM wp_posts ORDER BY 2
+3 | 2023-12-31
+1 | 2024-01-01
+2 | 2024-01-02
+1 | 2024-01-03
+
+-- SELECT DISTINCT post_author, DATE(post_date) FROM wp_posts ORDER BY 1 DESC, 2 DESC
+3 | 2023-12-31
+2 | 2024-01-02
+1 | 2024-01-03
+1 | 2024-01-01
+
+-- SELECT DISTINCT YEAR(post_date), MONTH(post_date) FROM wp_posts ORDER BY 1 DESC, 2 DESC
+2024 | 1
+2023 | 12
+
+-- SELECT DISTINCT YEAR(post_date) AS year, MONTH(post_date) AS month FROM wp_posts ORDER BY 1 DESC, 2 DESC
+2024 | 1
+2023 | 12
+
+-- SELECT DISTINCT -post_author FROM wp_posts GROUP BY post_author ORDER BY 1
+-3
+-2
+-1
+
+-- SELECT DISTINCT COUNT(*) FROM wp_posts GROUP BY post_author ORDER BY 1
+1
+2
+
+-- SELECT DISTINCT -COUNT(*) FROM wp_posts GROUP BY post_author ORDER BY 1
+-2
+-1
+
+-- SELECT DISTINCT SUBSTRING(post_title, 2, 3) FROM wp_posts ORDER BY 1
+
+ mu
+ell
+id
+raf
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE wp_posts
+ok affected=0 insert_id=0
+-- DROP TABLE t8
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE wp_posts (ID BIGINT UNSIGNED PRIMARY KEY, post_author BIGINT UNSIGNED NOT NULL DEFAULT 0, post_date DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', post_date_gmt DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', post_title TEXT, comment_count BIGINT NOT NULL DEFAULT 0)
+ok affected=0 insert_id=0
+-- INSERT INTO wp_posts VALUES (1, 1, '2024-01-03 10:00:00', '2024-01-03 01:00:00', 'Hello world', 2), (2, 1, '2024-01-01 10:00:00', '0000-00-00 00:00:00', 'A much longer title', 0), (3, 2, '2024-01-02 10:00:00', '2024-01-02 01:00:00', 'Mid', 1), (4, 2, '2024-01-02 12:00:00', '0000-00-00 00:00:00', 'Draft post', 0), (5, 3, '2023-12-31 10:00:00', '2023-12-31 01:00:00', 'x', 0)
+ok affected=5 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT post_author AS a, COUNT(*) AS post_author FROM wp_posts GROUP BY a HAVING post_author > 1 ORDER BY a
+2 | 2
+3 | 1
+
+-- SELECT post_author AS a, COUNT(*) AS post_author FROM wp_posts GROUP BY a HAVING post_author > 1 AND a < 3 ORDER BY a
+2 | 2
+
+-- SELECT post_author AS a, COUNT(*) AS post_author FROM wp_posts GROUP BY 1 HAVING post_author > 1 ORDER BY a
+2 | 2
+3 | 1
+
+-- SELECT p.post_author AS a, COUNT(*) AS post_author FROM wp_posts p GROUP BY a HAVING post_author > 1 ORDER BY a
+2 | 2
+3 | 1
+
+-- SELECT post_author AS a, COUNT(*) AS post_author FROM wp_posts GROUP BY post_author HAVING post_author > 1 ORDER BY a
+2 | 2
+3 | 1
+
+-- SELECT post_author, COUNT(*) AS post_author FROM wp_posts GROUP BY post_author HAVING post_author > 1 ORDER BY 1
+2 | 2
+3 | 1
+
+-- SELECT post_author AS a, COUNT(*) AS n FROM wp_posts GROUP BY a HAVING post_author > 1 ORDER BY a
+2 | 2
+3 | 1
+
+-- SELECT post_author AS a, COUNT(*) AS n FROM wp_posts GROUP BY a HAVING a > 1 ORDER BY a
+2 | 2
+3 | 1
+
+-- SELECT post_author + 0 AS a, COUNT(*) AS post_author FROM wp_posts GROUP BY a HAVING post_author > 1 ORDER BY a
+1 | 2
+2 | 2
+
+-- SELECT post_author AS a, SUM(comment_count) AS comment_count FROM wp_posts GROUP BY a HAVING comment_count > 0 ORDER BY a
+1 | 2
+2 | 1
+
+-- SELECT p.ID, p.comment_count, COUNT(c.ID) AS comment_count FROM wp_posts p LEFT JOIN wp_posts c ON c.post_author = p.ID GROUP BY p.ID HAVING comment_count > 0 ORDER BY p.ID
+1 | 2 | 2
+2 | 0 | 2
+3 | 1 | 1
+
+-- SELECT p.ID AS pid, p.comment_count, COUNT(c.ID) AS comment_count FROM wp_posts p LEFT JOIN wp_posts c ON c.post_author = p.ID GROUP BY pid HAVING comment_count > 0 ORDER BY pid
+1 | 2 | 2
+2 | 0 | 2
+3 | 1 | 1
+
+-- SELECT p.ID, COUNT(c.ID) AS comment_count, p.comment_count FROM wp_posts p LEFT JOIN wp_posts c ON c.post_author = p.ID GROUP BY p.ID HAVING comment_count > 0 ORDER BY p.ID
+1 | 2 | 2
+2 | 2 | 0
+3 | 1 | 1
+
+-- SELECT post_author, COUNT(*) AS cnt FROM wp_posts GROUP BY post_author HAVING cnt > 1 ORDER BY post_author
+1 | 2
+2 | 2
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT post_author AS a, COUNT(*) AS post_author FROM wp_posts GROUP BY a HAVING post_author > 1 ORDER BY a
+2 | 2
+3 | 1
+
+-- SELECT post_author AS a, COUNT(*) AS post_author FROM wp_posts GROUP BY a HAVING post_author > 1 AND a < 3 ORDER BY a
+2 | 2
+
+-- SELECT post_author AS a, COUNT(*) AS post_author FROM wp_posts GROUP BY 1 HAVING post_author > 1 ORDER BY a
+2 | 2
+3 | 1
+
+-- SELECT p.post_author AS a, COUNT(*) AS post_author FROM wp_posts p GROUP BY a HAVING post_author > 1 ORDER BY a
+2 | 2
+3 | 1
+
+-- SELECT post_author AS a, COUNT(*) AS post_author FROM wp_posts GROUP BY post_author HAVING post_author > 1 ORDER BY a
+2 | 2
+3 | 1
+
+-- SELECT post_author, COUNT(*) AS post_author FROM wp_posts GROUP BY post_author HAVING post_author > 1 ORDER BY 1
+2 | 2
+3 | 1
+
+-- SELECT post_author AS a, COUNT(*) AS n FROM wp_posts GROUP BY a HAVING post_author > 1 ORDER BY a
+2 | 2
+3 | 1
+
+-- SELECT post_author AS a, COUNT(*) AS n FROM wp_posts GROUP BY a HAVING a > 1 ORDER BY a
+2 | 2
+3 | 1
+
+-- SELECT post_author + 0 AS a, COUNT(*) AS post_author FROM wp_posts GROUP BY a HAVING post_author > 1 ORDER BY a
+1 | 2
+2 | 2
+
+-- SELECT post_author AS a, SUM(comment_count) AS comment_count FROM wp_posts GROUP BY a HAVING comment_count > 0 ORDER BY a
+1 | 2
+2 | 1
+
+-- SELECT p.ID, p.comment_count, COUNT(c.ID) AS comment_count FROM wp_posts p LEFT JOIN wp_posts c ON c.post_author = p.ID GROUP BY p.ID HAVING comment_count > 0 ORDER BY p.ID
+1 | 2 | 2
+2 | 0 | 2
+3 | 1 | 1
+
+-- SELECT p.ID AS pid, p.comment_count, COUNT(c.ID) AS comment_count FROM wp_posts p LEFT JOIN wp_posts c ON c.post_author = p.ID GROUP BY pid HAVING comment_count > 0 ORDER BY pid
+1 | 2 | 2
+2 | 0 | 2
+3 | 1 | 1
+
+-- SELECT p.ID, COUNT(c.ID) AS comment_count, p.comment_count FROM wp_posts p LEFT JOIN wp_posts c ON c.post_author = p.ID GROUP BY p.ID HAVING comment_count > 0 ORDER BY p.ID
+1 | 2 | 2
+2 | 2 | 0
+3 | 1 | 1
+
+-- SELECT post_author, COUNT(*) AS cnt FROM wp_posts GROUP BY post_author HAVING cnt > 1 ORDER BY post_author
+1 | 2
+2 | 2
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT post_author, comment_count, comment_count * 10 AS comment_count FROM wp_posts GROUP BY post_author HAVING comment_count > 5 ORDER BY post_author
+1 | 2 | 20
+2 | 1 | 10
+
+-- SELECT post_author, comment_count * 10 AS comment_count, comment_count FROM wp_posts GROUP BY post_author HAVING comment_count > 5 ORDER BY post_author
+1 | 20 | 2
+2 | 10 | 1
+
+-- SELECT post_author, comment_count FROM wp_posts GROUP BY post_author HAVING comment_count > 0 ORDER BY post_author
+1 | 2
+2 | 1
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE wp_posts
+ok affected=0 insert_id=0
+-- CREATE TABLE e7 (id INT PRIMARY KEY, e ENUM('a','b','c') NOT NULL DEFAULT 'a', e2 ENUM('a','b','c') NULL, st SET('x','y') NULL, KEY e (e)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- INSERT INTO e7 (id, e, e2) VALUES (1, 'a ', 'b ')
+ok affected=1 insert_id=0
+-- INSERT INTO e7 (id, e) VALUES (2, 'b  ')
+ok affected=1 insert_id=0
+-- INSERT INTO e7 (id, e) VALUES (3, ' a')
+error 1265
+-- INSERT INTO e7 (id, e) VALUES (4, 'A ')
+ok affected=1 insert_id=0
+-- INSERT INTO e7 (id, st) VALUES (5, 'x ')
+ok affected=1 insert_id=0
+-- INSERT INTO e7 (id, st) VALUES (6, 'x,y ')
+ok affected=1 insert_id=0
+-- INSERT INTO e7 (id, st) VALUES (7, 'x,bad')
+error 1265
+-- UPDATE e7 SET e = 'c ' WHERE id = 1
+ok affected=1 insert_id=0
+-- UPDATE e7 SET e2 = 'c  ' WHERE id = 2
+ok affected=1 insert_id=0
+-- UPDATE e7 SET e = 'zz ' WHERE id = 2
+error 1265
+-- SELECT id, e, e2, st, e + 0, st + 0 FROM e7 ORDER BY id
+1 | c | b | NULL | 3 | NULL
+2 | b | c | NULL | 2 | NULL
+4 | a | NULL | NULL | 1 | NULL
+5 | a | NULL | x | 1 | 1
+6 | a | NULL | x,y | 1 | 3
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- INSERT INTO e7 (id, e, e2) VALUES (11, 'a ', 'c ')
+ok affected=1 insert_id=0
+-- INSERT INTO e7 (id, e) VALUES (12, ' a')
+ok affected=1 insert_id=0
+-- INSERT INTO e7 (id, st) VALUES (15, 'x ')
+ok affected=1 insert_id=0
+-- INSERT INTO e7 (id, st) VALUES (17, 'x,bad')
+ok affected=1 insert_id=0
+-- INSERT INTO e7 (id, st) VALUES (18, 'bad,y')
+ok affected=1 insert_id=0
+-- INSERT INTO e7 (id, st) VALUES (19, 'bad')
+ok affected=1 insert_id=0
+-- INSERT INTO e7 (id, e, e2) VALUES (20, 'zz', 'zz')
+ok affected=1 insert_id=0
+-- INSERT INTO e7 (id, st) VALUES (21, 'y,bad,x')
+ok affected=1 insert_id=0
+-- UPDATE e7 SET e = 'b ' WHERE id = 11
+ok affected=1 insert_id=0
+-- UPDATE e7 SET st = 'y,bad' WHERE id = 15
+ok affected=1 insert_id=0
+-- REPLACE INTO e7 (id, e, st) VALUES (22, 'c ', 'bad,x')
+ok affected=1 insert_id=0
+-- INSERT INTO e7 (id, e) VALUES (22, 'a') ON DUPLICATE KEY UPDATE st = 'nope,y'
+ok affected=2 insert_id=0
+-- SELECT id, e, e2, st, e + 0, st + 0 FROM e7 ORDER BY id
+1 | c | b | NULL | 3 | NULL
+2 | b | c | NULL | 2 | NULL
+4 | a | NULL | NULL | 1 | NULL
+5 | a | NULL | x | 1 | 1
+6 | a | NULL | x,y | 1 | 3
+11 | b | c | NULL | 2 | NULL
+12 |  | NULL | NULL | 0 | NULL
+15 | a | NULL | y | 1 | 2
+17 | a | NULL | x | 1 | 1
+18 | a | NULL | y | 1 | 2
+19 | a | NULL |  | 1 | 0
+20 |  |  | NULL | 0 | NULL
+21 | a | NULL | x,y | 1 | 3
+22 | c | NULL | y | 3 | 2
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT id FROM e7 WHERE e = '' ORDER BY id
+12
+20
+
+-- SELECT id FROM e7 IGNORE INDEX (e) WHERE e = '' ORDER BY id
+12
+20
+
+-- SELECT id FROM e7 WHERE e2 = '' ORDER BY id
+20
+
+-- SELECT id FROM e7 WHERE e = '  ' ORDER BY id
+12
+20
+
+-- SELECT id FROM e7 WHERE e2 = '  ' ORDER BY id
+20
+
+-- SELECT id FROM e7 WHERE e > '' ORDER BY id
+1
+2
+4
+5
+6
+11
+15
+17
+18
+19
+21
+22
+
+-- SELECT id FROM e7 WHERE e >= '' ORDER BY id
+1
+2
+4
+5
+6
+11
+12
+15
+17
+18
+19
+20
+21
+22
+
+-- SELECT id FROM e7 WHERE e < 'b' ORDER BY id
+4
+5
+6
+12
+15
+17
+18
+19
+20
+21
+
+-- SELECT id FROM e7 WHERE e <= 'a' ORDER BY id
+4
+5
+6
+12
+15
+17
+18
+19
+20
+21
+
+-- SELECT id FROM e7 WHERE e BETWEEN '' AND 'a' ORDER BY id
+4
+5
+6
+12
+15
+17
+18
+19
+20
+21
+
+-- SELECT id FROM e7 WHERE e IN ('', 'a') ORDER BY id
+4
+5
+6
+12
+15
+17
+18
+19
+20
+21
+
+-- SELECT id FROM e7 IGNORE INDEX (e) WHERE e IN ('', 'a') ORDER BY id
+4
+5
+6
+12
+15
+17
+18
+19
+20
+21
+
+-- SELECT id FROM e7 WHERE e IN ('') ORDER BY id
+12
+20
+
+-- SELECT id FROM e7 WHERE e2 IN ('', 'b') ORDER BY id
+1
+20
+
+-- SELECT id FROM e7 WHERE e <> '' ORDER BY id
+1
+2
+4
+5
+6
+11
+15
+17
+18
+19
+21
+22
+
+-- SELECT id FROM e7 WHERE e NOT IN ('', 'b') ORDER BY id
+1
+4
+5
+6
+15
+17
+18
+19
+21
+22
+
+-- SELECT id FROM e7 WHERE e = 'a ' ORDER BY id
+4
+5
+6
+15
+17
+18
+19
+21
+
+-- SELECT id FROM e7 IGNORE INDEX (e) WHERE e = 'zz' ORDER BY id
+
+-- SELECT id FROM e7 WHERE e2 = 'zz' ORDER BY id
+
+-- SELECT id FROM e7 WHERE st = 'bad' ORDER BY id
+
+-- SELECT id FROM e7 WHERE st IN ('x', 'bad') ORDER BY id
+5
+17
+
+-- SELECT id FROM e7 WHERE st = '' ORDER BY id
+19
+
+-- SELECT id FROM e7 WHERE st = 'x' ORDER BY id
+5
+17
+
+-- SELECT id FROM e7 WHERE st = 'x,bad' ORDER BY id
+
+-- SELECT id FROM e7 WHERE st <> 'bad' ORDER BY id
+5
+6
+15
+17
+18
+19
+21
+22
+
+-- SELECT id FROM e7 WHERE st > 'bad' ORDER BY id
+5
+6
+15
+17
+18
+21
+22
+
+-- SELECT id, st = 'bad', st = 'x', st < 'bad', e = '', e > '', e2 = '' FROM e7 ORDER BY id
+1 | NULL | NULL | NULL | 0 | 1 | 0
+2 | NULL | NULL | NULL | 0 | 1 | 0
+4 | NULL | NULL | NULL | 0 | 1 | NULL
+5 | 0 | 1 | 0 | 0 | 1 | NULL
+6 | 0 | 0 | 0 | 0 | 1 | NULL
+11 | NULL | NULL | NULL | 0 | 1 | 0
+12 | NULL | NULL | NULL | 1 | 0 | NULL
+15 | 0 | 0 | 0 | 0 | 1 | NULL
+17 | 0 | 1 | 0 | 0 | 1 | NULL
+18 | 0 | 0 | 0 | 0 | 1 | NULL
+19 | 0 | 0 | 1 | 0 | 1 | NULL
+20 | NULL | NULL | NULL | 1 | 0 | 1
+21 | 0 | 0 | 0 | 0 | 1 | NULL
+22 | 0 | 0 | 0 | 0 | 1 | NULL
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT id FROM e7 WHERE e = '' ORDER BY id
+12
+20
+
+-- SELECT id FROM e7 IGNORE INDEX (e) WHERE e = '' ORDER BY id
+12
+20
+
+-- SELECT id FROM e7 WHERE e2 = '' ORDER BY id
+20
+
+-- SELECT id FROM e7 WHERE e = '  ' ORDER BY id
+12
+20
+
+-- SELECT id FROM e7 WHERE e2 = '  ' ORDER BY id
+20
+
+-- SELECT id FROM e7 WHERE e > '' ORDER BY id
+1
+2
+4
+5
+6
+11
+15
+17
+18
+19
+21
+22
+
+-- SELECT id FROM e7 WHERE e >= '' ORDER BY id
+1
+2
+4
+5
+6
+11
+12
+15
+17
+18
+19
+20
+21
+22
+
+-- SELECT id FROM e7 WHERE e < 'b' ORDER BY id
+4
+5
+6
+12
+15
+17
+18
+19
+20
+21
+
+-- SELECT id FROM e7 WHERE e <= 'a' ORDER BY id
+4
+5
+6
+12
+15
+17
+18
+19
+20
+21
+
+-- SELECT id FROM e7 WHERE e BETWEEN '' AND 'a' ORDER BY id
+4
+5
+6
+12
+15
+17
+18
+19
+20
+21
+
+-- SELECT id FROM e7 WHERE e IN ('', 'a') ORDER BY id
+4
+5
+6
+12
+15
+17
+18
+19
+20
+21
+
+-- SELECT id FROM e7 IGNORE INDEX (e) WHERE e IN ('', 'a') ORDER BY id
+4
+5
+6
+12
+15
+17
+18
+19
+20
+21
+
+-- SELECT id FROM e7 WHERE e IN ('') ORDER BY id
+12
+20
+
+-- SELECT id FROM e7 WHERE e2 IN ('', 'b') ORDER BY id
+1
+20
+
+-- SELECT id FROM e7 WHERE e <> '' ORDER BY id
+1
+2
+4
+5
+6
+11
+15
+17
+18
+19
+21
+22
+
+-- SELECT id FROM e7 WHERE e NOT IN ('', 'b') ORDER BY id
+1
+4
+5
+6
+15
+17
+18
+19
+21
+22
+
+-- SELECT id FROM e7 WHERE e = 'a ' ORDER BY id
+4
+5
+6
+15
+17
+18
+19
+21
+
+-- SELECT id FROM e7 IGNORE INDEX (e) WHERE e = 'zz' ORDER BY id
+
+-- SELECT id FROM e7 WHERE e2 = 'zz' ORDER BY id
+
+-- SELECT id FROM e7 WHERE st = 'bad' ORDER BY id
+
+-- SELECT id FROM e7 WHERE st IN ('x', 'bad') ORDER BY id
+5
+17
+
+-- SELECT id FROM e7 WHERE st = '' ORDER BY id
+19
+
+-- SELECT id FROM e7 WHERE st = 'x' ORDER BY id
+5
+17
+
+-- SELECT id FROM e7 WHERE st = 'x,bad' ORDER BY id
+
+-- SELECT id FROM e7 WHERE st <> 'bad' ORDER BY id
+5
+6
+15
+17
+18
+19
+21
+22
+
+-- SELECT id FROM e7 WHERE st > 'bad' ORDER BY id
+5
+6
+15
+17
+18
+21
+22
+
+-- SELECT id, st = 'bad', st = 'x', st < 'bad', e = '', e > '', e2 = '' FROM e7 ORDER BY id
+1 | NULL | NULL | NULL | 0 | 1 | 0
+2 | NULL | NULL | NULL | 0 | 1 | 0
+4 | NULL | NULL | NULL | 0 | 1 | NULL
+5 | 0 | 1 | 0 | 0 | 1 | NULL
+6 | 0 | 0 | 0 | 0 | 1 | NULL
+11 | NULL | NULL | NULL | 0 | 1 | 0
+12 | NULL | NULL | NULL | 1 | 0 | NULL
+15 | 0 | 0 | 0 | 0 | 1 | NULL
+17 | 0 | 1 | 0 | 0 | 1 | NULL
+18 | 0 | 0 | 0 | 0 | 1 | NULL
+19 | 0 | 0 | 1 | 0 | 1 | NULL
+20 | NULL | NULL | NULL | 1 | 0 | 1
+21 | 0 | 0 | 0 | 0 | 1 | NULL
+22 | 0 | 0 | 0 | 0 | 1 | NULL
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE e7
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE d1 (id INT PRIMARY KEY, dt DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', dd DATE NULL, ts TIMESTAMP NULL, t TIME NULL, y YEAR NULL)
+ok affected=0 insert_id=0
+-- INSERT INTO d1 VALUES (1, '0000-00-00 00:00:00', '0000-00-00', NULL, '00:00:00', 0), (2, '2024-01-01 00:00:00', '2024-01-01', '2024-01-01 00:00:00', '10:00:00', 2024), (3, '1970-01-01 00:00:00', '1970-01-01', '1970-01-01 00:00:01', '-01:00:00', 1970), (4, '2000-01-01 00:00:00', NULL, NULL, NULL, NULL), (5, '2024-01-01 00:00:00.5', '0001-01-01', NULL, '00:00:00.5', 2000)
+ok affected=5 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE wp_posts (ID BIGINT UNSIGNED PRIMARY KEY, post_author BIGINT UNSIGNED NOT NULL DEFAULT 0, post_date DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', post_date_gmt DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', post_title TEXT, comment_count BIGINT NOT NULL DEFAULT 0)
+ok affected=0 insert_id=0
+-- INSERT INTO wp_posts VALUES (1, 1, '2024-01-03 10:00:00', '2024-01-03 01:00:00', 'Hello world', 2), (2, 1, '2024-01-01 10:00:00', '0000-00-00 00:00:00', 'A much longer title', 0), (3, 2, '2024-01-02 10:00:00', '2024-01-02 01:00:00', 'Mid', 1), (4, 2, '2024-01-02 12:00:00', '0000-00-00 00:00:00', 'Draft post', 0), (5, 3, '2023-12-31 10:00:00', '2023-12-31 01:00:00', 'x', 0)
+ok affected=5 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT id, dt, IF(dt, 'y', 'n'), NOT dt, dt IS TRUE, dt IS FALSE, dt IS NOT TRUE, IF(dd, 'y', 'n'), NOT dd, dd IS TRUE, IF(ts, 'y', 'n'), IF(t, 'y', 'n'), NOT t, IF(y, 'y', 'n') FROM d1 ORDER BY id
+1 | 0000-00-00 00:00:00 | n | 1 | 0 | 1 | 1 | n | 1 | 0 | n | n | 1 | n
+2 | 2024-01-01 00:00:00 | y | 0 | 1 | 0 | 0 | y | 0 | 1 | y | y | 0 | y
+3 | 1970-01-01 00:00:00 | y | 0 | 1 | 0 | 0 | y | 0 | 1 | y | y | 0 | y
+4 | 2000-01-01 00:00:00 | y | 0 | 1 | 0 | 0 | n | NULL | 0 | n | n | NULL | n
+5 | 2024-01-01 00:00:01 | y | 0 | 1 | 0 | 0 | y | 0 | 1 | n | y | 0 | y
+
+-- SELECT id, dt AND 1, dt OR 0, dt XOR 1, dd AND dt, t OR 0, CASE WHEN dt THEN 1 ELSE 0 END, CASE WHEN t THEN 1 ELSE 0 END FROM d1 ORDER BY id
+1 | 0 | 0 | 1 | 0 | 0 | 0 | 0
+2 | 1 | 1 | 0 | 1 | 1 | 1 | 1
+3 | 1 | 1 | 0 | 1 | 1 | 1 | 1
+4 | 1 | 1 | 0 | NULL | NULL | 1 | 0
+5 | 1 | 1 | 0 | 1 | 1 | 1 | 1
+
+-- SELECT id FROM d1 WHERE dt ORDER BY id
+2
+3
+4
+5
+
+-- SELECT id FROM d1 WHERE NOT dt ORDER BY id
+1
+
+-- SELECT id FROM d1 WHERE dd ORDER BY id
+2
+3
+5
+
+-- SELECT id FROM d1 WHERE ts ORDER BY id
+2
+3
+
+-- SELECT id FROM d1 WHERE t ORDER BY id
+2
+3
+5
+
+-- SELECT id FROM d1 WHERE dt AND dd ORDER BY id
+2
+3
+5
+
+-- SELECT CASE WHEN dt THEN 1 ELSE 0 END, COUNT(*) FROM d1 GROUP BY 1 ORDER BY 1
+0 | 1
+1 | 4
+
+-- SELECT IF(CAST('0000-00-00' AS DATE), 1, 0), IF(FROM_UNIXTIME(0), 1, 0), IF(STR_TO_DATE('x', 'x'), 1, 0), IF(CAST('00:00:00' AS TIME), 1, 0), IF(CAST('00:00:01' AS TIME), 1, 0)
+0 | 1 | 0 | 0 | 1
+
+-- SELECT ID FROM wp_posts WHERE post_date_gmt ORDER BY ID
+1
+3
+5
+
+-- SELECT ID, IF(post_date_gmt, 'y', 'n'), NOT post_date_gmt, post_date_gmt IS TRUE FROM wp_posts ORDER BY ID
+1 | y | 0 | 1
+2 | n | 1 | 0
+3 | y | 0 | 1
+4 | n | 1 | 0
+5 | y | 0 | 1
+
+-- SELECT ID FROM wp_posts WHERE NOT post_date_gmt ORDER BY ID
+2
+4
+
+-- SELECT COUNT(*) FROM wp_posts WHERE post_date_gmt AND post_author = 1
+1
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT id, dt, IF(dt, 'y', 'n'), NOT dt, dt IS TRUE, dt IS FALSE, dt IS NOT TRUE, IF(dd, 'y', 'n'), NOT dd, dd IS TRUE, IF(ts, 'y', 'n'), IF(t, 'y', 'n'), NOT t, IF(y, 'y', 'n') FROM d1 ORDER BY id
+1 | 0000-00-00 00:00:00 | n | 1 | 0 | 1 | 1 | n | 1 | 0 | n | n | 1 | n
+2 | 2024-01-01 00:00:00 | y | 0 | 1 | 0 | 0 | y | 0 | 1 | y | y | 0 | y
+3 | 1970-01-01 00:00:00 | y | 0 | 1 | 0 | 0 | y | 0 | 1 | y | y | 0 | y
+4 | 2000-01-01 00:00:00 | y | 0 | 1 | 0 | 0 | n | NULL | 0 | n | n | NULL | n
+5 | 2024-01-01 00:00:01 | y | 0 | 1 | 0 | 0 | y | 0 | 1 | n | y | 0 | y
+
+-- SELECT id, dt AND 1, dt OR 0, dt XOR 1, dd AND dt, t OR 0, CASE WHEN dt THEN 1 ELSE 0 END, CASE WHEN t THEN 1 ELSE 0 END FROM d1 ORDER BY id
+1 | 0 | 0 | 1 | 0 | 0 | 0 | 0
+2 | 1 | 1 | 0 | 1 | 1 | 1 | 1
+3 | 1 | 1 | 0 | 1 | 1 | 1 | 1
+4 | 1 | 1 | 0 | NULL | NULL | 1 | 0
+5 | 1 | 1 | 0 | 1 | 1 | 1 | 1
+
+-- SELECT id FROM d1 WHERE dt ORDER BY id
+2
+3
+4
+5
+
+-- SELECT id FROM d1 WHERE NOT dt ORDER BY id
+1
+
+-- SELECT id FROM d1 WHERE dd ORDER BY id
+2
+3
+5
+
+-- SELECT id FROM d1 WHERE ts ORDER BY id
+2
+3
+
+-- SELECT id FROM d1 WHERE t ORDER BY id
+2
+3
+5
+
+-- SELECT id FROM d1 WHERE dt AND dd ORDER BY id
+2
+3
+5
+
+-- SELECT CASE WHEN dt THEN 1 ELSE 0 END, COUNT(*) FROM d1 GROUP BY 1 ORDER BY 1
+0 | 1
+1 | 4
+
+-- SELECT IF(CAST('0000-00-00' AS DATE), 1, 0), IF(FROM_UNIXTIME(0), 1, 0), IF(STR_TO_DATE('x', 'x'), 1, 0), IF(CAST('00:00:00' AS TIME), 1, 0), IF(CAST('00:00:01' AS TIME), 1, 0)
+0 | 1 | 0 | 0 | 1
+
+-- SELECT ID FROM wp_posts WHERE post_date_gmt ORDER BY ID
+1
+3
+5
+
+-- SELECT ID, IF(post_date_gmt, 'y', 'n'), NOT post_date_gmt, post_date_gmt IS TRUE FROM wp_posts ORDER BY ID
+1 | y | 0 | 1
+2 | n | 1 | 0
+3 | y | 0 | 1
+4 | n | 1 | 0
+5 | y | 0 | 1
+
+-- SELECT ID FROM wp_posts WHERE NOT post_date_gmt ORDER BY ID
+2
+4
+
+-- SELECT COUNT(*) FROM wp_posts WHERE post_date_gmt AND post_author = 1
+1
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE wp_posts
+ok affected=0 insert_id=0
+-- DROP TABLE d1
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE d2 (id INT PRIMARY KEY, dt DATETIME NULL, dd DATE NULL, t TIME NULL, e ENUM('a','b') NULL, st SET('x','y') NULL, s VARCHAR(10) NULL, i INT NULL, dz DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', price DECIMAL(10,2) NULL)
+ok affected=0 insert_id=0
+-- INSERT INTO d2 VALUES (1, '2024-01-02 03:04:05', '2024-01-02', '10:00:00', 'b', 'x,y', 'str', 5, '0000-00-00 00:00:00', 10.50), (2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2024-01-01 00:00:00', NULL)
+ok affected=2 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT id, IFNULL(dt, ''), IFNULL(dd, 'none'), IFNULL(dd, 0), IFNULL(dt, 0), IFNULL(t, ''), IFNULL(t, 0), IFNULL(e, ''), IFNULL(e, 0), IFNULL(st, 'none'), IFNULL(dz, '') FROM d2 ORDER BY id
+1 | 2024-01-02 03:04:05 | 2024-01-02 | 2024-01-02 | 2024-01-02 03:04:05 | 10:00:00 | 10:00:00 | b | b | x,y | 0000-00-00 00:00:00
+2 |  | none | 0 | 0 |  | 0 |  | 0 | none | 2024-01-01 00:00:00
+
+-- SELECT id, IFNULL(dt, dd), IFNULL(dt, NULL), IFNULL(NULL, dd), IFNULL(s, ''), IFNULL(i, 0), IFNULL(i, ''), IFNULL(i, 'none'), IFNULL(s, 0), IFNULL(s, dd), IFNULL(dd, s), IFNULL(price, ''), IFNULL(price, 0) FROM d2 ORDER BY id
+1 | 2024-01-02 03:04:05 | 2024-01-02 03:04:05 | 2024-01-02 | str | 5 | 5 | 5 | str | str | 2024-01-02 | 10.50 | 10.50
+2 | NULL | NULL | NULL |  | 0 |  | none | 0 | NULL | NULL |  | 0.00
+
+-- SELECT id, CONCAT(IFNULL(dd, '')), LENGTH(IFNULL(dt, '')), IFNULL(dd, '') = '', IFNULL(dd, '-'), CONCAT('[', IFNULL(i, ''), ']'), IFNULL(e, 'none') = 'b' FROM d2 ORDER BY id
+1 | 2024-01-02 | 19 | 0 | 2024-01-02 | [5] | 1
+2 |  | 0 | 1 | - | [] | 0
+
+-- SELECT id FROM d2 WHERE IFNULL(dd, '') = '' ORDER BY id
+2
+
+-- SELECT id FROM d2 WHERE IFNULL(dt, '') <> '' ORDER BY id
+1
+
+-- SELECT id, COALESCE(dd, ''), COALESCE(dd, 0), IFNULL(dd, 0) = COALESCE(dd, 0) FROM d2 ORDER BY id
+1 | 2024-01-02 | 2024-01-02 | 1
+2 |  | 0 | 1
+
+-- SELECT IFNULL(NULL, ''), IFNULL(NULL, 0), IFNULL(1, ''), IFNULL(CAST(NULL AS DATE), ''), IFNULL(CAST('2024-01-01' AS DATE), 'x')
+ | 0 | 1 |  | 2024-01-01
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT id, IFNULL(dt, ''), IFNULL(dd, 'none'), IFNULL(dd, 0), IFNULL(dt, 0), IFNULL(t, ''), IFNULL(t, 0), IFNULL(e, ''), IFNULL(e, 0), IFNULL(st, 'none'), IFNULL(dz, '') FROM d2 ORDER BY id
+1 | 2024-01-02 03:04:05 | 2024-01-02 | 2024-01-02 | 2024-01-02 03:04:05 | 10:00:00 | 10:00:00 | b | b | x,y | 0000-00-00 00:00:00
+2 |  | none | 0 | 0 |  | 0 |  | 0 | none | 2024-01-01 00:00:00
+
+-- SELECT id, IFNULL(dt, dd), IFNULL(dt, NULL), IFNULL(NULL, dd), IFNULL(s, ''), IFNULL(i, 0), IFNULL(i, ''), IFNULL(i, 'none'), IFNULL(s, 0), IFNULL(s, dd), IFNULL(dd, s), IFNULL(price, ''), IFNULL(price, 0) FROM d2 ORDER BY id
+1 | 2024-01-02 03:04:05 | 2024-01-02 03:04:05 | 2024-01-02 | str | 5 | 5 | 5 | str | str | 2024-01-02 | 10.50 | 10.50
+2 | NULL | NULL | NULL |  | 0 |  | none | 0 | NULL | NULL |  | 0.00
+
+-- SELECT id, CONCAT(IFNULL(dd, '')), LENGTH(IFNULL(dt, '')), IFNULL(dd, '') = '', IFNULL(dd, '-'), CONCAT('[', IFNULL(i, ''), ']'), IFNULL(e, 'none') = 'b' FROM d2 ORDER BY id
+1 | 2024-01-02 | 19 | 0 | 2024-01-02 | [5] | 1
+2 |  | 0 | 1 | - | [] | 0
+
+-- SELECT id FROM d2 WHERE IFNULL(dd, '') = '' ORDER BY id
+2
+
+-- SELECT id FROM d2 WHERE IFNULL(dt, '') <> '' ORDER BY id
+1
+
+-- SELECT id, COALESCE(dd, ''), COALESCE(dd, 0), IFNULL(dd, 0) = COALESCE(dd, 0) FROM d2 ORDER BY id
+1 | 2024-01-02 | 2024-01-02 | 1
+2 |  | 0 | 1
+
+-- SELECT IFNULL(NULL, ''), IFNULL(NULL, 0), IFNULL(1, ''), IFNULL(CAST(NULL AS DATE), ''), IFNULL(CAST('2024-01-01' AS DATE), 'x')
+ | 0 | 1 |  | 2024-01-01
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE d2
+ok affected=0 insert_id=0
+-- CREATE TABLE pm (meta_id INT PRIMARY KEY, post_id INT, meta_key VARCHAR(255), meta_value LONGTEXT, s VARCHAR(20))
+ok affected=0 insert_id=0
+-- INSERT INTO pm VALUES (1, 1, '_edit_lock', '1704103200:1', '3x'), (2, 2, '_edit_lock', '1704106800:2', '1'), (3, 1, '_price', '12abc', NULL), (4, 2, '_price', '10.5', '2.5y'), (5, 3, '_price', '', ''), (6, 3, '_x', '1e400', 'abc'), (7, 4, '_x', 'abc', NULL), (8, 4, '_x', NULL, NULL), (9, 5, '_x', ' 7 ', ' 7'), (10, 5, '_x', '-3.5e2x', '-1')
+ok affected=10 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT SUM(meta_value), AVG(meta_value) FROM pm WHERE meta_key = '_edit_lock'
+3.40821e+09 | 1.704105e+09
+
+-- SELECT SUM(meta_value), AVG(meta_value), COUNT(meta_value) FROM pm WHERE meta_key = '_price'
+22.5 | 7.5 | 3
+
+-- SELECT SUM(meta_value) FROM pm WHERE meta_key = '_x'
+1.7976931348623157e+308
+
+-- SELECT meta_key, SUM(meta_value), AVG(meta_value), SUM(s), AVG(s) FROM pm GROUP BY meta_key ORDER BY meta_key
+_edit_lock | 3.40821e+09 | 1.704105e+09 | 4 | 2
+_price | 22.5 | 7.5 | 2.5 | 1.25
+_x | 1.7976931348623157e+308 | 4.4942328371557893e+307 | 6 | 2
+
+-- SELECT SUM(s), AVG(s), SUM(s) + 0 FROM pm
+12.5 | 1.7857142857142858 | 12.5
+
+-- SELECT SUM('12abc'), SUM('1e400'), AVG('12abc'), SUM('abc'), SUM(''), SUM(' 5'), SUM('0x10'), SUM('1704103200:1')
+12 | 1.7976931348623157e+308 | 12 | 0 | 0 | 5 | 0 | 1.7041032e+09
+
+-- SELECT SUM(DISTINCT meta_value) FROM pm WHERE meta_key = '_edit_lock'
+3.40821e+09
+
+-- SELECT post_id, SUM(meta_value) OVER (PARTITION BY post_id), AVG(meta_value) OVER (PARTITION BY post_id) FROM pm WHERE meta_key = '_price' ORDER BY post_id
+1 | 12 | 12
+2 | 10.5 | 10.5
+3 | 0 | 0
+
+-- SELECT SUM(meta_value + 0), SUM(meta_value) = SUM(meta_value + 0) FROM pm WHERE meta_key IN ('_price', '_edit_lock')
+3.4082100225e+09 | 1
+
+-- SELECT post_id FROM pm GROUP BY post_id HAVING SUM(meta_value) > 1000 ORDER BY post_id
+1
+2
+3
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT SUM(meta_value), AVG(meta_value) FROM pm WHERE meta_key = '_edit_lock'
+3.40821e+09 | 1.704105e+09
+
+-- SELECT SUM(meta_value), AVG(meta_value), COUNT(meta_value) FROM pm WHERE meta_key = '_price'
+22.5 | 7.5 | 3
+
+-- SELECT SUM(meta_value) FROM pm WHERE meta_key = '_x'
+1.7976931348623157e+308
+
+-- SELECT meta_key, SUM(meta_value), AVG(meta_value), SUM(s), AVG(s) FROM pm GROUP BY meta_key ORDER BY meta_key
+_edit_lock | 3.40821e+09 | 1.704105e+09 | 4 | 2
+_price | 22.5 | 7.5 | 2.5 | 1.25
+_x | 1.7976931348623157e+308 | 4.4942328371557893e+307 | 6 | 2
+
+-- SELECT SUM(s), AVG(s), SUM(s) + 0 FROM pm
+12.5 | 1.7857142857142858 | 12.5
+
+-- SELECT SUM('12abc'), SUM('1e400'), AVG('12abc'), SUM('abc'), SUM(''), SUM(' 5'), SUM('0x10'), SUM('1704103200:1')
+12 | 1.7976931348623157e+308 | 12 | 0 | 0 | 5 | 0 | 1.7041032e+09
+
+-- SELECT SUM(DISTINCT meta_value) FROM pm WHERE meta_key = '_edit_lock'
+3.40821e+09
+
+-- SELECT post_id, SUM(meta_value) OVER (PARTITION BY post_id), AVG(meta_value) OVER (PARTITION BY post_id) FROM pm WHERE meta_key = '_price' ORDER BY post_id
+1 | 12 | 12
+2 | 10.5 | 10.5
+3 | 0 | 0
+
+-- SELECT SUM(meta_value + 0), SUM(meta_value) = SUM(meta_value + 0) FROM pm WHERE meta_key IN ('_price', '_edit_lock')
+3.4082100225e+09 | 1
+
+-- SELECT post_id FROM pm GROUP BY post_id HAVING SUM(meta_value) > 1000 ORDER BY post_id
+1
+2
+3
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE pm
+ok affected=0 insert_id=0
+-- CREATE TABLE e8 (id INT PRIMARY KEY, k INT NOT NULL, e ENUM('a','b','c') NOT NULL, e2 ENUM('a','b','c') NOT NULL, KEY e (e), KEY ke (k, e))
+ok affected=0 insert_id=0
+-- CREATE TABLE e9 (id INT PRIMARY KEY, e ENUM('a','b','c') NOT NULL, e2 ENUM('a','b','c') NOT NULL, KEY e (e)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- INSERT INTO e8 VALUES (1, 1, 'a', 'a'), (2, 1, 'b', 'b'), (3, 1, 'zz', 'zz'), (4, 1, 'c', 'c'), (5, 2, 'a', 'a'), (6, 2, 'c', 'c')
+ok affected=6 insert_id=0
+-- INSERT INTO e9 SELECT id, e, e2 FROM e8
+ok affected=6 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- INSERT INTO e8 VALUES (7, 3, 'b ', 'c  ')
+ok affected=1 insert_id=0
+-- UPDATE e8 SET e2 = 'a ' WHERE id = 7
+ok affected=1 insert_id=0
+-- SELECT id, e, e2 FROM e8 WHERE id = 7
+7 | b | a
+
+-- DELETE FROM e8 WHERE id = 7
+ok affected=1 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT id FROM e8 WHERE e = 'a ' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e2 = 'a ' ORDER BY id
+
+-- SELECT id FROM e8 IGNORE INDEX (e, ke) WHERE e = 'A ' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e IN ('a ', 'b') ORDER BY id
+2
+
+-- SELECT id FROM e8 WHERE e2 IN ('A', 'B ') ORDER BY id
+1
+5
+
+-- SELECT id FROM e8 WHERE e NOT IN ('a ', 'b') ORDER BY id
+1
+3
+4
+5
+6
+
+-- SELECT id FROM e8 WHERE e = CONCAT('a', ' ') ORDER BY id
+
+-- SELECT id FROM e8 WHERE e = BINARY 'a ' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e2 = BINARY 'a' ORDER BY id
+1
+5
+
+-- SELECT id FROM e8 WHERE e = BINARY 'A' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e2 = BINARY 'A' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e <> 'a ' ORDER BY id
+1
+2
+3
+4
+5
+6
+
+-- SELECT id FROM e8 WHERE e2 <> 'a ' ORDER BY id
+1
+2
+3
+4
+5
+6
+
+-- SELECT id FROM e8 WHERE e = '  ' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e2 = '  ' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e IN ('  ', 'b') ORDER BY id
+2
+
+-- SELECT id FROM e8 WHERE e > 'a ' ORDER BY id
+2
+4
+6
+
+-- SELECT id FROM e8 WHERE e >= 'A ' ORDER BY id
+2
+4
+6
+
+-- SELECT id, e = 'a ', e2 = 'a ', e = 'a', e = '', e2 = '  ' FROM e8 ORDER BY id
+1 | 0 | 0 | 1 | 0 | 0
+2 | 0 | 0 | 0 | 0 | 0
+3 | 0 | 0 | 0 | 1 | 0
+4 | 0 | 0 | 0 | 0 | 0
+5 | 0 | 0 | 1 | 0 | 0
+6 | 0 | 0 | 0 | 0 | 0
+
+-- SELECT id FROM e8 WHERE e > 'zz' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e < 'zz' ORDER BY id
+1
+2
+3
+4
+5
+6
+
+-- SELECT id FROM e8 WHERE e <= 'zz' ORDER BY id
+1
+2
+3
+4
+5
+6
+
+-- SELECT id FROM e8 WHERE e >= 'zz' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e BETWEEN 'a' AND 'zz' ORDER BY id
+1
+2
+4
+5
+6
+
+-- SELECT id FROM e8 WHERE e NOT BETWEEN 'a' AND 'zz' ORDER BY id
+3
+
+-- SELECT id FROM e8 WHERE e > 'aa' ORDER BY id
+2
+4
+6
+
+-- SELECT id FROM e8 WHERE e < 'bb' ORDER BY id
+1
+2
+3
+5
+
+-- SELECT id FROM e8 IGNORE INDEX (e, ke) WHERE e > 'zz' ORDER BY id
+
+-- SELECT id FROM e8 IGNORE INDEX (e, ke) WHERE e < 'bb' ORDER BY id
+1
+2
+3
+5
+
+-- SELECT id FROM e8 WHERE e2 > 'zz' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e2 BETWEEN 'a' AND 'zz' ORDER BY id
+1
+2
+4
+5
+6
+
+-- SELECT id FROM e8 WHERE e2 < 'bb' ORDER BY id
+1
+2
+3
+5
+
+-- SELECT id FROM e8 WHERE k = 1 AND e > 'zz' ORDER BY id
+
+-- SELECT id FROM e8 WHERE k = 1 AND e < 'bb' ORDER BY id
+1
+2
+3
+
+-- SELECT id FROM e8 WHERE k = 1 AND e BETWEEN 'a' AND 'zz' ORDER BY id
+1
+2
+4
+
+-- SELECT id FROM e8 WHERE k = 1 AND e = 'a ' ORDER BY id
+
+-- SELECT id, e > 'zz', e < 'zz', e > 'aa', e < 'bb', e2 >= 'zz' FROM e8 ORDER BY id
+1 | 0 | 1 | 0 | 1 | 0
+2 | 0 | 1 | 1 | 1 | 0
+3 | 0 | 1 | 0 | 1 | 0
+4 | 0 | 1 | 1 | 0 | 0
+5 | 0 | 1 | 0 | 1 | 0
+6 | 0 | 1 | 1 | 0 | 0
+
+-- SELECT id FROM e9 WHERE e = 'a ' ORDER BY id
+1
+5
+
+-- SELECT id FROM e9 WHERE e2 = 'A ' ORDER BY id
+1
+5
+
+-- SELECT id FROM e9 WHERE e IN ('a ', 'b') ORDER BY id
+1
+2
+5
+
+-- SELECT id FROM e9 WHERE e2 IN ('a ', 'b') ORDER BY id
+1
+2
+5
+
+-- SELECT id FROM e9 WHERE e <> 'a ' ORDER BY id
+2
+3
+4
+6
+
+-- SELECT id FROM e9 WHERE e = '  ' ORDER BY id
+3
+
+-- SELECT id FROM e9 WHERE e2 = '  ' ORDER BY id
+3
+
+-- SELECT id FROM e9 WHERE e2 = BINARY 'a ' ORDER BY id
+
+-- SELECT id FROM e9 WHERE e2 = BINARY 'A' ORDER BY id
+
+-- SELECT id FROM e9 WHERE e2 = BINARY 'a' ORDER BY id
+1
+5
+
+-- SELECT id FROM e9 WHERE e > 'zz' ORDER BY id
+
+-- SELECT id FROM e9 WHERE e < 'bb' ORDER BY id
+1
+2
+3
+5
+
+-- SELECT id FROM e9 WHERE e2 BETWEEN 'a' AND 'zz' ORDER BY id
+1
+2
+4
+5
+6
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT id FROM e8 WHERE e = 'a ' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e2 = 'a ' ORDER BY id
+
+-- SELECT id FROM e8 IGNORE INDEX (e, ke) WHERE e = 'A ' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e IN ('a ', 'b') ORDER BY id
+2
+
+-- SELECT id FROM e8 WHERE e2 IN ('A', 'B ') ORDER BY id
+1
+5
+
+-- SELECT id FROM e8 WHERE e NOT IN ('a ', 'b') ORDER BY id
+1
+3
+4
+5
+6
+
+-- SELECT id FROM e8 WHERE e = CONCAT('a', ' ') ORDER BY id
+
+-- SELECT id FROM e8 WHERE e = BINARY 'a ' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e2 = BINARY 'a' ORDER BY id
+1
+5
+
+-- SELECT id FROM e8 WHERE e = BINARY 'A' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e2 = BINARY 'A' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e <> 'a ' ORDER BY id
+1
+2
+3
+4
+5
+6
+
+-- SELECT id FROM e8 WHERE e2 <> 'a ' ORDER BY id
+1
+2
+3
+4
+5
+6
+
+-- SELECT id FROM e8 WHERE e = '  ' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e2 = '  ' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e IN ('  ', 'b') ORDER BY id
+2
+
+-- SELECT id FROM e8 WHERE e > 'a ' ORDER BY id
+2
+4
+6
+
+-- SELECT id FROM e8 WHERE e >= 'A ' ORDER BY id
+2
+4
+6
+
+-- SELECT id, e = 'a ', e2 = 'a ', e = 'a', e = '', e2 = '  ' FROM e8 ORDER BY id
+1 | 0 | 0 | 1 | 0 | 0
+2 | 0 | 0 | 0 | 0 | 0
+3 | 0 | 0 | 0 | 1 | 0
+4 | 0 | 0 | 0 | 0 | 0
+5 | 0 | 0 | 1 | 0 | 0
+6 | 0 | 0 | 0 | 0 | 0
+
+-- SELECT id FROM e8 WHERE e > 'zz' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e < 'zz' ORDER BY id
+1
+2
+3
+4
+5
+6
+
+-- SELECT id FROM e8 WHERE e <= 'zz' ORDER BY id
+1
+2
+3
+4
+5
+6
+
+-- SELECT id FROM e8 WHERE e >= 'zz' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e BETWEEN 'a' AND 'zz' ORDER BY id
+1
+2
+4
+5
+6
+
+-- SELECT id FROM e8 WHERE e NOT BETWEEN 'a' AND 'zz' ORDER BY id
+3
+
+-- SELECT id FROM e8 WHERE e > 'aa' ORDER BY id
+2
+4
+6
+
+-- SELECT id FROM e8 WHERE e < 'bb' ORDER BY id
+1
+2
+3
+5
+
+-- SELECT id FROM e8 IGNORE INDEX (e, ke) WHERE e > 'zz' ORDER BY id
+
+-- SELECT id FROM e8 IGNORE INDEX (e, ke) WHERE e < 'bb' ORDER BY id
+1
+2
+3
+5
+
+-- SELECT id FROM e8 WHERE e2 > 'zz' ORDER BY id
+
+-- SELECT id FROM e8 WHERE e2 BETWEEN 'a' AND 'zz' ORDER BY id
+1
+2
+4
+5
+6
+
+-- SELECT id FROM e8 WHERE e2 < 'bb' ORDER BY id
+1
+2
+3
+5
+
+-- SELECT id FROM e8 WHERE k = 1 AND e > 'zz' ORDER BY id
+
+-- SELECT id FROM e8 WHERE k = 1 AND e < 'bb' ORDER BY id
+1
+2
+3
+
+-- SELECT id FROM e8 WHERE k = 1 AND e BETWEEN 'a' AND 'zz' ORDER BY id
+1
+2
+4
+
+-- SELECT id FROM e8 WHERE k = 1 AND e = 'a ' ORDER BY id
+
+-- SELECT id, e > 'zz', e < 'zz', e > 'aa', e < 'bb', e2 >= 'zz' FROM e8 ORDER BY id
+1 | 0 | 1 | 0 | 1 | 0
+2 | 0 | 1 | 1 | 1 | 0
+3 | 0 | 1 | 0 | 1 | 0
+4 | 0 | 1 | 1 | 0 | 0
+5 | 0 | 1 | 0 | 1 | 0
+6 | 0 | 1 | 1 | 0 | 0
+
+-- SELECT id FROM e9 WHERE e = 'a ' ORDER BY id
+1
+5
+
+-- SELECT id FROM e9 WHERE e2 = 'A ' ORDER BY id
+1
+5
+
+-- SELECT id FROM e9 WHERE e IN ('a ', 'b') ORDER BY id
+1
+2
+5
+
+-- SELECT id FROM e9 WHERE e2 IN ('a ', 'b') ORDER BY id
+1
+2
+5
+
+-- SELECT id FROM e9 WHERE e <> 'a ' ORDER BY id
+2
+3
+4
+6
+
+-- SELECT id FROM e9 WHERE e = '  ' ORDER BY id
+3
+
+-- SELECT id FROM e9 WHERE e2 = '  ' ORDER BY id
+3
+
+-- SELECT id FROM e9 WHERE e2 = BINARY 'a ' ORDER BY id
+
+-- SELECT id FROM e9 WHERE e2 = BINARY 'A' ORDER BY id
+
+-- SELECT id FROM e9 WHERE e2 = BINARY 'a' ORDER BY id
+1
+5
+
+-- SELECT id FROM e9 WHERE e > 'zz' ORDER BY id
+
+-- SELECT id FROM e9 WHERE e < 'bb' ORDER BY id
+1
+2
+3
+5
+
+-- SELECT id FROM e9 WHERE e2 BETWEEN 'a' AND 'zz' ORDER BY id
+1
+2
+4
+5
+6
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE e8
+ok affected=0 insert_id=0
+-- DROP TABLE e9
+ok affected=0 insert_id=0
+-- CREATE TABLE t9 (id INT PRIMARY KEY, t TIME)
+ok affected=0 insert_id=0
+-- INSERT INTO t9 VALUES (1, '13:04:05'), (2, '00:00:00'), (3, NULL), (4, '-838:59:59'), (5, '-01:00:00'), (6, '00:00:01')
+ok affected=6 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT id, IFNULL(t, ''), IFNULL(t, 0), IFNULL(t, 'none'), IFNULL(t, 1.5) FROM t9 ORDER BY id
+1 | 13:04:05 | 13:04:05 | 13:04:05 | 13:04:05
+2 | 00:00:00 | 00:00:00 | 00:00:00 | 00:00:00
+3 |  | 0 | none | 1.5
+4 | -838:59:59 | -838:59:59 | -838:59:59 | -838:59:59
+5 | -01:00:00 | -01:00:00 | -01:00:00 | -01:00:00
+6 | 00:00:01 | 00:00:01 | 00:00:01 | 00:00:01
+
+-- SELECT id, IFNULL(t, '') + 0, IFNULL(t, '') = 0, IFNULL(t, 0) = 0, IFNULL(t, 0) + 0, IFNULL(t, 'x') + 0, LENGTH(IFNULL(t, '')), LENGTH(IFNULL(t, 0)) FROM t9 ORDER BY id
+1 | 13 | 0 | 0 | 13 | 13 | 8 | 8
+2 | 0 | 1 | 1 | 0 | 0 | 8 | 8
+3 | 0 | 1 | 1 | 0 | 0 | 0 | 1
+4 | -838 | 0 | 0 | -838 | -838 | 10 | 10
+5 | -1 | 0 | 0 | -1 | -1 | 9 | 9
+6 | 0 | 1 | 1 | 0 | 0 | 8 | 8
+
+-- SELECT id FROM t9 WHERE IFNULL(t, 0) = 0 ORDER BY id
+2
+3
+6
+
+-- SELECT id FROM t9 WHERE IFNULL(t, '') = '13:04:05' ORDER BY id
+1
+
+-- SELECT id FROM t9 WHERE IFNULL(t, '') = '' ORDER BY id
+3
+
+-- SELECT id, IFNULL(NULL, t), IFNULL('', t), CONCAT(IFNULL(t, '')), IFNULL(t, '') > '00:00:00', IFNULL(t, 'none') LIKE '13%' FROM t9 ORDER BY id
+1 | 13:04:05 |  | 13:04:05 | 1 | 1
+2 | 00:00:00 |  | 00:00:00 | 0 | 0
+3 | NULL |  |  | 0 | 0
+4 | -838:59:59 |  | -838:59:59 | 0 | 0
+5 | -01:00:00 |  | -01:00:00 | 0 | 0
+6 | 00:00:01 |  | 00:00:01 | 1 | 0
+
+-- SELECT id, COALESCE(t, ''), COALESCE(t, '') + 0, IF(id > 0, t, '') + 0, CONCAT(t) FROM t9 ORDER BY id
+1 | 13:04:05 | 13 | 130405 | 13:04:05
+2 | 00:00:00 | 0 | 0 | 00:00:00
+3 |  | 0 | NULL | NULL
+4 | -838:59:59 | -838 | -8.385959e+06 | -838:59:59
+5 | -01:00:00 | -1 | -10000 | -01:00:00
+6 | 00:00:01 | 0 | 1 | 00:00:01
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT id, IFNULL(t, ''), IFNULL(t, 0), IFNULL(t, 'none'), IFNULL(t, 1.5) FROM t9 ORDER BY id
+1 | 13:04:05 | 13:04:05 | 13:04:05 | 13:04:05
+2 | 00:00:00 | 00:00:00 | 00:00:00 | 00:00:00
+3 |  | 0 | none | 1.5
+4 | -838:59:59 | -838:59:59 | -838:59:59 | -838:59:59
+5 | -01:00:00 | -01:00:00 | -01:00:00 | -01:00:00
+6 | 00:00:01 | 00:00:01 | 00:00:01 | 00:00:01
+
+-- SELECT id, IFNULL(t, '') + 0, IFNULL(t, '') = 0, IFNULL(t, 0) = 0, IFNULL(t, 0) + 0, IFNULL(t, 'x') + 0, LENGTH(IFNULL(t, '')), LENGTH(IFNULL(t, 0)) FROM t9 ORDER BY id
+1 | 13 | 0 | 0 | 13 | 13 | 8 | 8
+2 | 0 | 1 | 1 | 0 | 0 | 8 | 8
+3 | 0 | 1 | 1 | 0 | 0 | 0 | 1
+4 | -838 | 0 | 0 | -838 | -838 | 10 | 10
+5 | -1 | 0 | 0 | -1 | -1 | 9 | 9
+6 | 0 | 1 | 1 | 0 | 0 | 8 | 8
+
+-- SELECT id FROM t9 WHERE IFNULL(t, 0) = 0 ORDER BY id
+2
+3
+6
+
+-- SELECT id FROM t9 WHERE IFNULL(t, '') = '13:04:05' ORDER BY id
+1
+
+-- SELECT id FROM t9 WHERE IFNULL(t, '') = '' ORDER BY id
+3
+
+-- SELECT id, IFNULL(NULL, t), IFNULL('', t), CONCAT(IFNULL(t, '')), IFNULL(t, '') > '00:00:00', IFNULL(t, 'none') LIKE '13%' FROM t9 ORDER BY id
+1 | 13:04:05 |  | 13:04:05 | 1 | 1
+2 | 00:00:00 |  | 00:00:00 | 0 | 0
+3 | NULL |  |  | 0 | 0
+4 | -838:59:59 |  | -838:59:59 | 0 | 0
+5 | -01:00:00 |  | -01:00:00 | 0 | 0
+6 | 00:00:01 |  | 00:00:01 | 1 | 0
+
+-- SELECT id, COALESCE(t, ''), COALESCE(t, '') + 0, IF(id > 0, t, '') + 0, CONCAT(t) FROM t9 ORDER BY id
+1 | 13:04:05 | 13 | 130405 | 13:04:05
+2 | 00:00:00 | 0 | 0 | 00:00:00
+3 |  | 0 | NULL | NULL
+4 | -838:59:59 | -838 | -8.385959e+06 | -838:59:59
+5 | -01:00:00 | -1 | -10000 | -01:00:00
+6 | 00:00:01 | 0 | 1 | 00:00:01
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE t9
+ok affected=0 insert_id=0
+-- CREATE TABLE ov (id INT PRIMARY KEY, g INT, vc VARCHAR(20), dbl DOUBLE)
+ok affected=0 insert_id=0
+-- INSERT INTO ov VALUES (1, 1, '1e400', 1e308), (2, 1, '1e400', 1e308), (3, 1, '5', 5), (4, 2, '1e308', 1e308), (5, 2, '1e308', 1e308), (6, 2, '-1e308', -1e308), (7, 3, '-1e400', -1e308), (8, 3, '-1e400', -1e308), (9, 4, '1e400', 1.5), (10, 4, NULL, NULL)
+ok affected=10 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT SUM(vc), AVG(vc), SUM(dbl), AVG(dbl) FROM ov WHERE g = 1
+0 | 0 | 0 | 0
+
+-- SELECT g, SUM(vc), AVG(vc), SUM(dbl), AVG(dbl), COUNT(vc) FROM ov GROUP BY g ORDER BY g
+1 | 0 | 0 | 0 | 0 | 3
+2 | 0 | 0 | 0 | 0 | 3
+3 | 0 | 0 | 0 | 0 | 2
+4 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.5 | 1.5 | 1
+
+-- SELECT SUM(vc), AVG(vc), SUM(dbl), AVG(dbl) FROM ov
+0 | 0 | 0 | 0
+
+-- SELECT SUM(vc) + 1 FROM ov WHERE g = 1
+error 1690
+-- SELECT SUM(dbl) = 0, SUM(dbl) IS NULL, SUM(dbl) > 1e308, CONCAT(SUM(dbl)), CAST(SUM(dbl) AS CHAR), ROUND(SUM(dbl)) FROM ov WHERE g = 1
+0 | 0 | 1 | 0 | 0 | 0
+
+-- SELECT -SUM(dbl) FROM ov WHERE g = 1
+0
+
+-- SELECT g, SUM(dbl) FROM ov GROUP BY g HAVING SUM(dbl) = 0 ORDER BY g
+
+-- SELECT SUM(DISTINCT vc), SUM(DISTINCT dbl), AVG(DISTINCT dbl) FROM ov WHERE g = 1
+1.7976931348623157e+308 | 1e+308 | 5e+307
+
+-- SELECT SUM(x) FROM (SELECT 1e308 AS x UNION ALL SELECT 1e308) u
+0
+
+-- SELECT SUM(x) FROM (SELECT '1e308' AS x UNION ALL SELECT '1e308') u
+0
+
+-- SELECT id, SUM(vc) OVER (ORDER BY id), SUM(dbl) OVER (ORDER BY id), AVG(vc) OVER (ORDER BY id), AVG(dbl) OVER (ORDER BY id) FROM ov ORDER BY id
+1 | 1.7976931348623157e+308 | 1e+308 | 1.7976931348623157e+308 | 1e+308
+2 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+3 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+4 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+5 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+6 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+7 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+8 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+9 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+10 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+
+-- SELECT id, SUM(vc) OVER (PARTITION BY g ORDER BY id), SUM(dbl) OVER (PARTITION BY g), AVG(dbl) OVER (PARTITION BY g) FROM ov ORDER BY id
+1 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+2 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+3 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+4 | 1e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+5 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+6 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+7 | -1.7976931348623157e+308 | -1.7976931348623157e+308 | -1.7976931348623157e+308
+8 | -1.7976931348623157e+308 | -1.7976931348623157e+308 | -1.7976931348623157e+308
+9 | 1.7976931348623157e+308 | 1.5 | 1.5
+10 | 1.7976931348623157e+308 | 1.5 | 1.5
+
+-- SELECT id, SUM(dbl) OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW), SUM(vc) OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW), AVG(dbl) OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) FROM ov ORDER BY id
+1 | 1e+308 | 1.7976931348623157e+308 | 1e+308
+2 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+3 | 1e+308 | 1.7976931348623157e+308 | 5e+307
+4 | 1e+308 | 1e+308 | 5e+307
+5 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+6 | 0 | 0 | 0
+7 | -1.7976931348623157e+308 | -1.7976931348623157e+308 | -1.7976931348623157e+308
+8 | -1.7976931348623157e+308 | -1.7976931348623157e+308 | -1.7976931348623157e+308
+9 | -1e+308 | 0 | -5e+307
+10 | 1.5 | 1.7976931348623157e+308 | 1.5
+
+-- SELECT id, SUM(dbl) OVER (ORDER BY id ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING), AVG(vc) OVER (ORDER BY id ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING) FROM ov ORDER BY id
+1 | 1.7976931348623157e+308 | NULL
+2 | 1e+308 | 1.7976931348623157e+308
+3 | 1e+308 | 1.7976931348623157e+308
+4 | 1.7976931348623157e+308 | 8.988465674311579e+307
+5 | 0 | 5e+307
+6 | -1.7976931348623157e+308 | 1.7976931348623157e+308
+7 | -1.7976931348623157e+308 | 0
+8 | -1e+308 | -1.7976931348623157e+308
+9 | 1.5 | -1.7976931348623157e+308
+10 | NULL | 0
+
+-- SELECT id, SUM(vc) OVER w, AVG(dbl) OVER w, SUM(IF(vc IS NULL, NULL, g)) OVER w, AVG(IF(vc IS NULL, NULL, g)) OVER w FROM ov WINDOW w AS (ORDER BY id ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING) ORDER BY id
+1 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 2 | 1.0000
+2 | 1.7976931348623157e+308 | 5e+307 | 2 | 1.0000
+3 | 1e+308 | 5e+307 | 3 | 1.5000
+4 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 4 | 2.0000
+5 | 0 | 0 | 4 | 2.0000
+6 | -1.7976931348623157e+308 | -1.7976931348623157e+308 | 5 | 2.5000
+7 | -1.7976931348623157e+308 | -1.7976931348623157e+308 | 6 | 3.0000
+8 | 0 | -5e+307 | 7 | 3.5000
+9 | 1.7976931348623157e+308 | 1.5 | 4 | 4.0000
+10 | NULL | NULL | NULL | NULL
+
+-- SELECT id, SUM(dbl) OVER w, AVG(dbl) OVER w, SUM(g) OVER w, AVG(g) OVER w FROM ov WINDOW w AS (ORDER BY id ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING) ORDER BY id
+1 | NULL | NULL | NULL | NULL
+2 | 1e+308 | 1e+308 | 1 | 1.0000
+3 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 2 | 1.0000
+4 | 1e+308 | 5e+307 | 2 | 1.0000
+5 | 1e+308 | 5e+307 | 3 | 1.5000
+6 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 4 | 2.0000
+7 | 0 | 0 | 4 | 2.0000
+8 | -1.7976931348623157e+308 | -1.7976931348623157e+308 | 5 | 2.5000
+9 | -1.7976931348623157e+308 | -1.7976931348623157e+308 | 6 | 3.0000
+10 | -1e+308 | -5e+307 | 7 | 3.5000
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT SUM(vc), AVG(vc), SUM(dbl), AVG(dbl) FROM ov WHERE g = 1
+0 | 0 | 0 | 0
+
+-- SELECT g, SUM(vc), AVG(vc), SUM(dbl), AVG(dbl), COUNT(vc) FROM ov GROUP BY g ORDER BY g
+1 | 0 | 0 | 0 | 0 | 3
+2 | 0 | 0 | 0 | 0 | 3
+3 | 0 | 0 | 0 | 0 | 2
+4 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.5 | 1.5 | 1
+
+-- SELECT SUM(vc), AVG(vc), SUM(dbl), AVG(dbl) FROM ov
+0 | 0 | 0 | 0
+
+-- SELECT SUM(vc) + 1 FROM ov WHERE g = 1
+error 1690
+-- SELECT SUM(dbl) = 0, SUM(dbl) IS NULL, SUM(dbl) > 1e308, CONCAT(SUM(dbl)), CAST(SUM(dbl) AS CHAR), ROUND(SUM(dbl)) FROM ov WHERE g = 1
+0 | 0 | 1 | 0 | 0 | 0
+
+-- SELECT -SUM(dbl) FROM ov WHERE g = 1
+0
+
+-- SELECT g, SUM(dbl) FROM ov GROUP BY g HAVING SUM(dbl) = 0 ORDER BY g
+
+-- SELECT SUM(DISTINCT vc), SUM(DISTINCT dbl), AVG(DISTINCT dbl) FROM ov WHERE g = 1
+1.7976931348623157e+308 | 1e+308 | 5e+307
+
+-- SELECT SUM(x) FROM (SELECT 1e308 AS x UNION ALL SELECT 1e308) u
+0
+
+-- SELECT SUM(x) FROM (SELECT '1e308' AS x UNION ALL SELECT '1e308') u
+0
+
+-- SELECT id, SUM(vc) OVER (ORDER BY id), SUM(dbl) OVER (ORDER BY id), AVG(vc) OVER (ORDER BY id), AVG(dbl) OVER (ORDER BY id) FROM ov ORDER BY id
+1 | 1.7976931348623157e+308 | 1e+308 | 1.7976931348623157e+308 | 1e+308
+2 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+3 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+4 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+5 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+6 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+7 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+8 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+9 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+10 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+
+-- SELECT id, SUM(vc) OVER (PARTITION BY g ORDER BY id), SUM(dbl) OVER (PARTITION BY g), AVG(dbl) OVER (PARTITION BY g) FROM ov ORDER BY id
+1 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+2 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+3 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+4 | 1e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+5 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+6 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+7 | -1.7976931348623157e+308 | -1.7976931348623157e+308 | -1.7976931348623157e+308
+8 | -1.7976931348623157e+308 | -1.7976931348623157e+308 | -1.7976931348623157e+308
+9 | 1.7976931348623157e+308 | 1.5 | 1.5
+10 | 1.7976931348623157e+308 | 1.5 | 1.5
+
+-- SELECT id, SUM(dbl) OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW), SUM(vc) OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW), AVG(dbl) OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) FROM ov ORDER BY id
+1 | 1e+308 | 1.7976931348623157e+308 | 1e+308
+2 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+3 | 1e+308 | 1.7976931348623157e+308 | 5e+307
+4 | 1e+308 | 1e+308 | 5e+307
+5 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 1.7976931348623157e+308
+6 | 0 | 0 | 0
+7 | -1.7976931348623157e+308 | -1.7976931348623157e+308 | -1.7976931348623157e+308
+8 | -1.7976931348623157e+308 | -1.7976931348623157e+308 | -1.7976931348623157e+308
+9 | -1e+308 | 0 | -5e+307
+10 | 1.5 | 1.7976931348623157e+308 | 1.5
+
+-- SELECT id, SUM(dbl) OVER (ORDER BY id ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING), AVG(vc) OVER (ORDER BY id ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING) FROM ov ORDER BY id
+1 | 1.7976931348623157e+308 | NULL
+2 | 1e+308 | 1.7976931348623157e+308
+3 | 1e+308 | 1.7976931348623157e+308
+4 | 1.7976931348623157e+308 | 8.988465674311579e+307
+5 | 0 | 5e+307
+6 | -1.7976931348623157e+308 | 1.7976931348623157e+308
+7 | -1.7976931348623157e+308 | 0
+8 | -1e+308 | -1.7976931348623157e+308
+9 | 1.5 | -1.7976931348623157e+308
+10 | NULL | 0
+
+-- SELECT id, SUM(vc) OVER w, AVG(dbl) OVER w, SUM(IF(vc IS NULL, NULL, g)) OVER w, AVG(IF(vc IS NULL, NULL, g)) OVER w FROM ov WINDOW w AS (ORDER BY id ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING) ORDER BY id
+1 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 2 | 1.0000
+2 | 1.7976931348623157e+308 | 5e+307 | 2 | 1.0000
+3 | 1e+308 | 5e+307 | 3 | 1.5000
+4 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 4 | 2.0000
+5 | 0 | 0 | 4 | 2.0000
+6 | -1.7976931348623157e+308 | -1.7976931348623157e+308 | 5 | 2.5000
+7 | -1.7976931348623157e+308 | -1.7976931348623157e+308 | 6 | 3.0000
+8 | 0 | -5e+307 | 7 | 3.5000
+9 | 1.7976931348623157e+308 | 1.5 | 4 | 4.0000
+10 | NULL | NULL | NULL | NULL
+
+-- SELECT id, SUM(dbl) OVER w, AVG(dbl) OVER w, SUM(g) OVER w, AVG(g) OVER w FROM ov WINDOW w AS (ORDER BY id ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING) ORDER BY id
+1 | NULL | NULL | NULL | NULL
+2 | 1e+308 | 1e+308 | 1 | 1.0000
+3 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 2 | 1.0000
+4 | 1e+308 | 5e+307 | 2 | 1.0000
+5 | 1e+308 | 5e+307 | 3 | 1.5000
+6 | 1.7976931348623157e+308 | 1.7976931348623157e+308 | 4 | 2.0000
+7 | 0 | 0 | 4 | 2.0000
+8 | -1.7976931348623157e+308 | -1.7976931348623157e+308 | 5 | 2.5000
+9 | -1.7976931348623157e+308 | -1.7976931348623157e+308 | 6 | 3.0000
+10 | -1e+308 | -5e+307 | 7 | 3.5000
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE ov
+ok affected=0 insert_id=0
+-- CREATE TABLE ej (id INT PRIMARY KEY, e ENUM('a','b','c','Dd') NOT NULL DEFAULT 'a', KEY (e)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ok affected=0 insert_id=0
+-- INSERT INTO ej VALUES (1, 'a'), (2, 'b'), (3, 'c'), (4, 'b'), (5, 'Dd'), (7, 'A')
+ok affected=6 insert_id=0
+-- INSERT IGNORE INTO ej VALUES (6, 'bad')
+ok affected=1 insert_id=0
+-- CREATE TABLE ev (id INT PRIMARY KEY, v VARCHAR(20), KEY (v)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ok affected=0 insert_id=0
+-- INSERT INTO ev VALUES (1, 'a'), (2, 'a '), (3, 'A'), (4, 'b'), (5, 'zz'), (6, ''), (7, NULL), (8, 'dd'), (9, '1'), (10, '2')
+ok affected=10 insert_id=0
+-- CREATE TABLE ejp (id INT PRIMARY KEY, e ENUM('a','b','c','Dd') NOT NULL DEFAULT 'a', KEY (e)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- INSERT INTO ejp SELECT * FROM ej
+ok affected=7 insert_id=0
+-- CREATE TABLE evp (id INT PRIMARY KEY, v VARCHAR(20), KEY (v)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- INSERT INTO evp SELECT * FROM ev
+ok affected=10 insert_id=0
+-- CREATE TABLE ee (id INT PRIMARY KEY, e1 ENUM('a','b','c') NOT NULL, e2 ENUM('c','b','a') NOT NULL, e3 ENUM('a','b','c','d') NULL, KEY (e1), KEY (e2)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ok affected=0 insert_id=0
+-- INSERT INTO ee VALUES (1, 'a', 'a', 'a'), (2, 'a', 'b', 'b'), (3, 'b', 'a', 'd'), (4, 'c', 'c', NULL), (5, 'b', 'b', 'c')
+ok affected=5 insert_id=0
+-- CREATE TABLE es (id INT PRIMARY KEY, s SET('a','b','c') NOT NULL, s2 SET('c','b','a'), KEY (s)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ok affected=0 insert_id=0
+-- INSERT INTO es VALUES (1, 'a', 'a'), (2, 'b', 'a,b'), (3, 'a,b', 'b,a'), (4, '', 'c'), (5, 'c', '')
+ok affected=5 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT a.id, b.id FROM ej a JOIN ev b ON a.e = b.v ORDER BY a.id, b.id
+1 | 1
+1 | 3
+2 | 4
+4 | 4
+5 | 8
+6 | 6
+7 | 1
+7 | 3
+
+-- SELECT a.id, b.id FROM ej a JOIN ev b ON b.v = a.e ORDER BY a.id, b.id
+1 | 1
+1 | 3
+2 | 4
+4 | 4
+5 | 8
+6 | 6
+7 | 1
+7 | 3
+
+-- SELECT a.id, b.id FROM ej a LEFT JOIN ev b ON a.e = b.v ORDER BY a.id, b.id
+1 | 1
+1 | 3
+2 | 4
+3 | NULL
+4 | 4
+5 | 8
+6 | 6
+7 | 1
+7 | 3
+
+-- SELECT a.id, b.id FROM ev b LEFT JOIN ej a ON a.e = b.v ORDER BY b.id, a.id
+1 | 1
+7 | 1
+NULL | 2
+1 | 3
+7 | 3
+2 | 4
+4 | 4
+NULL | 5
+6 | 6
+NULL | 7
+5 | 8
+NULL | 9
+NULL | 10
+
+-- SELECT a.id, b.id FROM ej a JOIN ev b ON a.e = b.v AND b.id > 2 ORDER BY a.id, b.id
+1 | 3
+2 | 4
+4 | 4
+5 | 8
+6 | 6
+7 | 3
+
+-- SELECT a.id, b.id FROM ej a JOIN ev b ON a.e = CONCAT(b.v, '') ORDER BY a.id, b.id
+1 | 1
+1 | 3
+2 | 4
+4 | 4
+5 | 8
+6 | 6
+7 | 1
+7 | 3
+
+-- SELECT a.id, b.id FROM ejp a JOIN evp b ON a.e = b.v ORDER BY a.id, b.id
+1 | 1
+1 | 2
+1 | 3
+2 | 4
+4 | 4
+5 | 8
+6 | 6
+7 | 1
+7 | 2
+7 | 3
+
+-- SELECT id FROM ev WHERE v IN (SELECT e FROM ej) ORDER BY id
+1
+3
+4
+6
+8
+
+-- SELECT id FROM ev WHERE v NOT IN (SELECT e FROM ej) ORDER BY id
+2
+5
+9
+10
+
+-- SELECT id FROM ev WHERE v = (SELECT e FROM ej WHERE id = 1) ORDER BY id
+1
+3
+
+-- SELECT id FROM ej WHERE e IN (SELECT v FROM ev) ORDER BY id
+1
+2
+4
+5
+6
+7
+
+-- SELECT id FROM ej a WHERE EXISTS (SELECT 1 FROM ev b WHERE b.v = a.e) ORDER BY id
+1
+2
+4
+5
+6
+7
+
+-- SELECT id FROM ej a WHERE NOT EXISTS (SELECT 1 FROM ev b WHERE b.v = a.e) ORDER BY id
+3
+
+-- SELECT a.id, b.id, a.e = b.v, b.v = a.e, a.e < b.v FROM ej a JOIN ev b ON a.id = 1 ORDER BY b.id
+1 | 1 | 1 | 1 | 0
+1 | 2 | 0 | 0 | 1
+1 | 3 | 1 | 1 | 0
+1 | 4 | 0 | 0 | 1
+1 | 5 | 0 | 0 | 1
+1 | 6 | 0 | 0 | 0
+1 | 7 | NULL | NULL | NULL
+1 | 8 | 0 | 0 | 1
+1 | 9 | 0 | 0 | 0
+1 | 10 | 0 | 0 | 0
+
+-- SELECT a.id, b.id FROM ee a JOIN ee b ON a.e1 = b.e2 ORDER BY a.id, b.id
+1 | 1
+1 | 3
+2 | 1
+2 | 3
+3 | 2
+3 | 5
+4 | 4
+5 | 2
+5 | 5
+
+-- SELECT a.id, b.id FROM ee a JOIN ee b ON a.e1 = b.e3 ORDER BY a.id, b.id
+1 | 1
+2 | 1
+3 | 2
+4 | 5
+5 | 2
+
+-- SELECT a.id, b.id FROM ee a LEFT JOIN ee b ON a.e2 = b.e3 ORDER BY a.id, b.id
+1 | 1
+2 | 2
+3 | 1
+4 | 5
+5 | 2
+
+-- SELECT a.id, b.id FROM ee a JOIN ee b ON a.e1 = b.e1 ORDER BY a.id, b.id
+1 | 1
+1 | 2
+2 | 1
+2 | 2
+3 | 3
+3 | 5
+4 | 4
+5 | 3
+5 | 5
+
+-- SELECT a.id, b.id FROM ee a JOIN ee b ON a.e1 = b.id ORDER BY a.id, b.id
+1 | 1
+2 | 1
+3 | 2
+4 | 3
+5 | 2
+
+-- SELECT id, e1 = e2, e2 = e1, e1 = e3, e1 <> e2 FROM ee ORDER BY id
+1 | 1 | 1 | 1 | 0
+2 | 0 | 0 | 0 | 1
+3 | 0 | 0 | 0 | 1
+4 | 1 | 1 | NULL | 0
+5 | 1 | 1 | 0 | 0
+
+-- SELECT id FROM ee WHERE e1 = e2 ORDER BY id
+1
+4
+5
+
+-- SELECT a.id, b.id FROM ej a JOIN ej b ON a.e = b.e ORDER BY a.id, b.id
+1 | 1
+1 | 7
+2 | 2
+2 | 4
+3 | 3
+4 | 2
+4 | 4
+5 | 5
+6 | 6
+7 | 1
+7 | 7
+
+-- SELECT a.id, b.id FROM es a JOIN ev b ON a.s = b.v ORDER BY a.id, b.id
+1 | 1
+1 | 3
+2 | 4
+4 | 6
+
+-- SELECT a.id, b.id FROM es a JOIN es b ON a.s = b.s2 ORDER BY a.id, b.id
+1 | 1
+4 | 5
+5 | 4
+
+-- SELECT id, s = s2 FROM es ORDER BY id
+1 | 1
+2 | 0
+3 | 0
+4 | 0
+5 | 0
+
+-- SELECT id FROM ev WHERE v IN (SELECT s FROM es) ORDER BY id
+1
+3
+4
+6
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT a.id, b.id FROM ej a JOIN ev b ON a.e = b.v ORDER BY a.id, b.id
+1 | 1
+1 | 3
+2 | 4
+4 | 4
+5 | 8
+6 | 6
+7 | 1
+7 | 3
+
+-- SELECT a.id, b.id FROM ej a JOIN ev b ON b.v = a.e ORDER BY a.id, b.id
+1 | 1
+1 | 3
+2 | 4
+4 | 4
+5 | 8
+6 | 6
+7 | 1
+7 | 3
+
+-- SELECT a.id, b.id FROM ej a LEFT JOIN ev b ON a.e = b.v ORDER BY a.id, b.id
+1 | 1
+1 | 3
+2 | 4
+3 | NULL
+4 | 4
+5 | 8
+6 | 6
+7 | 1
+7 | 3
+
+-- SELECT a.id, b.id FROM ev b LEFT JOIN ej a ON a.e = b.v ORDER BY b.id, a.id
+1 | 1
+7 | 1
+NULL | 2
+1 | 3
+7 | 3
+2 | 4
+4 | 4
+NULL | 5
+6 | 6
+NULL | 7
+5 | 8
+NULL | 9
+NULL | 10
+
+-- SELECT a.id, b.id FROM ej a JOIN ev b ON a.e = b.v AND b.id > 2 ORDER BY a.id, b.id
+1 | 3
+2 | 4
+4 | 4
+5 | 8
+6 | 6
+7 | 3
+
+-- SELECT a.id, b.id FROM ej a JOIN ev b ON a.e = CONCAT(b.v, '') ORDER BY a.id, b.id
+1 | 1
+1 | 3
+2 | 4
+4 | 4
+5 | 8
+6 | 6
+7 | 1
+7 | 3
+
+-- SELECT a.id, b.id FROM ejp a JOIN evp b ON a.e = b.v ORDER BY a.id, b.id
+1 | 1
+1 | 2
+1 | 3
+2 | 4
+4 | 4
+5 | 8
+6 | 6
+7 | 1
+7 | 2
+7 | 3
+
+-- SELECT id FROM ev WHERE v IN (SELECT e FROM ej) ORDER BY id
+1
+3
+4
+6
+8
+
+-- SELECT id FROM ev WHERE v NOT IN (SELECT e FROM ej) ORDER BY id
+2
+5
+9
+10
+
+-- SELECT id FROM ev WHERE v = (SELECT e FROM ej WHERE id = 1) ORDER BY id
+1
+3
+
+-- SELECT id FROM ej WHERE e IN (SELECT v FROM ev) ORDER BY id
+1
+2
+4
+5
+6
+7
+
+-- SELECT id FROM ej a WHERE EXISTS (SELECT 1 FROM ev b WHERE b.v = a.e) ORDER BY id
+1
+2
+4
+5
+6
+7
+
+-- SELECT id FROM ej a WHERE NOT EXISTS (SELECT 1 FROM ev b WHERE b.v = a.e) ORDER BY id
+3
+
+-- SELECT a.id, b.id, a.e = b.v, b.v = a.e, a.e < b.v FROM ej a JOIN ev b ON a.id = 1 ORDER BY b.id
+1 | 1 | 1 | 1 | 0
+1 | 2 | 0 | 0 | 1
+1 | 3 | 1 | 1 | 0
+1 | 4 | 0 | 0 | 1
+1 | 5 | 0 | 0 | 1
+1 | 6 | 0 | 0 | 0
+1 | 7 | NULL | NULL | NULL
+1 | 8 | 0 | 0 | 1
+1 | 9 | 0 | 0 | 0
+1 | 10 | 0 | 0 | 0
+
+-- SELECT a.id, b.id FROM ee a JOIN ee b ON a.e1 = b.e2 ORDER BY a.id, b.id
+1 | 1
+1 | 3
+2 | 1
+2 | 3
+3 | 2
+3 | 5
+4 | 4
+5 | 2
+5 | 5
+
+-- SELECT a.id, b.id FROM ee a JOIN ee b ON a.e1 = b.e3 ORDER BY a.id, b.id
+1 | 1
+2 | 1
+3 | 2
+4 | 5
+5 | 2
+
+-- SELECT a.id, b.id FROM ee a LEFT JOIN ee b ON a.e2 = b.e3 ORDER BY a.id, b.id
+1 | 1
+2 | 2
+3 | 1
+4 | 5
+5 | 2
+
+-- SELECT a.id, b.id FROM ee a JOIN ee b ON a.e1 = b.e1 ORDER BY a.id, b.id
+1 | 1
+1 | 2
+2 | 1
+2 | 2
+3 | 3
+3 | 5
+4 | 4
+5 | 3
+5 | 5
+
+-- SELECT a.id, b.id FROM ee a JOIN ee b ON a.e1 = b.id ORDER BY a.id, b.id
+1 | 1
+2 | 1
+3 | 2
+4 | 3
+5 | 2
+
+-- SELECT id, e1 = e2, e2 = e1, e1 = e3, e1 <> e2 FROM ee ORDER BY id
+1 | 1 | 1 | 1 | 0
+2 | 0 | 0 | 0 | 1
+3 | 0 | 0 | 0 | 1
+4 | 1 | 1 | NULL | 0
+5 | 1 | 1 | 0 | 0
+
+-- SELECT id FROM ee WHERE e1 = e2 ORDER BY id
+1
+4
+5
+
+-- SELECT a.id, b.id FROM ej a JOIN ej b ON a.e = b.e ORDER BY a.id, b.id
+1 | 1
+1 | 7
+2 | 2
+2 | 4
+3 | 3
+4 | 2
+4 | 4
+5 | 5
+6 | 6
+7 | 1
+7 | 7
+
+-- SELECT a.id, b.id FROM es a JOIN ev b ON a.s = b.v ORDER BY a.id, b.id
+1 | 1
+1 | 3
+2 | 4
+4 | 6
+
+-- SELECT a.id, b.id FROM es a JOIN es b ON a.s = b.s2 ORDER BY a.id, b.id
+1 | 1
+4 | 5
+5 | 4
+
+-- SELECT id, s = s2 FROM es ORDER BY id
+1 | 1
+2 | 0
+3 | 0
+4 | 0
+5 | 0
+
+-- SELECT id FROM ev WHERE v IN (SELECT s FROM es) ORDER BY id
+1
+3
+4
+6
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE ej
+ok affected=0 insert_id=0
+-- DROP TABLE ev
+ok affected=0 insert_id=0
+-- DROP TABLE ejp
+ok affected=0 insert_id=0
+-- DROP TABLE evp
+ok affected=0 insert_id=0
+-- DROP TABLE ee
+ok affected=0 insert_id=0
+-- DROP TABLE es
+ok affected=0 insert_id=0
+-- CREATE TABLE ef (id INT PRIMARY KEY, e ENUM('a','b','c','Dd') NOT NULL DEFAULT 'a', en ENUM('a','b','c','Dd') NULL, s SET('a','b','c') NULL, KEY (e)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ok affected=0 insert_id=0
+-- INSERT IGNORE INTO ef VALUES (1, 'a', 'a', 'a'), (2, 'b', 'b', 'a,b'), (3, 'c', 'c', ''), (4, 'b', NULL, NULL), (5, 'Dd', 'dd', 'c'), (6, 'bad', 'bad', 'b'), (7, 'A', 'C', 'a,c')
+ok affected=7 insert_id=0
+-- CREATE TABLE eft (id INT PRIMARY KEY, st ENUM('publish','draft','pending','Private') NOT NULL, KEY (st)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- INSERT IGNORE INTO eft VALUES (1, 'publish'), (2, 'draft'), (3, 'pending'), (4, 'Private'), (5, 'publish'), (6, 'oops')
+ok affected=6 insert_id=0
+-- CREATE TABLE efv (id INT PRIMARY KEY, v VARCHAR(20), t LONGTEXT) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- INSERT INTO efv VALUES (1, 'b', 'b'), (2, 'B', 'B'), (3, 'a', 'a'), (4, 'Dd', 'Dd'), (5, 'c', 'c'), (6, 'A', 'A'), (7, '10', '10'), (8, '9', '9')
+ok affected=8 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT id, st, FIELD(st, 'publish', 'draft', 'pending', 'Private') FROM eft ORDER BY id
+1 | publish | 1
+2 | draft | 2
+3 | pending | 3
+4 | Private | 4
+5 | publish | 1
+6 |  | 0
+
+-- SELECT id FROM eft ORDER BY FIELD(st, 'publish', 'draft', 'pending', 'Private'), id
+6
+1
+5
+2
+3
+4
+
+-- SELECT id FROM eft ORDER BY FIELD(st, 'pending', 'publish') DESC, id
+1
+5
+3
+2
+4
+6
+
+-- SELECT id, FIELD('draft', st, 'x'), FIELD(st, 'PUBLISH'), FIELD(st, ''), FIELD(st, 1), FIELD(st, 2, 3), FIELD(e, en), FIELD(en, 'c', 'a'), FIELD(s, 'a,b', 'b') FROM eft JOIN ef USING (id) ORDER BY id
+1 | 0 | 1 | 0 | 1 | 0 | 1 | 2 | 0
+2 | 1 | 0 | 0 | 0 | 1 | 1 | 0 | 1
+3 | 0 | 0 | 0 | 0 | 2 | 1 | 1 | 0
+4 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0
+5 | 0 | 1 | 0 | 1 | 0 | 1 | 0 | 0
+6 | 0 | 0 | 1 | 0 | 0 | 1 | 0 | 2
+
+-- SELECT id, STRCMP(e, 'a'), STRCMP('b', e), STRCMP(e, en), STRCMP(s, 'a,b') FROM ef ORDER BY id
+1 | 0 | 1 | 0 | -1
+2 | 1 | 0 | 0 | 0
+3 | 1 | -1 | 0 | -1
+4 | 1 | 0 | NULL | NULL
+5 | 1 | -1 | 0 | 1
+6 | -1 | 1 | 0 | 1
+7 | 0 | 1 | -1 | 1
+
+-- SELECT id FROM ef WHERE STRCMP(e, 'a') = 0 ORDER BY id
+1
+7
+
+-- SELECT id FROM ef WHERE e REGEXP '^a$' ORDER BY id
+1
+7
+
+-- SELECT id FROM ef WHERE s REGEXP 'b' ORDER BY id
+2
+6
+
+-- SELECT id, 'Dd' REGEXP e, 'xAy' REGEXP e FROM ef WHERE id <> 6 ORDER BY id
+1 | 0 | 1
+2 | 0 | 0
+3 | 0 | 0
+4 | 0 | 0
+5 | 1 | 0
+7 | 0 | 1
+
+-- SELECT id, e REGEXP '^[ab]', REGEXP_LIKE(e, 'd'), e RLIKE 'D', REGEXP_INSTR(e, 'b'), REGEXP_SUBSTR(e, '[a-z]+'), REGEXP_REPLACE(e, 'a', 'x'), REGEXP_REPLACE('xay', 'a', e) FROM ef ORDER BY id
+1 | 1 | 0 | 0 | 0 | a | x | xay
+2 | 1 | 0 | 0 | 1 | b | b | xby
+3 | 0 | 0 | 0 | 0 | c | c | xcy
+4 | 1 | 0 | 0 | 1 | b | b | xby
+5 | 0 | 1 | 1 | 0 | Dd | Dd | xDdy
+6 | 0 | 0 | 0 | 0 | NULL |  | xy
+7 | 1 | 0 | 0 | 0 | a | x | xay
+
+-- SELECT id, LOCATE('d', e), INSTR(e, 'D'), POSITION('b' IN e), LOCATE(e, 'xxDd'), FIND_IN_SET(e, 'x,b,a'), FIND_IN_SET('b', e), FIND_IN_SET(e, s), ELT(2, e, en), ELT(1, s) FROM ef ORDER BY id
+1 | 0 | 0 | 0 | 0 | 3 | 0 | 1 | a | a
+2 | 0 | 0 | 1 | 0 | 2 | 1 | 2 | b | a,b
+3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | c | 
+4 | 0 | 0 | 1 | 0 | 2 | 1 | NULL | NULL | NULL
+5 | 1 | 1 | 0 | 3 | 0 | 0 | 0 | Dd | c
+6 | 0 | 0 | 0 | 1 | 0 | 0 | 0 |  | b
+7 | 0 | 0 | 0 | 0 | 3 | 0 | 1 | c | a,c
+
+-- SELECT id, REPEAT(e, 2), ASCII(e), ORD(e), MD5(e), SHA1(e), SHA2(e, 256), CRC32(e), TO_BASE64(e), BIT_LENGTH(e), QUOTE(e), MD5(s), QUOTE(s) FROM ef ORDER BY id
+1 | aa | 97 | 97 | 0cc175b9c0f1b6a831c399e269772661 | 86f7e437faa5a7fce15d1ddcb9eaeaea377667b8 | ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb | 3904355907 | YQ== | 8 | 'a' | 0cc175b9c0f1b6a831c399e269772661 | 'a'
+2 | bb | 98 | 98 | 92eb5ffee6ae2fec3ad71c777531578f | e9d71f5ee7c92d6dc9e92ffdad17b8bd49418f98 | 3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d | 1908338681 | Yg== | 8 | 'b' | b345e1dc09f20fdefdea469f09167892 | 'a,b'
+3 | cc | 99 | 99 | 4a8a08f09d37b73795649038408b5f33 | 84a516841ba77a5b4648de2cd0dfcb30ea46dbb4 | 2e7d2c03a9507ae265ecf5b5356885a53393a2029d241394997265a1a25aefc6 | 112844655 | Yw== | 8 | 'c' | d41d8cd98f00b204e9800998ecf8427e | ''
+4 | bb | 98 | 98 | 92eb5ffee6ae2fec3ad71c777531578f | e9d71f5ee7c92d6dc9e92ffdad17b8bd49418f98 | 3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d | 1908338681 | Yg== | 8 | 'b' | NULL | NULL
+5 | DdDd | 68 | 68 | 419af6d362a14b7a789ba1c7e772bbae | 85dde59bec27686708dc612f174dee372e89513b | 5b486fe5dbf39aea33037cf94e46b280dadf3718f67583b2c54b4b0233a85c69 | 2668838335 | RGQ= | 16 | 'Dd' | 4a8a08f09d37b73795649038408b5f33 | 'c'
+6 |  | 0 | 0 | d41d8cd98f00b204e9800998ecf8427e | da39a3ee5e6b4b0d3255bfef95601890afd80709 | e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 | 0 |  | 0 | '' | 92eb5ffee6ae2fec3ad71c777531578f | 'b'
+7 | aa | 97 | 97 | 0cc175b9c0f1b6a831c399e269772661 | 86f7e437faa5a7fce15d1ddcb9eaeaea377667b8 | ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb | 3904355907 | YQ== | 8 | 'a' | f24f071a6ff25db0c9da484cbe06a17a | 'a,c'
+
+-- SELECT id, SOUNDEX(e) FROM ef WHERE id <> 6 ORDER BY id
+1 | A000
+2 | B000
+3 | C000
+4 | B000
+5 | D000
+7 | A000
+
+-- SELECT id FROM ef ORDER BY CAST(e AS CHAR), id
+6
+1
+7
+2
+4
+3
+5
+
+-- SELECT DISTINCT CAST(e AS CHAR) FROM ef ORDER BY 1
+
+a
+b
+c
+Dd
+
+-- SELECT CAST(e AS CHAR) AS c, COUNT(*) FROM ef GROUP BY c ORDER BY c
+ | 1
+a | 2
+b | 2
+c | 1
+Dd | 1
+
+-- SELECT id FROM efv ORDER BY CAST(t AS CHAR), id
+7
+8
+3
+6
+1
+2
+5
+4
+
+-- SELECT id FROM efv ORDER BY CAST(v AS CHAR) DESC, id
+4
+5
+1
+2
+3
+6
+8
+7
+
+-- SELECT id, CAST(e AS CHAR) = 'A', CAST(e AS CHAR) < 'b', COLLATION(CAST(e AS CHAR)), COLLATION(CAST(e AS CHAR CHARACTER SET utf8mb4)) FROM ef ORDER BY id
+1 | 1 | 1 | utf8mb4_general_ci | utf8mb4_0900_ai_ci
+2 | 0 | 0 | utf8mb4_general_ci | utf8mb4_0900_ai_ci
+3 | 0 | 0 | utf8mb4_general_ci | utf8mb4_0900_ai_ci
+4 | 0 | 0 | utf8mb4_general_ci | utf8mb4_0900_ai_ci
+5 | 0 | 0 | utf8mb4_general_ci | utf8mb4_0900_ai_ci
+6 | 0 | 1 | utf8mb4_general_ci | utf8mb4_0900_ai_ci
+7 | 1 | 1 | utf8mb4_general_ci | utf8mb4_0900_ai_ci
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT id, st, FIELD(st, 'publish', 'draft', 'pending', 'Private') FROM eft ORDER BY id
+1 | publish | 1
+2 | draft | 2
+3 | pending | 3
+4 | Private | 4
+5 | publish | 1
+6 |  | 0
+
+-- SELECT id FROM eft ORDER BY FIELD(st, 'publish', 'draft', 'pending', 'Private'), id
+6
+1
+5
+2
+3
+4
+
+-- SELECT id FROM eft ORDER BY FIELD(st, 'pending', 'publish') DESC, id
+1
+5
+3
+2
+4
+6
+
+-- SELECT id, FIELD('draft', st, 'x'), FIELD(st, 'PUBLISH'), FIELD(st, ''), FIELD(st, 1), FIELD(st, 2, 3), FIELD(e, en), FIELD(en, 'c', 'a'), FIELD(s, 'a,b', 'b') FROM eft JOIN ef USING (id) ORDER BY id
+1 | 0 | 1 | 0 | 1 | 0 | 1 | 2 | 0
+2 | 1 | 0 | 0 | 0 | 1 | 1 | 0 | 1
+3 | 0 | 0 | 0 | 0 | 2 | 1 | 1 | 0
+4 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0
+5 | 0 | 1 | 0 | 1 | 0 | 1 | 0 | 0
+6 | 0 | 0 | 1 | 0 | 0 | 1 | 0 | 2
+
+-- SELECT id, STRCMP(e, 'a'), STRCMP('b', e), STRCMP(e, en), STRCMP(s, 'a,b') FROM ef ORDER BY id
+1 | 0 | 1 | 0 | -1
+2 | 1 | 0 | 0 | 0
+3 | 1 | -1 | 0 | -1
+4 | 1 | 0 | NULL | NULL
+5 | 1 | -1 | 0 | 1
+6 | -1 | 1 | 0 | 1
+7 | 0 | 1 | -1 | 1
+
+-- SELECT id FROM ef WHERE STRCMP(e, 'a') = 0 ORDER BY id
+1
+7
+
+-- SELECT id FROM ef WHERE e REGEXP '^a$' ORDER BY id
+1
+7
+
+-- SELECT id FROM ef WHERE s REGEXP 'b' ORDER BY id
+2
+6
+
+-- SELECT id, 'Dd' REGEXP e, 'xAy' REGEXP e FROM ef WHERE id <> 6 ORDER BY id
+1 | 0 | 1
+2 | 0 | 0
+3 | 0 | 0
+4 | 0 | 0
+5 | 1 | 0
+7 | 0 | 1
+
+-- SELECT id, e REGEXP '^[ab]', REGEXP_LIKE(e, 'd'), e RLIKE 'D', REGEXP_INSTR(e, 'b'), REGEXP_SUBSTR(e, '[a-z]+'), REGEXP_REPLACE(e, 'a', 'x'), REGEXP_REPLACE('xay', 'a', e) FROM ef ORDER BY id
+1 | 1 | 0 | 0 | 0 | a | x | xay
+2 | 1 | 0 | 0 | 1 | b | b | xby
+3 | 0 | 0 | 0 | 0 | c | c | xcy
+4 | 1 | 0 | 0 | 1 | b | b | xby
+5 | 0 | 1 | 1 | 0 | Dd | Dd | xDdy
+6 | 0 | 0 | 0 | 0 | NULL |  | xy
+7 | 1 | 0 | 0 | 0 | a | x | xay
+
+-- SELECT id, LOCATE('d', e), INSTR(e, 'D'), POSITION('b' IN e), LOCATE(e, 'xxDd'), FIND_IN_SET(e, 'x,b,a'), FIND_IN_SET('b', e), FIND_IN_SET(e, s), ELT(2, e, en), ELT(1, s) FROM ef ORDER BY id
+1 | 0 | 0 | 0 | 0 | 3 | 0 | 1 | a | a
+2 | 0 | 0 | 1 | 0 | 2 | 1 | 2 | b | a,b
+3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | c | 
+4 | 0 | 0 | 1 | 0 | 2 | 1 | NULL | NULL | NULL
+5 | 1 | 1 | 0 | 3 | 0 | 0 | 0 | Dd | c
+6 | 0 | 0 | 0 | 1 | 0 | 0 | 0 |  | b
+7 | 0 | 0 | 0 | 0 | 3 | 0 | 1 | c | a,c
+
+-- SELECT id, REPEAT(e, 2), ASCII(e), ORD(e), MD5(e), SHA1(e), SHA2(e, 256), CRC32(e), TO_BASE64(e), BIT_LENGTH(e), QUOTE(e), MD5(s), QUOTE(s) FROM ef ORDER BY id
+1 | aa | 97 | 97 | 0cc175b9c0f1b6a831c399e269772661 | 86f7e437faa5a7fce15d1ddcb9eaeaea377667b8 | ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb | 3904355907 | YQ== | 8 | 'a' | 0cc175b9c0f1b6a831c399e269772661 | 'a'
+2 | bb | 98 | 98 | 92eb5ffee6ae2fec3ad71c777531578f | e9d71f5ee7c92d6dc9e92ffdad17b8bd49418f98 | 3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d | 1908338681 | Yg== | 8 | 'b' | b345e1dc09f20fdefdea469f09167892 | 'a,b'
+3 | cc | 99 | 99 | 4a8a08f09d37b73795649038408b5f33 | 84a516841ba77a5b4648de2cd0dfcb30ea46dbb4 | 2e7d2c03a9507ae265ecf5b5356885a53393a2029d241394997265a1a25aefc6 | 112844655 | Yw== | 8 | 'c' | d41d8cd98f00b204e9800998ecf8427e | ''
+4 | bb | 98 | 98 | 92eb5ffee6ae2fec3ad71c777531578f | e9d71f5ee7c92d6dc9e92ffdad17b8bd49418f98 | 3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d | 1908338681 | Yg== | 8 | 'b' | NULL | NULL
+5 | DdDd | 68 | 68 | 419af6d362a14b7a789ba1c7e772bbae | 85dde59bec27686708dc612f174dee372e89513b | 5b486fe5dbf39aea33037cf94e46b280dadf3718f67583b2c54b4b0233a85c69 | 2668838335 | RGQ= | 16 | 'Dd' | 4a8a08f09d37b73795649038408b5f33 | 'c'
+6 |  | 0 | 0 | d41d8cd98f00b204e9800998ecf8427e | da39a3ee5e6b4b0d3255bfef95601890afd80709 | e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 | 0 |  | 0 | '' | 92eb5ffee6ae2fec3ad71c777531578f | 'b'
+7 | aa | 97 | 97 | 0cc175b9c0f1b6a831c399e269772661 | 86f7e437faa5a7fce15d1ddcb9eaeaea377667b8 | ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb | 3904355907 | YQ== | 8 | 'a' | f24f071a6ff25db0c9da484cbe06a17a | 'a,c'
+
+-- SELECT id, SOUNDEX(e) FROM ef WHERE id <> 6 ORDER BY id
+1 | A000
+2 | B000
+3 | C000
+4 | B000
+5 | D000
+7 | A000
+
+-- SELECT id FROM ef ORDER BY CAST(e AS CHAR), id
+6
+1
+7
+2
+4
+3
+5
+
+-- SELECT DISTINCT CAST(e AS CHAR) FROM ef ORDER BY 1
+
+a
+b
+c
+Dd
+
+-- SELECT CAST(e AS CHAR) AS c, COUNT(*) FROM ef GROUP BY c ORDER BY c
+ | 1
+a | 2
+b | 2
+c | 1
+Dd | 1
+
+-- SELECT id FROM efv ORDER BY CAST(t AS CHAR), id
+7
+8
+3
+6
+1
+2
+5
+4
+
+-- SELECT id FROM efv ORDER BY CAST(v AS CHAR) DESC, id
+4
+5
+1
+2
+3
+6
+8
+7
+
+-- SELECT id, CAST(e AS CHAR) = 'A', CAST(e AS CHAR) < 'b', COLLATION(CAST(e AS CHAR)), COLLATION(CAST(e AS CHAR CHARACTER SET utf8mb4)) FROM ef ORDER BY id
+1 | 1 | 1 | utf8mb4_general_ci | utf8mb4_0900_ai_ci
+2 | 0 | 0 | utf8mb4_general_ci | utf8mb4_0900_ai_ci
+3 | 0 | 0 | utf8mb4_general_ci | utf8mb4_0900_ai_ci
+4 | 0 | 0 | utf8mb4_general_ci | utf8mb4_0900_ai_ci
+5 | 0 | 0 | utf8mb4_general_ci | utf8mb4_0900_ai_ci
+6 | 0 | 1 | utf8mb4_general_ci | utf8mb4_0900_ai_ci
+7 | 1 | 1 | utf8mb4_general_ci | utf8mb4_0900_ai_ci
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET NAMES utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok
+-- SELECT id FROM ef ORDER BY CAST(e AS CHAR), id
+6
+1
+7
+2
+4
+3
+5
+
+-- SELECT id FROM efv ORDER BY CAST(t AS CHAR), id
+7
+8
+3
+6
+1
+2
+5
+4
+
+-- SELECT DISTINCT CAST(t AS CHAR) FROM efv ORDER BY 1
+10
+9
+a
+b
+c
+Dd
+
+-- SELECT COLLATION(CAST(t AS CHAR)), COLLATION(CAST(e AS CHAR CHARACTER SET utf8mb4)) FROM ef JOIN efv USING (id) WHERE id = 1
+utf8mb4_unicode_520_ci | utf8mb4_0900_ai_ci
+
+-- SET NAMES utf8mb4
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE ef
+ok affected=0 insert_id=0
+-- DROP TABLE eft
+ok affected=0 insert_id=0
+-- DROP TABLE efv
+ok affected=0 insert_id=0
+-- CREATE TABLE ec (id INT PRIMARY KEY, e ENUM('a','b','c','Dd') NOT NULL DEFAULT 'a', en ENUM('a','b','c','Dd') NULL, s SET('a','b','c') NULL, KEY (e)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ok affected=0 insert_id=0
+-- INSERT IGNORE INTO ec VALUES (1, 'a', 'a', 'a'), (2, 'b', 'b', 'a,b'), (3, 'c', 'c', ''), (4, 'b', NULL, NULL), (5, 'Dd', 'dd', 'c'), (6, 'bad', 'bad', 'b'), (7, 'A', 'C', 'a,c')
+ok affected=7 insert_id=0
+-- CREATE TABLE ecx (id INT PRIMARY KEY, e ENUM('a','b','c','Dd') NOT NULL DEFAULT 'a', en ENUM('a','b','c','Dd') NULL, s SET('a','b','c') NULL) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ok affected=0 insert_id=0
+-- INSERT INTO ecx SELECT * FROM ec
+ok affected=7 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT id FROM ec WHERE e = 'a ' COLLATE utf8mb4_bin ORDER BY id
+1
+7
+
+-- SELECT id FROM ecx WHERE e = 'a ' COLLATE utf8mb4_bin ORDER BY id
+1
+7
+
+-- SELECT id FROM ec WHERE e = _utf8mb4'a ' COLLATE utf8mb4_unicode_520_ci ORDER BY id
+1
+7
+
+-- SELECT id FROM ecx WHERE e = _utf8mb4'A ' COLLATE utf8mb4_unicode_520_ci ORDER BY id
+1
+7
+
+-- SELECT id FROM ec WHERE e = 'A ' COLLATE utf8mb4_unicode_520_ci ORDER BY id
+1
+7
+
+-- SELECT id FROM ec WHERE e = 'A' COLLATE utf8mb4_bin ORDER BY id
+
+-- SELECT id FROM ecx WHERE e = 'A' COLLATE utf8mb4_bin ORDER BY id
+
+-- SELECT id FROM ec WHERE e = 'dd' COLLATE utf8mb4_0900_as_cs ORDER BY id
+
+-- SELECT id FROM ec WHERE e = 'Dd' COLLATE utf8mb4_0900_as_cs ORDER BY id
+5
+
+-- SELECT id FROM ec WHERE e <> 'a ' COLLATE utf8mb4_bin ORDER BY id
+2
+3
+4
+5
+6
+
+-- SELECT id FROM ec WHERE 'a ' COLLATE utf8mb4_bin = e ORDER BY id
+1
+7
+
+-- SELECT id FROM ec WHERE e = 'a ' ORDER BY id
+
+-- SELECT id FROM ec WHERE e IN ('a ' COLLATE utf8mb4_bin, 'c') ORDER BY id
+1
+3
+7
+
+-- SELECT id FROM ecx WHERE e IN ('a ' COLLATE utf8mb4_bin, 'c', 'zz', 'b ') ORDER BY id
+1
+2
+3
+4
+7
+
+-- SELECT id FROM ec WHERE e NOT IN ('a ' COLLATE utf8mb4_bin, 'c') ORDER BY id
+2
+4
+5
+6
+
+-- SELECT id FROM ec WHERE e IN ('A' COLLATE utf8mb4_bin, 'c') ORDER BY id
+3
+
+-- SELECT id FROM ec WHERE e IN ('a ', 'c') ORDER BY id
+3
+
+-- SELECT id, e = 'a ' COLLATE utf8mb4_bin, e = 'A' COLLATE utf8mb4_bin, en = 'C ' COLLATE utf8mb4_unicode_520_ci, s = 'a,b ' COLLATE utf8mb4_bin, s = 'A,B' COLLATE utf8mb4_bin FROM ec ORDER BY id
+1 | 1 | 0 | 0 | 0 | 0
+2 | 0 | 0 | 0 | 1 | 0
+3 | 0 | 0 | 1 | 0 | 0
+4 | 0 | 0 | NULL | NULL | NULL
+5 | 0 | 0 | 0 | 0 | 0
+6 | 0 | 0 | 0 | 0 | 0
+7 | 1 | 0 | 1 | 0 | 0
+
+-- SELECT id FROM ec WHERE s = 'a,c ' COLLATE utf8mb4_bin ORDER BY id
+7
+
+-- SELECT COERCIBILITY(_utf8mb4'a ' COLLATE utf8mb4_unicode_520_ci), COLLATION(_utf8mb4'a ' COLLATE utf8mb4_unicode_520_ci)
+0 | utf8mb4_unicode_520_ci
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT id FROM ec WHERE e = 'a ' COLLATE utf8mb4_bin ORDER BY id
+1
+7
+
+-- SELECT id FROM ecx WHERE e = 'a ' COLLATE utf8mb4_bin ORDER BY id
+1
+7
+
+-- SELECT id FROM ec WHERE e = _utf8mb4'a ' COLLATE utf8mb4_unicode_520_ci ORDER BY id
+1
+7
+
+-- SELECT id FROM ecx WHERE e = _utf8mb4'A ' COLLATE utf8mb4_unicode_520_ci ORDER BY id
+1
+7
+
+-- SELECT id FROM ec WHERE e = 'A ' COLLATE utf8mb4_unicode_520_ci ORDER BY id
+1
+7
+
+-- SELECT id FROM ec WHERE e = 'A' COLLATE utf8mb4_bin ORDER BY id
+
+-- SELECT id FROM ecx WHERE e = 'A' COLLATE utf8mb4_bin ORDER BY id
+
+-- SELECT id FROM ec WHERE e = 'dd' COLLATE utf8mb4_0900_as_cs ORDER BY id
+
+-- SELECT id FROM ec WHERE e = 'Dd' COLLATE utf8mb4_0900_as_cs ORDER BY id
+5
+
+-- SELECT id FROM ec WHERE e <> 'a ' COLLATE utf8mb4_bin ORDER BY id
+2
+3
+4
+5
+6
+
+-- SELECT id FROM ec WHERE 'a ' COLLATE utf8mb4_bin = e ORDER BY id
+1
+7
+
+-- SELECT id FROM ec WHERE e = 'a ' ORDER BY id
+
+-- SELECT id FROM ec WHERE e IN ('a ' COLLATE utf8mb4_bin, 'c') ORDER BY id
+1
+3
+7
+
+-- SELECT id FROM ecx WHERE e IN ('a ' COLLATE utf8mb4_bin, 'c', 'zz', 'b ') ORDER BY id
+1
+2
+3
+4
+7
+
+-- SELECT id FROM ec WHERE e NOT IN ('a ' COLLATE utf8mb4_bin, 'c') ORDER BY id
+2
+4
+5
+6
+
+-- SELECT id FROM ec WHERE e IN ('A' COLLATE utf8mb4_bin, 'c') ORDER BY id
+3
+
+-- SELECT id FROM ec WHERE e IN ('a ', 'c') ORDER BY id
+3
+
+-- SELECT id, e = 'a ' COLLATE utf8mb4_bin, e = 'A' COLLATE utf8mb4_bin, en = 'C ' COLLATE utf8mb4_unicode_520_ci, s = 'a,b ' COLLATE utf8mb4_bin, s = 'A,B' COLLATE utf8mb4_bin FROM ec ORDER BY id
+1 | 1 | 0 | 0 | 0 | 0
+2 | 0 | 0 | 0 | 1 | 0
+3 | 0 | 0 | 1 | 0 | 0
+4 | 0 | 0 | NULL | NULL | NULL
+5 | 0 | 0 | 0 | 0 | 0
+6 | 0 | 0 | 0 | 0 | 0
+7 | 1 | 0 | 1 | 0 | 0
+
+-- SELECT id FROM ec WHERE s = 'a,c ' COLLATE utf8mb4_bin ORDER BY id
+7
+
+-- SELECT COERCIBILITY(_utf8mb4'a ' COLLATE utf8mb4_unicode_520_ci), COLLATION(_utf8mb4'a ' COLLATE utf8mb4_unicode_520_ci)
+0 | utf8mb4_unicode_520_ci
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE ec
+ok affected=0 insert_id=0
+-- DROP TABLE ecx
+ok affected=0 insert_id=0
+-- CREATE TABLE dp (id INT PRIMARY KEY, post_date DATETIME NOT NULL, d3 DATETIME(3) NULL, ts2 TIMESTAMP(2) NULL, dd DATE NULL, vc VARCHAR(30) NULL)
+ok affected=0 insert_id=0
+-- INSERT INTO dp VALUES (1, '2024-01-01 10:00:00', '2024-01-01 10:00:00.120', '2024-01-01 10:00:00.10', '2024-01-01', '2024-01-01 10:00:00'), (2, '2024-01-02 10:00:00', '2024-01-02 10:00:00.000', '2024-01-02 10:00:00.00', '2024-01-02', '2024-01-02 10:00:00.5'), (3, '2024-01-03 10:00:00', NULL, NULL, NULL, NULL)
+ok affected=3 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT id, STRCMP(DATE_ADD(post_date, INTERVAL 1 DAY), '2024-01-02 10:00:00'), DATE_ADD(post_date, INTERVAL 1 DAY) REGEXP '10:00:00$', MD5(DATE_ADD(post_date, INTERVAL 1 DAY)), FIELD(DATE_ADD(post_date, INTERVAL 1 DAY), '2024-01-02 10:00:00', '2024-01-03 10:00:00'), QUOTE(DATE_ADD(post_date, INTERVAL 1 DAY)), BIT_LENGTH(DATE_ADD(post_date, INTERVAL 1 DAY)), FIND_IN_SET(DATE_ADD(post_date, INTERVAL 1 DAY), 'x,2024-01-02 10:00:00'), REPEAT(DATE_SUB(post_date, INTERVAL 1 HOUR), 2), TO_BASE64(post_date + INTERVAL 1 DAY), MD5(post_date - INTERVAL 1 DAY) FROM dp ORDER BY id
+1 | 0 | 1 | 4bad979e0a0d13ee617e341372538417 | 1 | '2024-01-02 10:00:00' | 152 | 2 | 2024-01-01 09:00:002024-01-01 09:00:00 | MjAyNC0wMS0wMiAxMDowMDowMA== | a57f3d777100b509b4e42e883a16c5c5
+2 | 1 | 1 | 3f36551362dc26124b25d1674293c2e9 | 2 | '2024-01-03 10:00:00' | 152 | 0 | 2024-01-02 09:00:002024-01-02 09:00:00 | MjAyNC0wMS0wMyAxMDowMDowMA== | 9d94806ef38539ba47ad36495bf69f2d
+3 | 1 | 1 | 737528c661d697464d3c0ccebc1aff5f | 0 | '2024-01-04 10:00:00' | 152 | 0 | 2024-01-03 09:00:002024-01-03 09:00:00 | MjAyNC0wMS0wNCAxMDowMDowMA== | 4bad979e0a0d13ee617e341372538417
+
+-- SELECT id FROM dp WHERE DATE_ADD(post_date, INTERVAL 1 DAY) REGEXP '^2024-01-0[2-4] 10:00:00$' ORDER BY id
+1
+2
+3
+
+-- SELECT id FROM dp WHERE STRCMP(DATE_ADD(post_date, INTERVAL 1 DAY), '2024-01-02 10:00:00') = 0 ORDER BY id
+1
+
+-- SELECT id FROM dp WHERE QUOTE(DATE_SUB(post_date, INTERVAL 0 DAY)) = '''2024-01-01 10:00:00''' ORDER BY id
+1
+
+-- SELECT id, CONCAT(DATE_ADD(post_date, INTERVAL 1 DAY)), CAST(DATE_ADD(post_date, INTERVAL 1 DAY) AS CHAR), LENGTH(DATE_ADD(post_date, INTERVAL 1 DAY)), CONCAT(DATE_ADD(d3, INTERVAL 1 DAY)), CONCAT(DATE_SUB(ts2, INTERVAL 1 SECOND)), CONCAT(d3 - INTERVAL 1 DAY), CONCAT(INTERVAL 1 DAY + d3), CONCAT(DATE_ADD(post_date, INTERVAL 1 MICROSECOND)), CONCAT(DATE_ADD(post_date, INTERVAL 0 MICROSECOND)), CONCAT(DATE_ADD(dd, INTERVAL 1 HOUR)), CONCAT(DATE_ADD(dd, INTERVAL 1 DAY)), CONCAT(dd + INTERVAL 1 DAY), CONCAT(DATE_ADD(vc, INTERVAL 1 DAY)), CONCAT(ADDDATE(d3, 1)) FROM dp ORDER BY id
+1 | 2024-01-02 10:00:00 | 2024-01-02 10:00:00 | 19 | 2024-01-02 10:00:00.120 | 2024-01-01 09:59:59.10 | 2023-12-31 10:00:00.120 | 2024-01-02 10:00:00.120 | 2024-01-01 10:00:00.000001 | 2024-01-01 10:00:00.000000 | 2024-01-01 01:00:00 | 2024-01-02 | 2024-01-02 | 2024-01-02 10:00:00 | 2024-01-02 10:00:00.120
+2 | 2024-01-03 10:00:00 | 2024-01-03 10:00:00 | 19 | 2024-01-03 10:00:00.000 | 2024-01-02 09:59:59.00 | 2024-01-01 10:00:00.000 | 2024-01-03 10:00:00.000 | 2024-01-02 10:00:00.000001 | 2024-01-02 10:00:00.000000 | 2024-01-02 01:00:00 | 2024-01-03 | 2024-01-03 | 2024-01-03 10:00:00.500000 | 2024-01-03 10:00:00.000
+3 | 2024-01-04 10:00:00 | 2024-01-04 10:00:00 | 19 | NULL | NULL | NULL | NULL | 2024-01-03 10:00:00.000001 | 2024-01-03 10:00:00.000000 | NULL | NULL | NULL | NULL | NULL
+
+-- SELECT id, DATE_ADD(post_date, INTERVAL 1 DAY), DATE_ADD(d3, INTERVAL 1 DAY), DATE_SUB(ts2, INTERVAL 1 SECOND), d3 - INTERVAL 1 DAY, post_date + INTERVAL 1 HOUR, DATE_ADD(post_date, INTERVAL 1 MICROSECOND), DATE_ADD(dd, INTERVAL 1 HOUR), DATE_ADD(dd, INTERVAL 1 DAY), dd + INTERVAL 1 DAY, DATE_ADD(vc, INTERVAL 1 DAY) FROM dp ORDER BY id
+1 | 2024-01-02 10:00:00 | 2024-01-02 10:00:00.120 | 2024-01-01 09:59:59.10 | 2023-12-31 10:00:00.120 | 2024-01-01 11:00:00 | 2024-01-01 10:00:00.000001 | 2024-01-01 01:00:00 | 2024-01-02 | 2024-01-02 | 2024-01-02 10:00:00
+2 | 2024-01-03 10:00:00 | 2024-01-03 10:00:00.000 | 2024-01-02 09:59:59.00 | 2024-01-01 10:00:00.000 | 2024-01-02 11:00:00 | 2024-01-02 10:00:00.000001 | 2024-01-02 01:00:00 | 2024-01-03 | 2024-01-03 | 2024-01-03 10:00:00.500000
+3 | 2024-01-04 10:00:00 | NULL | NULL | NULL | 2024-01-03 11:00:00 | 2024-01-03 10:00:00.000001 | NULL | NULL | NULL | NULL
+
+-- SELECT STRCMP(FROM_UNIXTIME(0), '1970-01-01 00:00:00'), CONCAT(FROM_UNIXTIME(0)), BIT_LENGTH(FROM_UNIXTIME(0)), FROM_UNIXTIME(1.5), FROM_UNIXTIME(1.50), CONCAT(FROM_UNIXTIME(1.50)), FROM_UNIXTIME(1.1234567), FROM_UNIXTIME('1.5'), FROM_UNIXTIME(1e0), FROM_UNIXTIME(1.9999999), FROM_UNIXTIME(-1), FROM_UNIXTIME(NULL), FROM_UNIXTIME(1700000000), MD5(FROM_UNIXTIME(1700000000)), FROM_UNIXTIME(1.5, '%s.%f')
+0 | 1970-01-01 00:00:00 | 152 | 1970-01-01 00:00:01.5 | 1970-01-01 00:00:01.50 | 1970-01-01 00:00:01.50 | 1970-01-01 00:00:01.123457 | 1970-01-01 00:00:01.500000 | 1970-01-01 00:00:01.000000 | 1970-01-01 00:00:02.000000 | NULL | NULL | 2023-11-14 22:13:20 | 4e01a10aec03109f56fbced81e6b8c52 | 01.500000
+
+-- SELECT id, IF(id = 1, post_date, NULL), CONCAT(IF(id = 1, post_date, NULL)), MD5(IF(id = 1, post_date, NULL)), QUOTE(IF(id = 1, post_date, NULL)), IF(id = 1, post_date, d3), CONCAT(IF(id = 1, post_date, d3)), IF(id = 1, d3, NULL), CONCAT(GREATEST(post_date, '2024-01-01')), MD5(GREATEST(post_date, '2024-01-01')), GREATEST(post_date, d3), LEAST(d3, ts2), CONCAT(COALESCE(post_date, '')), MD5(COALESCE(post_date, '')), COALESCE(d3, post_date), COALESCE(post_date, d3), IFNULL(d3, post_date), IFNULL(post_date, d3), CASE WHEN id = 1 THEN post_date ELSE d3 END, CONCAT(CASE WHEN id = 1 THEN dd ELSE d3 END), IF(id = 1, dd, post_date), IF(id = 1, dd, NULL) FROM dp ORDER BY id
+1 | 2024-01-01 10:00:00 | 2024-01-01 10:00:00 | 9d94806ef38539ba47ad36495bf69f2d | '2024-01-01 10:00:00' | 2024-01-01 10:00:00.000 | 2024-01-01 10:00:00.000 | 2024-01-01 10:00:00.120 | 2024-01-01 10:00:00 | 9d94806ef38539ba47ad36495bf69f2d | 2024-01-01 10:00:00.120 | 2024-01-01 10:00:00.100 | 2024-01-01 10:00:00 | 9d94806ef38539ba47ad36495bf69f2d | 2024-01-01 10:00:00.120 | 2024-01-01 10:00:00.000 | 2024-01-01 10:00:00.120 | 2024-01-01 10:00:00.000 | 2024-01-01 10:00:00.000 | 2024-01-01 00:00:00.000 | 2024-01-01 00:00:00 | 2024-01-01
+2 | NULL | NULL | NULL | NULL | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00.000 | NULL | 2024-01-02 10:00:00 | 4bad979e0a0d13ee617e341372538417 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00 | 4bad979e0a0d13ee617e341372538417 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00 | NULL
+3 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | 2024-01-03 10:00:00 | 3f36551362dc26124b25d1674293c2e9 | NULL | NULL | 2024-01-03 10:00:00 | 3f36551362dc26124b25d1674293c2e9 | 2024-01-03 10:00:00.000 | 2024-01-03 10:00:00.000 | 2024-01-03 10:00:00.000 | 2024-01-03 10:00:00.000 | NULL | NULL | 2024-01-03 10:00:00 | NULL
+
+-- SELECT id, TIMESTAMP('2024-01-01 10:00:00'), CONCAT(TIMESTAMP('2024-01-01 10:00:00')), BIT_LENGTH(TIMESTAMP('2024-01-01 10:00:00')), MD5(TIMESTAMP('2024-01-01 10:00:00')), TIMESTAMP('2024-01-01 10:00:00.50'), CONCAT(TIMESTAMP('2024-01-01 10:00:00.50')), TIMESTAMP('2024-01-01'), TIMESTAMP(dd), CONCAT(TIMESTAMP(dd)), TIMESTAMP(d3), TIMESTAMP(post_date), TIMESTAMP(vc), CONCAT(TIMESTAMP(ts2)), TIMESTAMP(20240101) FROM dp ORDER BY id
+1 | 2024-01-01 10:00:00 | 2024-01-01 10:00:00 | 152 | 9d94806ef38539ba47ad36495bf69f2d | 2024-01-01 10:00:00.50 | 2024-01-01 10:00:00.50 | 2024-01-01 00:00:00 | 2024-01-01 00:00:00 | 2024-01-01 00:00:00 | 2024-01-01 10:00:00.120 | 2024-01-01 10:00:00 | 2024-01-01 10:00:00.000000 | 2024-01-01 10:00:00.10 | 2024-01-01 00:00:00
+2 | 2024-01-01 10:00:00 | 2024-01-01 10:00:00 | 152 | 9d94806ef38539ba47ad36495bf69f2d | 2024-01-01 10:00:00.50 | 2024-01-01 10:00:00.50 | 2024-01-01 00:00:00 | 2024-01-02 00:00:00 | 2024-01-02 00:00:00 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00 | 2024-01-02 10:00:00.500000 | 2024-01-02 10:00:00.00 | 2024-01-01 00:00:00
+3 | 2024-01-01 10:00:00 | 2024-01-01 10:00:00 | 152 | 9d94806ef38539ba47ad36495bf69f2d | 2024-01-01 10:00:00.50 | 2024-01-01 10:00:00.50 | 2024-01-01 00:00:00 | NULL | NULL | NULL | 2024-01-03 10:00:00 | NULL | NULL | 2024-01-01 00:00:00
+
+-- SELECT BIT_LENGTH(NOW()), BIT_LENGTH(NOW(3)), BIT_LENGTH(NOW(6)), BIT_LENGTH(CURTIME()), BIT_LENGTH(CURTIME(2)), LENGTH(CURRENT_TIME(1)), LENGTH(CURTIME(6)), BIT_LENGTH(UTC_TIMESTAMP()), BIT_LENGTH(UTC_TIMESTAMP(3)), LENGTH(SYSDATE(4)), LENGTH(CURRENT_TIMESTAMP(1)), LENGTH(LOCALTIME(2)), LENGTH(LOCALTIMESTAMP(5)), LENGTH(CONCAT(NOW(3))), LENGTH(CAST(NOW(2) AS CHAR)), CONCAT(UTC_TIMESTAMP()) REGEXP '[.]', NOW() = UTC_TIMESTAMP()
+152 | 184 | 208 | 64 | 88 | 10 | 15 | 152 | 184 | 24 | 21 | 22 | 25 | 23 | 22 | 0 | 1
+
+-- SELECT id, d3, CONCAT(d3), CAST(d3 AS CHAR), QUOTE(d3), LENGTH(d3), ts2, CONCAT(ts2), CONCAT(post_date), CAST(post_date AS CHAR), CONCAT(dd), CONCAT(CAST(d3 AS DATETIME(2))), CONCAT(CAST(post_date AS DATETIME(2))), STRCMP(d3, '2024-01-01 10:00:00.120'), MD5(ts2) FROM dp ORDER BY id
+1 | 2024-01-01 10:00:00.120 | 2024-01-01 10:00:00.120 | 2024-01-01 10:00:00.120 | '2024-01-01 10:00:00.120' | 23 | 2024-01-01 10:00:00.10 | 2024-01-01 10:00:00.10 | 2024-01-01 10:00:00 | 2024-01-01 10:00:00 | 2024-01-01 | 2024-01-01 10:00:00.12 | 2024-01-01 10:00:00.00 | 0 | 8550c2748951df90421189d39a3b54b1
+2 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00.000 | '2024-01-02 10:00:00.000' | 23 | 2024-01-02 10:00:00.00 | 2024-01-02 10:00:00.00 | 2024-01-02 10:00:00 | 2024-01-02 10:00:00 | 2024-01-02 | 2024-01-02 10:00:00.00 | 2024-01-02 10:00:00.00 | 1 | 37436cc8e2e89d3643d2904115cd9355
+3 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | 2024-01-03 10:00:00 | 2024-01-03 10:00:00 | NULL | NULL | 2024-01-03 10:00:00.00 | NULL | NULL
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT id, STRCMP(DATE_ADD(post_date, INTERVAL 1 DAY), '2024-01-02 10:00:00'), DATE_ADD(post_date, INTERVAL 1 DAY) REGEXP '10:00:00$', MD5(DATE_ADD(post_date, INTERVAL 1 DAY)), FIELD(DATE_ADD(post_date, INTERVAL 1 DAY), '2024-01-02 10:00:00', '2024-01-03 10:00:00'), QUOTE(DATE_ADD(post_date, INTERVAL 1 DAY)), BIT_LENGTH(DATE_ADD(post_date, INTERVAL 1 DAY)), FIND_IN_SET(DATE_ADD(post_date, INTERVAL 1 DAY), 'x,2024-01-02 10:00:00'), REPEAT(DATE_SUB(post_date, INTERVAL 1 HOUR), 2), TO_BASE64(post_date + INTERVAL 1 DAY), MD5(post_date - INTERVAL 1 DAY) FROM dp ORDER BY id
+1 | 0 | 1 | 4bad979e0a0d13ee617e341372538417 | 1 | '2024-01-02 10:00:00' | 152 | 2 | 2024-01-01 09:00:002024-01-01 09:00:00 | MjAyNC0wMS0wMiAxMDowMDowMA== | a57f3d777100b509b4e42e883a16c5c5
+2 | 1 | 1 | 3f36551362dc26124b25d1674293c2e9 | 2 | '2024-01-03 10:00:00' | 152 | 0 | 2024-01-02 09:00:002024-01-02 09:00:00 | MjAyNC0wMS0wMyAxMDowMDowMA== | 9d94806ef38539ba47ad36495bf69f2d
+3 | 1 | 1 | 737528c661d697464d3c0ccebc1aff5f | 0 | '2024-01-04 10:00:00' | 152 | 0 | 2024-01-03 09:00:002024-01-03 09:00:00 | MjAyNC0wMS0wNCAxMDowMDowMA== | 4bad979e0a0d13ee617e341372538417
+
+-- SELECT id FROM dp WHERE DATE_ADD(post_date, INTERVAL 1 DAY) REGEXP '^2024-01-0[2-4] 10:00:00$' ORDER BY id
+1
+2
+3
+
+-- SELECT id FROM dp WHERE STRCMP(DATE_ADD(post_date, INTERVAL 1 DAY), '2024-01-02 10:00:00') = 0 ORDER BY id
+1
+
+-- SELECT id FROM dp WHERE QUOTE(DATE_SUB(post_date, INTERVAL 0 DAY)) = '''2024-01-01 10:00:00''' ORDER BY id
+1
+
+-- SELECT id, CONCAT(DATE_ADD(post_date, INTERVAL 1 DAY)), CAST(DATE_ADD(post_date, INTERVAL 1 DAY) AS CHAR), LENGTH(DATE_ADD(post_date, INTERVAL 1 DAY)), CONCAT(DATE_ADD(d3, INTERVAL 1 DAY)), CONCAT(DATE_SUB(ts2, INTERVAL 1 SECOND)), CONCAT(d3 - INTERVAL 1 DAY), CONCAT(INTERVAL 1 DAY + d3), CONCAT(DATE_ADD(post_date, INTERVAL 1 MICROSECOND)), CONCAT(DATE_ADD(post_date, INTERVAL 0 MICROSECOND)), CONCAT(DATE_ADD(dd, INTERVAL 1 HOUR)), CONCAT(DATE_ADD(dd, INTERVAL 1 DAY)), CONCAT(dd + INTERVAL 1 DAY), CONCAT(DATE_ADD(vc, INTERVAL 1 DAY)), CONCAT(ADDDATE(d3, 1)) FROM dp ORDER BY id
+1 | 2024-01-02 10:00:00 | 2024-01-02 10:00:00 | 19 | 2024-01-02 10:00:00.120 | 2024-01-01 09:59:59.10 | 2023-12-31 10:00:00.120 | 2024-01-02 10:00:00.120 | 2024-01-01 10:00:00.000001 | 2024-01-01 10:00:00.000000 | 2024-01-01 01:00:00 | 2024-01-02 | 2024-01-02 | 2024-01-02 10:00:00 | 2024-01-02 10:00:00.120
+2 | 2024-01-03 10:00:00 | 2024-01-03 10:00:00 | 19 | 2024-01-03 10:00:00.000 | 2024-01-02 09:59:59.00 | 2024-01-01 10:00:00.000 | 2024-01-03 10:00:00.000 | 2024-01-02 10:00:00.000001 | 2024-01-02 10:00:00.000000 | 2024-01-02 01:00:00 | 2024-01-03 | 2024-01-03 | 2024-01-03 10:00:00.500000 | 2024-01-03 10:00:00.000
+3 | 2024-01-04 10:00:00 | 2024-01-04 10:00:00 | 19 | NULL | NULL | NULL | NULL | 2024-01-03 10:00:00.000001 | 2024-01-03 10:00:00.000000 | NULL | NULL | NULL | NULL | NULL
+
+-- SELECT id, DATE_ADD(post_date, INTERVAL 1 DAY), DATE_ADD(d3, INTERVAL 1 DAY), DATE_SUB(ts2, INTERVAL 1 SECOND), d3 - INTERVAL 1 DAY, post_date + INTERVAL 1 HOUR, DATE_ADD(post_date, INTERVAL 1 MICROSECOND), DATE_ADD(dd, INTERVAL 1 HOUR), DATE_ADD(dd, INTERVAL 1 DAY), dd + INTERVAL 1 DAY, DATE_ADD(vc, INTERVAL 1 DAY) FROM dp ORDER BY id
+1 | 2024-01-02 10:00:00 | 2024-01-02 10:00:00.120 | 2024-01-01 09:59:59.10 | 2023-12-31 10:00:00.120 | 2024-01-01 11:00:00 | 2024-01-01 10:00:00.000001 | 2024-01-01 01:00:00 | 2024-01-02 | 2024-01-02 | 2024-01-02 10:00:00
+2 | 2024-01-03 10:00:00 | 2024-01-03 10:00:00.000 | 2024-01-02 09:59:59.00 | 2024-01-01 10:00:00.000 | 2024-01-02 11:00:00 | 2024-01-02 10:00:00.000001 | 2024-01-02 01:00:00 | 2024-01-03 | 2024-01-03 | 2024-01-03 10:00:00.500000
+3 | 2024-01-04 10:00:00 | NULL | NULL | NULL | 2024-01-03 11:00:00 | 2024-01-03 10:00:00.000001 | NULL | NULL | NULL | NULL
+
+-- SELECT STRCMP(FROM_UNIXTIME(0), '1970-01-01 00:00:00'), CONCAT(FROM_UNIXTIME(0)), BIT_LENGTH(FROM_UNIXTIME(0)), FROM_UNIXTIME(1.5), FROM_UNIXTIME(1.50), CONCAT(FROM_UNIXTIME(1.50)), FROM_UNIXTIME(1.1234567), FROM_UNIXTIME('1.5'), FROM_UNIXTIME(1e0), FROM_UNIXTIME(1.9999999), FROM_UNIXTIME(-1), FROM_UNIXTIME(NULL), FROM_UNIXTIME(1700000000), MD5(FROM_UNIXTIME(1700000000)), FROM_UNIXTIME(1.5, '%s.%f')
+0 | 1970-01-01 00:00:00 | 152 | 1970-01-01 00:00:01.5 | 1970-01-01 00:00:01.50 | 1970-01-01 00:00:01.50 | 1970-01-01 00:00:01.123457 | 1970-01-01 00:00:01.500000 | 1970-01-01 00:00:01.000000 | 1970-01-01 00:00:02.000000 | NULL | NULL | 2023-11-14 22:13:20 | 4e01a10aec03109f56fbced81e6b8c52 | 01.500000
+
+-- SELECT id, IF(id = 1, post_date, NULL), CONCAT(IF(id = 1, post_date, NULL)), MD5(IF(id = 1, post_date, NULL)), QUOTE(IF(id = 1, post_date, NULL)), IF(id = 1, post_date, d3), CONCAT(IF(id = 1, post_date, d3)), IF(id = 1, d3, NULL), CONCAT(GREATEST(post_date, '2024-01-01')), MD5(GREATEST(post_date, '2024-01-01')), GREATEST(post_date, d3), LEAST(d3, ts2), CONCAT(COALESCE(post_date, '')), MD5(COALESCE(post_date, '')), COALESCE(d3, post_date), COALESCE(post_date, d3), IFNULL(d3, post_date), IFNULL(post_date, d3), CASE WHEN id = 1 THEN post_date ELSE d3 END, CONCAT(CASE WHEN id = 1 THEN dd ELSE d3 END), IF(id = 1, dd, post_date), IF(id = 1, dd, NULL) FROM dp ORDER BY id
+1 | 2024-01-01 10:00:00 | 2024-01-01 10:00:00 | 9d94806ef38539ba47ad36495bf69f2d | '2024-01-01 10:00:00' | 2024-01-01 10:00:00.000 | 2024-01-01 10:00:00.000 | 2024-01-01 10:00:00.120 | 2024-01-01 10:00:00 | 9d94806ef38539ba47ad36495bf69f2d | 2024-01-01 10:00:00.120 | 2024-01-01 10:00:00.100 | 2024-01-01 10:00:00 | 9d94806ef38539ba47ad36495bf69f2d | 2024-01-01 10:00:00.120 | 2024-01-01 10:00:00.000 | 2024-01-01 10:00:00.120 | 2024-01-01 10:00:00.000 | 2024-01-01 10:00:00.000 | 2024-01-01 00:00:00.000 | 2024-01-01 00:00:00 | 2024-01-01
+2 | NULL | NULL | NULL | NULL | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00.000 | NULL | 2024-01-02 10:00:00 | 4bad979e0a0d13ee617e341372538417 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00 | 4bad979e0a0d13ee617e341372538417 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00 | NULL
+3 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | 2024-01-03 10:00:00 | 3f36551362dc26124b25d1674293c2e9 | NULL | NULL | 2024-01-03 10:00:00 | 3f36551362dc26124b25d1674293c2e9 | 2024-01-03 10:00:00.000 | 2024-01-03 10:00:00.000 | 2024-01-03 10:00:00.000 | 2024-01-03 10:00:00.000 | NULL | NULL | 2024-01-03 10:00:00 | NULL
+
+-- SELECT id, TIMESTAMP('2024-01-01 10:00:00'), CONCAT(TIMESTAMP('2024-01-01 10:00:00')), BIT_LENGTH(TIMESTAMP('2024-01-01 10:00:00')), MD5(TIMESTAMP('2024-01-01 10:00:00')), TIMESTAMP('2024-01-01 10:00:00.50'), CONCAT(TIMESTAMP('2024-01-01 10:00:00.50')), TIMESTAMP('2024-01-01'), TIMESTAMP(dd), CONCAT(TIMESTAMP(dd)), TIMESTAMP(d3), TIMESTAMP(post_date), TIMESTAMP(vc), CONCAT(TIMESTAMP(ts2)), TIMESTAMP(20240101) FROM dp ORDER BY id
+1 | 2024-01-01 10:00:00 | 2024-01-01 10:00:00 | 152 | 9d94806ef38539ba47ad36495bf69f2d | 2024-01-01 10:00:00.50 | 2024-01-01 10:00:00.50 | 2024-01-01 00:00:00 | 2024-01-01 00:00:00 | 2024-01-01 00:00:00 | 2024-01-01 10:00:00.120 | 2024-01-01 10:00:00 | 2024-01-01 10:00:00.000000 | 2024-01-01 10:00:00.10 | 2024-01-01 00:00:00
+2 | 2024-01-01 10:00:00 | 2024-01-01 10:00:00 | 152 | 9d94806ef38539ba47ad36495bf69f2d | 2024-01-01 10:00:00.50 | 2024-01-01 10:00:00.50 | 2024-01-01 00:00:00 | 2024-01-02 00:00:00 | 2024-01-02 00:00:00 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00 | 2024-01-02 10:00:00.500000 | 2024-01-02 10:00:00.00 | 2024-01-01 00:00:00
+3 | 2024-01-01 10:00:00 | 2024-01-01 10:00:00 | 152 | 9d94806ef38539ba47ad36495bf69f2d | 2024-01-01 10:00:00.50 | 2024-01-01 10:00:00.50 | 2024-01-01 00:00:00 | NULL | NULL | NULL | 2024-01-03 10:00:00 | NULL | NULL | 2024-01-01 00:00:00
+
+-- SELECT BIT_LENGTH(NOW()), BIT_LENGTH(NOW(3)), BIT_LENGTH(NOW(6)), BIT_LENGTH(CURTIME()), BIT_LENGTH(CURTIME(2)), LENGTH(CURRENT_TIME(1)), LENGTH(CURTIME(6)), BIT_LENGTH(UTC_TIMESTAMP()), BIT_LENGTH(UTC_TIMESTAMP(3)), LENGTH(SYSDATE(4)), LENGTH(CURRENT_TIMESTAMP(1)), LENGTH(LOCALTIME(2)), LENGTH(LOCALTIMESTAMP(5)), LENGTH(CONCAT(NOW(3))), LENGTH(CAST(NOW(2) AS CHAR)), CONCAT(UTC_TIMESTAMP()) REGEXP '[.]', NOW() = UTC_TIMESTAMP()
+152 | 184 | 208 | 64 | 88 | 10 | 15 | 152 | 184 | 24 | 21 | 22 | 25 | 23 | 22 | 0 | 1
+
+-- SELECT id, d3, CONCAT(d3), CAST(d3 AS CHAR), QUOTE(d3), LENGTH(d3), ts2, CONCAT(ts2), CONCAT(post_date), CAST(post_date AS CHAR), CONCAT(dd), CONCAT(CAST(d3 AS DATETIME(2))), CONCAT(CAST(post_date AS DATETIME(2))), STRCMP(d3, '2024-01-01 10:00:00.120'), MD5(ts2) FROM dp ORDER BY id
+1 | 2024-01-01 10:00:00.120 | 2024-01-01 10:00:00.120 | 2024-01-01 10:00:00.120 | '2024-01-01 10:00:00.120' | 23 | 2024-01-01 10:00:00.10 | 2024-01-01 10:00:00.10 | 2024-01-01 10:00:00 | 2024-01-01 10:00:00 | 2024-01-01 | 2024-01-01 10:00:00.12 | 2024-01-01 10:00:00.00 | 0 | 8550c2748951df90421189d39a3b54b1
+2 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00.000 | 2024-01-02 10:00:00.000 | '2024-01-02 10:00:00.000' | 23 | 2024-01-02 10:00:00.00 | 2024-01-02 10:00:00.00 | 2024-01-02 10:00:00 | 2024-01-02 10:00:00 | 2024-01-02 | 2024-01-02 10:00:00.00 | 2024-01-02 10:00:00.00 | 1 | 37436cc8e2e89d3643d2904115cd9355
+3 | NULL | NULL | NULL | NULL | NULL | NULL | NULL | 2024-01-03 10:00:00 | 2024-01-03 10:00:00 | NULL | NULL | 2024-01-03 10:00:00.00 | NULL | NULL
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE dp
+ok affected=0 insert_id=0

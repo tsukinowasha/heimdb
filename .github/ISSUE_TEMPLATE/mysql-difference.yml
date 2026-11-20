@@ -1,0 +1,41 @@
+name: Difference from MySQL
+description: A statement that returns different results, errors or warnings from MySQL 8.0
+labels: [compatibility]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        HeimDB supports only the SQL that WordPress, wp-cli, mysqldump and plugins issue. Known differences are in `docs/differences.md`.
+  - type: input
+    id: version
+    attributes:
+      label: HeimDB version
+      placeholder: "0.3.0"
+    validations:
+      required: true
+  - type: textarea
+    id: sql
+    attributes:
+      label: SQL
+      description: The statement(s), including the CREATE TABLE and the rows needed to reproduce, from the general or slow query log if possible.
+      render: sql
+    validations:
+      required: true
+  - type: textarea
+    id: mysql
+    attributes:
+      label: Result on MySQL 8.0
+      description: Rows, errors and warnings (`SHOW WARNINGS`), and the MySQL version.
+    validations:
+      required: true
+  - type: textarea
+    id: heimdb
+    attributes:
+      label: Result on HeimDB
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Where it comes from
+      description: WordPress core, wp-cli, mysqldump, or a plugin (name and version).

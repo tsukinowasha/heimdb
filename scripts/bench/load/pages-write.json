@@ -1,0 +1,383 @@
+{
+ "session": [
+  "SET NAMES 'utf8mb4' COLLATE 'utf8mb4_unicode_520_ci'",
+  "SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
+ ],
+ "setup": [
+  {
+   "check": "SELECT term_id FROM wp_terms WHERE term_id = 900001",
+   "steps": [
+    {
+     "sql": "INSERT INTO `wp_terms` (`term_id`, `name`, `slug`, `term_group`) VALUES (900001, 'bench-a', 'bench-a', 0)"
+    },
+    {
+     "sql": "INSERT INTO `wp_term_taxonomy` (`term_taxonomy_id`, `term_id`, `taxonomy`, `description`, `parent`, `count`) VALUES (900001, 900001, 'post_tag', '', 0, 0)"
+    }
+   ]
+  },
+  {
+   "check": "SELECT term_id FROM wp_terms WHERE term_id = 900002",
+   "steps": [
+    {
+     "sql": "INSERT INTO `wp_terms` (`term_id`, `name`, `slug`, `term_group`) VALUES (900002, 'bench-b', 'bench-b', 0)"
+    },
+    {
+     "sql": "INSERT INTO `wp_term_taxonomy` (`term_taxonomy_id`, `term_id`, `taxonomy`, `description`, `parent`, `count`) VALUES (900002, 900002, 'post_tag', '', 0, 0)"
+    }
+   ]
+  },
+  {
+   "check": "SELECT option_id FROM wp_options WHERE option_name = 'bench_option'",
+   "steps": [
+    {
+     "sql": "INSERT INTO `wp_options` (`option_name`, `option_value`, `autoload`) VALUES ('bench_option', 'value 0', 'auto')"
+    }
+   ]
+  }
+ ],
+ "pages": [
+  {
+   "name": "post_create",
+   "kind": "write",
+   "steps": [
+    {
+     "sql": "SELECT   wp_posts.*\n\t\t\t\t\t FROM wp_posts \n\t\t\t\t\t WHERE 1=1  AND wp_posts.post_name = 'bench-post-{{u}}' AND wp_posts.ID NOT IN (0) AND wp_posts.post_type IN ('post', 'page', 'attachment') AND ((wp_posts.post_status = 'trash'))\n\t\t\t\t\t \n\t\t\t\t\t ORDER BY wp_posts.post_date DESC\n\t\t\t\t\t "
+    },
+    {
+     "sql": "SELECT post_name FROM wp_posts WHERE post_name = 'bench-post-{{u}}' AND post_type = 'post' AND ID != 0 LIMIT 1"
+    },
+    {
+     "sql": "INSERT INTO `wp_posts` (`post_author`, `post_date`, `post_date_gmt`, `post_content`, `post_content_filtered`, `post_title`, `post_excerpt`, `post_status`, `post_type`, `comment_status`, `ping_status`, `post_password`, `post_name`, `to_ping`, `pinged`, `post_modified`, `post_modified_gmt`, `post_parent`, `menu_order`, `post_mime_type`, `guid`) VALUES (1, '{{now}}', '{{now}}', 'Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet. ', '', 'Bench post {{u}}', '', 'publish', 'post', 'open', 'open', '', 'bench-post-{{u}}', '', '', '{{now}}', '{{now}}', 0, 0, '', '')",
+     "save_id": "post"
+    },
+    {
+     "sql": "SELECT * FROM wp_posts WHERE ID = {{post}} LIMIT 1"
+    },
+    {
+     "sql": "SELECT DISTINCT t.term_id\n\t\t\t FROM wp_terms AS t  INNER JOIN wp_term_taxonomy AS tt ON t.term_id = tt.term_id INNER JOIN wp_term_relationships AS tr ON tr.term_taxonomy_id = tt.term_taxonomy_id\n\t\t\t WHERE tt.taxonomy IN ('category') AND tr.object_id IN ({{post}})\n\t\t\t \n\t\t\t "
+    },
+    {
+     "sql": "SELECT  t.term_id\n\t\t\t FROM wp_terms AS t  INNER JOIN wp_term_taxonomy AS tt ON t.term_id = tt.term_id\n\t\t\t WHERE tt.taxonomy IN ('category') AND t.term_id IN ( 1 )\n\t\t\t ORDER BY t.term_id ASC\n\t\t\t LIMIT 1"
+    },
+    {
+     "sql": "SELECT t.*, tt.* FROM wp_terms AS t INNER JOIN wp_term_taxonomy AS tt ON t.term_id = tt.term_id WHERE t.term_id IN (1)"
+    },
+    {
+     "sql": "SELECT term_taxonomy_id FROM wp_term_relationships WHERE object_id = {{post}} AND term_taxonomy_id = 1"
+    },
+    {
+     "sql": "INSERT INTO `wp_term_relationships` (`object_id`, `term_taxonomy_id`) VALUES ({{post}}, 1)"
+    },
+    {
+     "sql": "SELECT COUNT(*) FROM wp_term_relationships, wp_posts WHERE wp_posts.ID = wp_term_relationships.object_id AND post_status IN ('publish') AND post_type IN ('post') AND term_taxonomy_id = 1",
+     "save": [
+      "cnt1"
+     ]
+    },
+    {
+     "sql": "UPDATE `wp_term_taxonomy` SET `count` = {{cnt1}} WHERE `term_taxonomy_id` = 1"
+    },
+    {
+     "sql": "SELECT term_id, taxonomy FROM wp_term_taxonomy WHERE term_taxonomy_id IN (1)"
+    },
+    {
+     "sql": "SELECT DISTINCT t.term_id\n\t\t\t FROM wp_terms AS t  INNER JOIN wp_term_taxonomy AS tt ON t.term_id = tt.term_id INNER JOIN wp_term_relationships AS tr ON tr.term_taxonomy_id = tt.term_taxonomy_id\n\t\t\t WHERE tt.taxonomy IN ('post_tag') AND tr.object_id IN ({{post}})\n\t\t\t \n\t\t\t "
+    },
+    {
+     "sql": "SELECT  t.term_id\n\t\t\t FROM wp_terms AS t  INNER JOIN wp_term_taxonomy AS tt ON t.term_id = tt.term_id\n\t\t\t WHERE tt.taxonomy IN ('post_tag') AND t.slug IN ('bench-a')\n\t\t\t ORDER BY t.term_id ASC\n\t\t\t LIMIT 1"
+    },
+    {
+     "sql": "SELECT term_taxonomy_id FROM wp_term_relationships WHERE object_id = {{post}} AND term_taxonomy_id = 900001"
+    },
+    {
+     "sql": "INSERT INTO `wp_term_relationships` (`object_id`, `term_taxonomy_id`) VALUES ({{post}}, 900001)"
+    },
+    {
+     "sql": "SELECT  t.term_id\n\t\t\t FROM wp_terms AS t  INNER JOIN wp_term_taxonomy AS tt ON t.term_id = tt.term_id\n\t\t\t WHERE tt.taxonomy IN ('post_tag') AND t.slug IN ('bench-b')\n\t\t\t ORDER BY t.term_id ASC\n\t\t\t LIMIT 1"
+    },
+    {
+     "sql": "SELECT term_taxonomy_id FROM wp_term_relationships WHERE object_id = {{post}} AND term_taxonomy_id = 900002"
+    },
+    {
+     "sql": "INSERT INTO `wp_term_relationships` (`object_id`, `term_taxonomy_id`) VALUES ({{post}}, 900002)"
+    },
+    {
+     "sql": "SELECT COUNT(*) FROM wp_term_relationships, wp_posts WHERE wp_posts.ID = wp_term_relationships.object_id AND post_status IN ('publish') AND post_type IN ('post') AND term_taxonomy_id = 900001",
+     "save": [
+      "cnt2"
+     ]
+    },
+    {
+     "sql": "UPDATE `wp_term_taxonomy` SET `count` = {{cnt2}} WHERE `term_taxonomy_id` = 900001"
+    },
+    {
+     "sql": "SELECT COUNT(*) FROM wp_term_relationships, wp_posts WHERE wp_posts.ID = wp_term_relationships.object_id AND post_status IN ('publish') AND post_type IN ('post') AND term_taxonomy_id = 900002",
+     "save": [
+      "cnt3"
+     ]
+    },
+    {
+     "sql": "UPDATE `wp_term_taxonomy` SET `count` = {{cnt3}} WHERE `term_taxonomy_id` = 900002"
+    },
+    {
+     "sql": "SELECT term_id, taxonomy FROM wp_term_taxonomy WHERE term_taxonomy_id IN (900001, 900002)"
+    },
+    {
+     "sql": "UPDATE `wp_posts` SET `guid` = 'http://localhost:18181/?p={{post}}' WHERE `ID` = {{post}}"
+    },
+    {
+     "sql": "SELECT * FROM wp_posts WHERE ID = {{post}} LIMIT 1"
+    },
+    {
+     "sql": "SELECT DISTINCT t.term_id\n\t\t\t FROM wp_terms AS t  INNER JOIN wp_term_taxonomy AS tt ON t.term_id = tt.term_id INNER JOIN wp_term_relationships AS tr ON tr.term_taxonomy_id = tt.term_taxonomy_id\n\t\t\t WHERE tt.taxonomy IN ('category') AND tr.object_id IN ({{post}})\n\t\t\t ORDER BY t.name ASC\n\t\t\t "
+    },
+    {
+     "sql": "SELECT t.*, tt.* FROM wp_terms AS t INNER JOIN wp_term_taxonomy AS tt ON t.term_id = tt.term_id WHERE t.term_id IN (1)"
+    },
+    {
+     "sql": "SELECT COUNT(*) FROM wp_term_relationships, wp_posts WHERE wp_posts.ID = wp_term_relationships.object_id AND post_status IN ('publish') AND post_type IN ('post') AND term_taxonomy_id = 1",
+     "save": [
+      "cnt4"
+     ]
+    },
+    {
+     "sql": "UPDATE `wp_term_taxonomy` SET `count` = {{cnt4}} WHERE `term_taxonomy_id` = 1"
+    },
+    {
+     "sql": "SELECT term_id, taxonomy FROM wp_term_taxonomy WHERE term_taxonomy_id IN (1)"
+    },
+    {
+     "sql": "SELECT DISTINCT t.term_id\n\t\t\t FROM wp_terms AS t  INNER JOIN wp_term_taxonomy AS tt ON t.term_id = tt.term_id INNER JOIN wp_term_relationships AS tr ON tr.term_taxonomy_id = tt.term_taxonomy_id\n\t\t\t WHERE tt.taxonomy IN ('post_tag') AND tr.object_id IN ({{post}})\n\t\t\t ORDER BY t.name ASC\n\t\t\t "
+    },
+    {
+     "sql": "SELECT t.*, tt.* FROM wp_terms AS t INNER JOIN wp_term_taxonomy AS tt ON t.term_id = tt.term_id WHERE t.term_id IN (900001,900002)"
+    },
+    {
+     "sql": "SELECT COUNT(*) FROM wp_term_relationships, wp_posts WHERE wp_posts.ID = wp_term_relationships.object_id AND post_status IN ('publish') AND post_type IN ('post') AND term_taxonomy_id = 900001",
+     "save": [
+      "cnt5"
+     ]
+    },
+    {
+     "sql": "UPDATE `wp_term_taxonomy` SET `count` = {{cnt5}} WHERE `term_taxonomy_id` = 900001"
+    },
+    {
+     "sql": "SELECT COUNT(*) FROM wp_term_relationships, wp_posts WHERE wp_posts.ID = wp_term_relationships.object_id AND post_status IN ('publish') AND post_type IN ('post') AND term_taxonomy_id = 900002",
+     "save": [
+      "cnt6"
+     ]
+    },
+    {
+     "sql": "UPDATE `wp_term_taxonomy` SET `count` = {{cnt6}} WHERE `term_taxonomy_id` = 900002"
+    },
+    {
+     "sql": "SELECT term_id, taxonomy FROM wp_term_taxonomy WHERE term_taxonomy_id IN (900001, 900002)"
+    },
+    {
+     "sql": "SELECT DISTINCT t.term_id\n\t\t\t FROM wp_terms AS t  INNER JOIN wp_term_taxonomy AS tt ON t.term_id = tt.term_id INNER JOIN wp_term_relationships AS tr ON tr.term_taxonomy_id = tt.term_taxonomy_id\n\t\t\t WHERE tt.taxonomy IN ('post_format') AND tr.object_id IN ({{post}})\n\t\t\t ORDER BY t.name ASC\n\t\t\t "
+    },
+    {
+     "sql": "SELECT autoload FROM wp_options WHERE option_name = '_transient_is_multi_author'"
+    },
+    {
+     "sql": "SELECT 1 as test FROM wp_posts WHERE post_type = 'post' AND post_status = 'publish' LIMIT 1"
+    },
+    {
+     "sql": "SELECT autoload FROM wp_options WHERE option_name = 'wp_calendar_block_has_published_posts' LIMIT 1"
+    },
+    {
+     "sql": "UPDATE `wp_options` SET `option_value` = '1' WHERE `option_name` = 'wp_calendar_block_has_published_posts'"
+    },
+    {
+     "sql": "SELECT COUNT(*) FROM wp_postmeta WHERE meta_key = '_pingme' AND post_id = {{post}}"
+    },
+    {
+     "sql": "INSERT INTO `wp_postmeta` (`post_id`, `meta_key`, `meta_value`) VALUES ({{post}}, '_pingme', '1')",
+     "save_id": "meta1"
+    },
+    {
+     "sql": "SELECT COUNT(*) FROM wp_postmeta WHERE meta_key = '_encloseme' AND post_id = {{post}}"
+    },
+    {
+     "sql": "INSERT INTO `wp_postmeta` (`post_id`, `meta_key`, `meta_value`) VALUES ({{post}}, '_encloseme', '1')",
+     "save_id": "meta2"
+    }
+   ]
+  },
+  {
+   "name": "comment_add",
+   "kind": "write",
+   "steps": [
+    {
+     "sql": "INSERT INTO `wp_comments` (`comment_post_ID`, `comment_author_IP`, `comment_author`, `comment_author_email`, `comment_author_url`, `comment_date`, `comment_date_gmt`, `comment_content`, `comment_karma`, `comment_approved`, `comment_agent`, `comment_type`, `comment_parent`, `user_id`) VALUES ({{post}}, '', 'Bench {{u}}', 'bench{{u}}@example.com', '', '{{now}}', '{{now}}', 'Bench comment.', 0, '1', '', 'comment', 0, 0)",
+     "save_id": "comment"
+    },
+    {
+     "sql": "SELECT COUNT(*) FROM wp_comments WHERE comment_post_ID = {{post}} AND comment_approved = '1' AND comment_type != 'note'",
+     "save": [
+      "cnt7"
+     ]
+    },
+    {
+     "sql": "UPDATE `wp_posts` SET `comment_count` = {{cnt7}} WHERE `ID` = {{post}}"
+    },
+    {
+     "sql": "SELECT * FROM wp_comments WHERE comment_ID = {{comment}} LIMIT 1"
+    }
+   ]
+  },
+  {
+   "name": "option_update",
+   "kind": "write",
+   "steps": [
+    {
+     "sql": "SELECT autoload FROM wp_options WHERE option_name = 'bench_option' LIMIT 1"
+    },
+    {
+     "sql": "UPDATE `wp_options` SET `option_value` = 'value {{u}}' WHERE `option_name` = 'bench_option'"
+    }
+   ]
+  },
+  {
+   "name": "post_delete",
+   "kind": "write",
+   "steps": [
+    {
+     "sql": "SELECT * FROM wp_posts WHERE ID = {{post}}"
+    },
+    {
+     "sql": "SELECT * FROM wp_posts WHERE ID = {{post}} LIMIT 1"
+    },
+    {
+     "sql": "SELECT meta_id FROM wp_postmeta WHERE meta_key = '_wp_trash_meta_status' AND post_id = {{post}}"
+    },
+    {
+     "sql": "SELECT meta_id FROM wp_postmeta WHERE meta_key = '_wp_trash_meta_time' AND post_id = {{post}}"
+    },
+    {
+     "sql": "SELECT DISTINCT t.term_id\n\t\t\t FROM wp_terms AS t  INNER JOIN wp_term_taxonomy AS tt ON t.term_id = tt.term_id INNER JOIN wp_term_relationships AS tr ON tr.term_taxonomy_id = tt.term_taxonomy_id\n\t\t\t WHERE tt.taxonomy IN ('category') AND tr.object_id IN ({{post}})\n\t\t\t ORDER BY t.name ASC\n\t\t\t "
+    },
+    {
+     "sql": "SELECT t.*, tt.* FROM wp_terms AS t INNER JOIN wp_term_taxonomy AS tt ON t.term_id = tt.term_id WHERE t.term_id IN (1)"
+    },
+    {
+     "sql": "SELECT  t.term_id\n\t\t\t FROM wp_terms AS t  INNER JOIN wp_term_taxonomy AS tt ON t.term_id = tt.term_id\n\t\t\t WHERE tt.taxonomy IN ('category') AND t.term_id IN ( 1 )\n\t\t\t ORDER BY t.term_id ASC\n\t\t\t LIMIT 1"
+    },
+    {
+     "sql": "DELETE FROM wp_term_relationships WHERE object_id = {{post}} AND term_taxonomy_id IN ('1')"
+    },
+    {
+     "sql": "SELECT COUNT(*) FROM wp_term_relationships, wp_posts WHERE wp_posts.ID = wp_term_relationships.object_id AND post_status IN ('publish') AND post_type IN ('post') AND term_taxonomy_id = 1",
+     "save": [
+      "cnt8"
+     ]
+    },
+    {
+     "sql": "UPDATE `wp_term_taxonomy` SET `count` = {{cnt8}} WHERE `term_taxonomy_id` = 1"
+    },
+    {
+     "sql": "SELECT term_id, taxonomy FROM wp_term_taxonomy WHERE term_taxonomy_id IN (1)"
+    },
+    {
+     "sql": "SELECT DISTINCT t.term_id\n\t\t\t FROM wp_terms AS t  INNER JOIN wp_term_taxonomy AS tt ON t.term_id = tt.term_id INNER JOIN wp_term_relationships AS tr ON tr.term_taxonomy_id = tt.term_taxonomy_id\n\t\t\t WHERE tt.taxonomy IN ('post_tag') AND tr.object_id IN ({{post}})\n\t\t\t ORDER BY t.name ASC\n\t\t\t "
+    },
+    {
+     "sql": "SELECT t.*, tt.* FROM wp_terms AS t INNER JOIN wp_term_taxonomy AS tt ON t.term_id = tt.term_id WHERE t.term_id IN (900001,900002)"
+    },
+    {
+     "sql": "SELECT  t.term_id\n\t\t\t FROM wp_terms AS t  INNER JOIN wp_term_taxonomy AS tt ON t.term_id = tt.term_id\n\t\t\t WHERE tt.taxonomy IN ('post_tag') AND t.term_id IN ( 900001 )\n\t\t\t ORDER BY t.term_id ASC\n\t\t\t LIMIT 1"
+    },
+    {
+     "sql": "SELECT  t.term_id\n\t\t\t FROM wp_terms AS t  INNER JOIN wp_term_taxonomy AS tt ON t.term_id = tt.term_id\n\t\t\t WHERE tt.taxonomy IN ('post_tag') AND t.term_id IN ( 900002 )\n\t\t\t ORDER BY t.term_id ASC\n\t\t\t LIMIT 1"
+    },
+    {
+     "sql": "DELETE FROM wp_term_relationships WHERE object_id = {{post}} AND term_taxonomy_id IN ('900001', '900002')"
+    },
+    {
+     "sql": "SELECT COUNT(*) FROM wp_term_relationships, wp_posts WHERE wp_posts.ID = wp_term_relationships.object_id AND post_status IN ('publish') AND post_type IN ('post') AND term_taxonomy_id = 900001",
+     "save": [
+      "cnt9"
+     ]
+    },
+    {
+     "sql": "UPDATE `wp_term_taxonomy` SET `count` = {{cnt9}} WHERE `term_taxonomy_id` = 900001"
+    },
+    {
+     "sql": "SELECT COUNT(*) FROM wp_term_relationships, wp_posts WHERE wp_posts.ID = wp_term_relationships.object_id AND post_status IN ('publish') AND post_type IN ('post') AND term_taxonomy_id = 900002",
+     "save": [
+      "cnt10"
+     ]
+    },
+    {
+     "sql": "UPDATE `wp_term_taxonomy` SET `count` = {{cnt10}} WHERE `term_taxonomy_id` = 900002"
+    },
+    {
+     "sql": "SELECT term_id, taxonomy FROM wp_term_taxonomy WHERE term_taxonomy_id IN (900001, 900002)"
+    },
+    {
+     "sql": "SELECT DISTINCT t.term_id\n\t\t\t FROM wp_terms AS t  INNER JOIN wp_term_taxonomy AS tt ON t.term_id = tt.term_id INNER JOIN wp_term_relationships AS tr ON tr.term_taxonomy_id = tt.term_taxonomy_id\n\t\t\t WHERE tt.taxonomy IN ('post_format') AND tr.object_id IN ({{post}})\n\t\t\t ORDER BY t.name ASC\n\t\t\t "
+    },
+    {
+     "sql": "SELECT ID FROM wp_posts WHERE post_parent = {{post}} AND post_type = 'revision'"
+    },
+    {
+     "sql": "UPDATE `wp_posts` SET `post_parent` = 0 WHERE `post_parent` = {{post}} AND `post_type` = 'attachment'"
+    },
+    {
+     "sql": "SELECT comment_ID FROM wp_comments WHERE comment_post_ID = {{post}} ORDER BY comment_ID DESC"
+    },
+    {
+     "sql": "SELECT comment_ID FROM wp_comments WHERE comment_parent = {{comment}}"
+    },
+    {
+     "sql": "SELECT meta_id FROM wp_commentmeta WHERE comment_id = {{comment}}"
+    },
+    {
+     "sql": "DELETE FROM `wp_comments` WHERE `comment_ID` = {{comment}}"
+    },
+    {
+     "sql": "SELECT COUNT(*) FROM wp_comments WHERE comment_post_ID = {{post}} AND comment_approved = '1' AND comment_type != 'note'",
+     "save": [
+      "cnt11"
+     ]
+    },
+    {
+     "sql": "UPDATE `wp_posts` SET `comment_count` = {{cnt11}} WHERE `ID` = {{post}}"
+    },
+    {
+     "sql": "SELECT meta_id FROM wp_postmeta WHERE post_id = {{post}} "
+    },
+    {
+     "sql": "SELECT * FROM wp_postmeta WHERE meta_id = {{meta1}}"
+    },
+    {
+     "sql": "DELETE FROM `wp_postmeta` WHERE `meta_id` = {{meta1}}"
+    },
+    {
+     "sql": "SELECT * FROM wp_postmeta WHERE meta_id = {{meta2}}"
+    },
+    {
+     "sql": "DELETE FROM `wp_postmeta` WHERE `meta_id` = {{meta2}}"
+    },
+    {
+     "sql": "SELECT   wp_posts.*\n\t\t\t\t\t FROM wp_posts  INNER JOIN wp_postmeta ON ( wp_posts.ID = wp_postmeta.post_id )\n\t\t\t\t\t WHERE 1=1  AND ( \n  ( wp_postmeta.meta_key = '_menu_item_object_id' AND wp_postmeta.meta_value = '{{post}}' )\n) AND wp_posts.post_type = 'nav_menu_item' AND ((wp_posts.post_status <> 'trash' AND wp_posts.post_status <> 'auto-draft'))\n\t\t\t\t\t GROUP BY wp_posts.ID\n\t\t\t\t\t ORDER BY wp_posts.post_date DESC\n\t\t\t\t\t "
+    },
+    {
+     "sql": "SELECT * FROM wp_posts WHERE ID = {{post}} LIMIT 1"
+    },
+    {
+     "sql": "SELECT 1 as test FROM wp_posts WHERE post_type = 'post' AND post_status = 'publish' LIMIT 1"
+    },
+    {
+     "sql": "SELECT autoload FROM wp_options WHERE option_name = 'wp_calendar_block_has_published_posts' LIMIT 1"
+    },
+    {
+     "sql": "UPDATE `wp_options` SET `option_value` = '1' WHERE `option_name` = 'wp_calendar_block_has_published_posts'"
+    },
+    {
+     "sql": "DELETE FROM `wp_posts` WHERE `ID` = {{post}}"
+    }
+   ]
+  }
+ ]
+}

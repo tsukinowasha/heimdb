@@ -1,0 +1,848 @@
+{
+    "CollationTest::test_literals::collation": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "rows": [
+            [
+                "utf8mb4_unicode_520_ci",
+                "utf8mb4"
+            ]
+        ],
+        "warnings": []
+    },
+    "CollationTest::test_literals::compare": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "rows": [
+            [
+                "1",
+                "1",
+                "1",
+                "1",
+                "1",
+                "1",
+                "1",
+                "1"
+            ]
+        ],
+        "warnings": []
+    },
+    "CollationTest::test_order_by::distinct": [
+        "7"
+    ],
+    "CollationTest::test_order_by::expression_collation": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "rows": [
+            [
+                "utf8mb4_unicode_520_ci",
+                "utf8mb4_unicode_520_ci"
+            ]
+        ],
+        "warnings": []
+    },
+    "CollationTest::test_order_by::group_by": [
+        "2",
+        "3",
+        "3",
+        "1",
+        "2",
+        "2",
+        "1"
+    ],
+    "CollationTest::test_order_by::order": [
+        "１-10",
+        "1-9",
+        "ａ-2",
+        "A-3",
+        "a-4",
+        "b-0",
+        "B-1",
+        "é-11",
+        "e-12",
+        "Z-13",
+        "あ-5",
+        "ア-6",
+        "ｱ-7",
+        "い-8"
+    ],
+    "CollationTest::test_terms::exists_halfwidth": true,
+    "CollationTest::test_terms::exists_katakana": true,
+    "CollationTest::test_terms::get_by_name_katakana": "あ",
+    "CollationTest::test_terms::insert_fullwidth_then_ascii": [
+        "ok",
+        "ok"
+    ],
+    "CollationTest::test_terms::insert_hiragana": "ok",
+    "CollationTest::test_terms::insert_katakana": "ok",
+    "CollationTest::test_unique::first": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "affected": 1,
+        "warnings": []
+    },
+    "CollationTest::test_unique::ignore": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "affected": 1,
+        "warnings": [
+            [
+                "Warning",
+                "1062",
+                "Duplicate entry 'ｱ' for key 'compat_unique.v'"
+            ]
+        ]
+    },
+    "CollationTest::test_unique::katakana": {
+        "error": "Duplicate entry 'ア' for key 'compat_unique.v'",
+        "errno": 1062,
+        "sqlstate": "23000",
+        "affected": null,
+        "warnings": [
+            [
+                "Error",
+                "1062",
+                "Duplicate entry 'ア' for key 'compat_unique.v'"
+            ]
+        ]
+    },
+    "CollationTest::test_unique::primary": {
+        "error": "Duplicate entry '1' for key 'compat_unique.PRIMARY'",
+        "errno": 1062,
+        "sqlstate": "23000",
+        "affected": null,
+        "warnings": [
+            [
+                "Error",
+                "1062",
+                "Duplicate entry '1' for key 'compat_unique.PRIMARY'"
+            ]
+        ]
+    },
+    "ComparisonTest::test_meta_query_decimal::ge_1000": [
+        "[1000]",
+        "[1500]",
+        "[999.5]"
+    ],
+    "ComparisonTest::test_meta_query_numeric::ge_12": [
+        "[1000]",
+        "[12]",
+        "[12abc]",
+        "[1500]",
+        "[999.5]"
+    ],
+    "ComparisonTest::test_orderby_meta_value_num::order": [
+        "[]",
+        "[0]",
+        "[0x0C]",
+        "[１]",
+        "[abc]",
+        "[ 1 ]",
+        "[1.0]",
+        "[1]",
+        "[1abc]",
+        "[12]",
+        "[12abc]",
+        "[999.5]",
+        "[1000]",
+        "[1500]"
+    ],
+    "ComparisonTest::test_text_column_and_number::indexed_eq_0": [
+        "5",
+        "6",
+        "7",
+        "13",
+        "14"
+    ],
+    "ComparisonTest::test_text_column_and_number::indexed_eq_1": [
+        "1",
+        "2",
+        "3",
+        "4"
+    ],
+    "ComparisonTest::test_text_column_and_number::indexed_eq_12": [
+        "8",
+        "12"
+    ],
+    "ComparisonTest::test_text_column_and_number::indexed_gt_100": [
+        "9",
+        "10",
+        "11"
+    ],
+    "ComparisonTest::test_text_column_and_number::indexed_in": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "8",
+        "12"
+    ],
+    "ComparisonTest::test_text_column_and_number::unindexed_eq_0": [
+        "5",
+        "6",
+        "7",
+        "13",
+        "14"
+    ],
+    "ComparisonTest::test_text_column_and_number::unindexed_eq_1": [
+        "1",
+        "2",
+        "3",
+        "4"
+    ],
+    "ComparisonTest::test_text_column_and_number::unindexed_eq_12": [
+        "8",
+        "12"
+    ],
+    "ComparisonTest::test_text_column_and_number::unindexed_gt_100": [
+        "9",
+        "10",
+        "11"
+    ],
+    "ComparisonTest::test_text_column_and_number::unindexed_in": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "8",
+        "12"
+    ],
+    "ComparisonTest::test_text_column_and_number::value_eq_0": [
+        "[0]",
+        "[abc]",
+        "[]",
+        "[0x0C]",
+        "[１]"
+    ],
+    "ComparisonTest::test_text_column_and_number::value_eq_1": [
+        "[1]",
+        "[1abc]",
+        "[ 1 ]",
+        "[1.0]"
+    ],
+    "ComparisonTest::test_text_column_and_number::value_eq_12": [
+        "[12]",
+        "[12abc]"
+    ],
+    "ComparisonTest::test_text_column_and_number::value_eq_string": [
+        "[1]",
+        "[１]"
+    ],
+    "ComparisonTest::test_text_column_and_number::value_in": [
+        "[1]",
+        "[1abc]",
+        "[ 1 ]",
+        "[1.0]",
+        "[12]",
+        "[12abc]"
+    ],
+    "ComparisonTest::test_text_column_and_number::value_ne_1": [
+        "[0]",
+        "[abc]",
+        "[]",
+        "[12]",
+        "[999.5]",
+        "[1000]",
+        "[1500]",
+        "[12abc]",
+        "[0x0C]",
+        "[１]"
+    ],
+    "DmlTest::test_delete_expired_transients::delete": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "affected": 4,
+        "warnings": []
+    },
+    "DmlTest::test_delete_expired_transients::left": [
+        "_transient_compat_c",
+        "_transient_timeout_compat_c"
+    ],
+    "DmlTest::test_insert_id_and_affected::ignore": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "affected": 1,
+        "warnings": [
+            [
+                "Warning",
+                "1062",
+                "Duplicate entry 'one' for key 'compat_ai.k'"
+            ]
+        ]
+    },
+    "DmlTest::test_insert_id_and_affected::multi": [
+        3,
+        1
+    ],
+    "DmlTest::test_insert_id_and_affected::odku_insert": [
+        1,
+        6
+    ],
+    "DmlTest::test_insert_id_and_affected::odku_unchanged": 0,
+    "DmlTest::test_insert_id_and_affected::odku_update": [
+        2,
+        [
+            [
+                "Warning",
+                "1287",
+                "'VALUES function' is deprecated and will be removed in a future release. Please use an alias (INSERT INTO ... VALUES (...) AS alias) and replace VALUES(col) in the ON DUPLICATE KEY UPDATE clause with alias.col instead"
+            ]
+        ]
+    ],
+    "DmlTest::test_insert_id_and_affected::replace": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "affected": 2,
+        "warnings": []
+    },
+    "DmlTest::test_insert_id_and_affected::rows": [
+        "five=1",
+        "four=0",
+        "one=9",
+        "six=0",
+        "three=0",
+        "two=0"
+    ],
+    "DmlTest::test_insert_id_and_affected::single": 1,
+    "DmlTest::test_insert_id_and_affected::update_matched": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "affected": 1,
+        "warnings": []
+    },
+    "DmlTest::test_keyless_tables::duplicate": {
+        "error": "Duplicate entry '10.0.0.1' for key 'compat_keyless.ip'",
+        "errno": 1062,
+        "sqlstate": "23000",
+        "affected": null,
+        "warnings": [
+            [
+                "Error",
+                "1062",
+                "Duplicate entry '10.0.0.1' for key 'compat_keyless.ip'"
+            ]
+        ]
+    },
+    "DmlTest::test_keyless_tables::log_delete": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "affected": 1,
+        "warnings": []
+    },
+    "DmlTest::test_keyless_tables::log_insert": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "affected": 3,
+        "warnings": []
+    },
+    "DmlTest::test_keyless_tables::log_select": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "rows": [
+            [
+                "1",
+                "a"
+            ],
+            [
+                "2",
+                "b"
+            ]
+        ],
+        "warnings": []
+    },
+    "DmlTest::test_keyless_tables::select": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "rows": [
+            [
+                "10.0.0.1",
+                "2",
+                "100"
+            ]
+        ],
+        "warnings": []
+    },
+    "DmlTest::test_keyless_tables::upsert": [
+        1,
+        2
+    ],
+    "DmlTest::test_write_fit::ignore": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "affected": 1,
+        "warnings": [
+            [
+                "Warning",
+                "1265",
+                "Data truncated for column 'v' at row 1"
+            ],
+            [
+                "Warning",
+                "1264",
+                "Out of range value for column 'u' at row 1"
+            ]
+        ]
+    },
+    "DmlTest::test_write_fit::insert": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "affected": 3,
+        "warnings": [
+            [
+                "Warning",
+                "1265",
+                "Data truncated for column 'v' at row 1"
+            ],
+            [
+                "Warning",
+                "1264",
+                "Out of range value for column 'u' at row 1"
+            ],
+            [
+                "Warning",
+                "1264",
+                "Out of range value for column 'd' at row 1"
+            ],
+            [
+                "Note",
+                "1265",
+                "Data truncated for column 'v' at row 2"
+            ],
+            [
+                "Warning",
+                "1265",
+                "Data truncated for column 'c' at row 2"
+            ],
+            [
+                "Warning",
+                "1264",
+                "Out of range value for column 'u' at row 2"
+            ],
+            [
+                "Note",
+                "1265",
+                "Data truncated for column 'd' at row 2"
+            ],
+            [
+                "Warning",
+                "1264",
+                "Out of range value for column 'u' at row 3"
+            ],
+            [
+                "Note",
+                "1265",
+                "Data truncated for column 'd' at row 3"
+            ],
+            [
+                "Warning",
+                "1264",
+                "Out of range value for column 'd' at row 3"
+            ]
+        ]
+    },
+    "DmlTest::test_write_fit::rows": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "rows": [
+            [
+                "あいうえお",
+                "ab",
+                "0",
+                "999.99"
+            ],
+            [
+                "abcde",
+                "abc",
+                "0",
+                "1.01"
+            ],
+            [
+                "abczz",
+                "x",
+                "4294967295",
+                "-999.99"
+            ],
+            [
+                "かきくけこ",
+                null,
+                "0",
+                null
+            ]
+        ],
+        "warnings": []
+    },
+    "DmlTest::test_write_fit::update": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "affected": 1,
+        "warnings": [
+            [
+                "Warning",
+                "1265",
+                "Data truncated for column 'v' at row 3"
+            ],
+            [
+                "Warning",
+                "1264",
+                "Out of range value for column 'd' at row 3"
+            ]
+        ]
+    },
+    "DmlTest::test_write_fit::wpdb_insert": [
+        false,
+        "WordPress database error: Processing the value for the following field failed: v. The supplied value may be too long or contains invalid data."
+    ],
+    "DmlTest::test_write_warnings::bad_number": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "affected": 1,
+        "warnings": [
+            [
+                "Warning",
+                "1265",
+                "Data truncated for column 'n' at row 1"
+            ]
+        ]
+    },
+    "DmlTest::test_write_warnings::out_of_range": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "affected": 1,
+        "warnings": [
+            [
+                "Warning",
+                "1264",
+                "Out of range value for column 'n' at row 1"
+            ]
+        ]
+    },
+    "DmlTest::test_write_warnings::rows": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "rows": [
+            [
+                "w1",
+                "12"
+            ],
+            [
+                "w2",
+                "2147483647"
+            ],
+            [
+                "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                "1"
+            ]
+        ],
+        "warnings": []
+    },
+    "DmlTest::test_write_warnings::truncate_string": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "affected": 1,
+        "warnings": [
+            [
+                "Warning",
+                "1265",
+                "Data truncated for column 'k' at row 1"
+            ]
+        ]
+    },
+    "NumbersTest::test_decimal::bad_precision": {
+        "error": "Too-big precision 66 specified for '1'. Maximum is 65.",
+        "errno": 1426,
+        "sqlstate": "42000",
+        "warnings": [
+            [
+                "Error",
+                "1426",
+                "Too-big precision 66 specified for '1'. Maximum is 65."
+            ]
+        ]
+    },
+    "NumbersTest::test_decimal::cast": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "rows": [
+            [
+                "2",
+                "3",
+                "1.56",
+                "12.0"
+            ]
+        ],
+        "warnings": [
+            [
+                "Warning",
+                "1292",
+                "Truncated incorrect DECIMAL value: '12abc'"
+            ]
+        ]
+    },
+    "NumbersTest::test_decimal::out_of_range": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "rows": [
+            [
+                "9999.9",
+                "-9999.9"
+            ]
+        ],
+        "warnings": [
+            [
+                "Warning",
+                "1264",
+                "Out of range value for column 'CAST(123456.78 AS DECIMAL(5,1))' at row 1"
+            ],
+            [
+                "Warning",
+                "1264",
+                "Out of range value for column 'CAST(-123456.78 AS DECIMAL(5,1))' at row 1"
+            ]
+        ]
+    },
+    "NumbersTest::test_division_and_zero_dates::division": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "rows": [
+            [
+                null,
+                null,
+                null
+            ]
+        ],
+        "warnings": [
+            [
+                "Warning",
+                "1365",
+                "Division by 0"
+            ],
+            [
+                "Warning",
+                "1365",
+                "Division by 0"
+            ],
+            [
+                "Warning",
+                "1365",
+                "Division by 0"
+            ]
+        ]
+    },
+    "NumbersTest::test_division_and_zero_dates::zero_in_date": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "rows": [
+            [
+                null,
+                null
+            ]
+        ],
+        "warnings": [
+            [
+                "Warning",
+                "1292",
+                "Incorrect datetime value: '2025-00-10'"
+            ],
+            [
+                "Warning",
+                "1292",
+                "Incorrect datetime value: '2025-01-00'"
+            ]
+        ]
+    },
+    "NumbersTest::test_double_text::concat": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "rows": [
+            [
+                "1e15",
+                "20250331",
+                "0.00000015"
+            ]
+        ],
+        "warnings": []
+    },
+    "NumbersTest::test_double_text::literals": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "rows": [
+            [
+                "20250331",
+                "0.00000015",
+                "1e15",
+                "100000000000000",
+                "-1e15",
+                "1.5e-16",
+                "0.30000000000000004"
+            ]
+        ],
+        "warnings": []
+    },
+    "NumbersTest::test_double_text::meta_plus_zero": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "rows": [
+            [
+                "1000000"
+            ],
+            [
+                "135.5"
+            ]
+        ],
+        "warnings": []
+    },
+    "NumbersTest::test_double_text::sum": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "rows": [
+            [
+                "1000135.5",
+                "500067.75",
+                "333333.3333333333"
+            ]
+        ],
+        "warnings": []
+    },
+    "NumbersTest::test_string_to_number::cast": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "rows": [
+            [
+                "12",
+                "12",
+                "0",
+                "12",
+                "1000"
+            ]
+        ],
+        "warnings": [
+            [
+                "Warning",
+                "1292",
+                "Truncated incorrect INTEGER value: '12abc'"
+            ],
+            [
+                "Warning",
+                "1292",
+                "Truncated incorrect INTEGER value: 'abc'"
+            ],
+            [
+                "Warning",
+                "1292",
+                "Truncated incorrect DOUBLE value: '12abc'"
+            ],
+            [
+                "Warning",
+                "1292",
+                "Truncated incorrect DOUBLE value: '1e3x'"
+            ]
+        ]
+    },
+    "NumbersTest::test_string_to_number::compare": {
+        "error": "",
+        "errno": 0,
+        "sqlstate": "00000",
+        "rows": [
+            [
+                "1",
+                "1",
+                "1",
+                "0"
+            ]
+        ],
+        "warnings": [
+            [
+                "Warning",
+                "1292",
+                "Truncated incorrect DOUBLE value: '12abc'"
+            ],
+            [
+                "Warning",
+                "1292",
+                "Truncated incorrect DOUBLE value: 'abc'"
+            ],
+            [
+                "Warning",
+                "1292",
+                "Truncated incorrect DOUBLE value: '0x0C'"
+            ]
+        ]
+    },
+    "QueryTest::test_found_rows::found": [
+        6,
+        3
+    ],
+    "QueryTest::test_post_in::default_order": [
+        "p1",
+        "p3",
+        "p2"
+    ],
+    "QueryTest::test_post_in::orderby_post_in": [
+        "p3",
+        "p1",
+        "p2"
+    ],
+    "QueryTest::test_same_date::asc": [
+        "t1",
+        "t2",
+        "t3"
+    ],
+    "QueryTest::test_same_date::desc": [
+        "t3",
+        "t2",
+        "t1"
+    ],
+    "QueryTest::test_same_date::paged": [
+        "t1"
+    ],
+    "QueryTest::test_site_health_tables::error": "",
+    "QueryTest::test_site_health_tables::tables": [
+        [
+            "wptests_options",
+            true,
+            true
+        ],
+        [
+            "wptests_posts",
+            true,
+            true
+        ]
+    ],
+    "connection::charset": [
+        "utf8mb4",
+        "utf8mb4",
+        "utf8mb4",
+        "utf8mb4_unicode_520_ci"
+    ],
+    "connection::sql_mode": "NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+}

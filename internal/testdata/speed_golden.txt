@@ -1,0 +1,462 @@
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE wp_termmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	term_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY term_id (term_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_terms (
+ term_id bigint(20) unsigned NOT NULL auto_increment,
+ name varchar(200) NOT NULL default '',
+ slug varchar(200) NOT NULL default '',
+ term_group bigint(10) NOT NULL default 0,
+ PRIMARY KEY  (term_id),
+ KEY slug (slug(191)),
+ KEY name (name(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_term_taxonomy (
+ term_taxonomy_id bigint(20) unsigned NOT NULL auto_increment,
+ term_id bigint(20) unsigned NOT NULL default 0,
+ taxonomy varchar(32) NOT NULL default '',
+ description longtext NOT NULL,
+ parent bigint(20) unsigned NOT NULL default 0,
+ count bigint(20) NOT NULL default 0,
+ PRIMARY KEY  (term_taxonomy_id),
+ UNIQUE KEY term_id_taxonomy (term_id,taxonomy),
+ KEY taxonomy (taxonomy)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_term_relationships (
+ object_id bigint(20) unsigned NOT NULL default 0,
+ term_taxonomy_id bigint(20) unsigned NOT NULL default 0,
+ term_order int(11) NOT NULL default 0,
+ PRIMARY KEY  (object_id,term_taxonomy_id),
+ KEY term_taxonomy_id (term_taxonomy_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_commentmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	comment_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY comment_id (comment_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_comments (
+	comment_ID bigint(20) unsigned NOT NULL auto_increment,
+	comment_post_ID bigint(20) unsigned NOT NULL default '0',
+	comment_author tinytext NOT NULL,
+	comment_author_email varchar(100) NOT NULL default '',
+	comment_author_url varchar(200) NOT NULL default '',
+	comment_author_IP varchar(100) NOT NULL default '',
+	comment_date datetime NOT NULL default '0000-00-00 00:00:00',
+	comment_date_gmt datetime NOT NULL default '0000-00-00 00:00:00',
+	comment_content text NOT NULL,
+	comment_karma int(11) NOT NULL default '0',
+	comment_approved varchar(20) NOT NULL default '1',
+	comment_agent varchar(255) NOT NULL default '',
+	comment_type varchar(20) NOT NULL default 'comment',
+	comment_parent bigint(20) unsigned NOT NULL default '0',
+	user_id bigint(20) unsigned NOT NULL default '0',
+	PRIMARY KEY  (comment_ID),
+	KEY comment_post_ID (comment_post_ID),
+	KEY comment_approved_date_gmt (comment_approved,comment_date_gmt),
+	KEY comment_date_gmt (comment_date_gmt),
+	KEY comment_parent (comment_parent),
+	KEY comment_author_email (comment_author_email(10))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_links (
+	link_id bigint(20) unsigned NOT NULL auto_increment,
+	link_url varchar(255) NOT NULL default '',
+	link_name varchar(255) NOT NULL default '',
+	link_image varchar(255) NOT NULL default '',
+	link_target varchar(25) NOT NULL default '',
+	link_description varchar(255) NOT NULL default '',
+	link_visible varchar(20) NOT NULL default 'Y',
+	link_owner bigint(20) unsigned NOT NULL default '1',
+	link_rating int(11) NOT NULL default '0',
+	link_updated datetime NOT NULL default '0000-00-00 00:00:00',
+	link_rel varchar(255) NOT NULL default '',
+	link_notes mediumtext NOT NULL,
+	link_rss varchar(255) NOT NULL default '',
+	PRIMARY KEY  (link_id),
+	KEY link_visible (link_visible)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_options (
+	option_id bigint(20) unsigned NOT NULL auto_increment,
+	option_name varchar(191) NOT NULL default '',
+	option_value longtext NOT NULL,
+	autoload varchar(20) NOT NULL default 'yes',
+	PRIMARY KEY  (option_id),
+	UNIQUE KEY option_name (option_name),
+	KEY autoload (autoload)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_postmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	post_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY post_id (post_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_posts (
+	ID bigint(20) unsigned NOT NULL auto_increment,
+	post_author bigint(20) unsigned NOT NULL default '0',
+	post_date datetime NOT NULL default '0000-00-00 00:00:00',
+	post_date_gmt datetime NOT NULL default '0000-00-00 00:00:00',
+	post_content longtext NOT NULL,
+	post_title text NOT NULL,
+	post_excerpt text NOT NULL,
+	post_status varchar(20) NOT NULL default 'publish',
+	comment_status varchar(20) NOT NULL default 'open',
+	ping_status varchar(20) NOT NULL default 'open',
+	post_password varchar(255) NOT NULL default '',
+	post_name varchar(200) NOT NULL default '',
+	to_ping text NOT NULL,
+	pinged text NOT NULL,
+	post_modified datetime NOT NULL default '0000-00-00 00:00:00',
+	post_modified_gmt datetime NOT NULL default '0000-00-00 00:00:00',
+	post_content_filtered longtext NOT NULL,
+	post_parent bigint(20) unsigned NOT NULL default '0',
+	guid varchar(255) NOT NULL default '',
+	menu_order int(11) NOT NULL default '0',
+	post_type varchar(20) NOT NULL default 'post',
+	post_mime_type varchar(100) NOT NULL default '',
+	comment_count bigint(20) NOT NULL default '0',
+	PRIMARY KEY  (ID),
+	KEY post_name (post_name(191)),
+	KEY type_status_date (post_type,post_status,post_date,ID),
+	KEY post_parent (post_parent),
+	KEY post_author (post_author),
+	KEY type_status_author (post_type,post_status,post_author)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_users (
+	ID bigint(20) unsigned NOT NULL auto_increment,
+	user_login varchar(60) NOT NULL default '',
+	user_pass varchar(255) NOT NULL default '',
+	user_nicename varchar(50) NOT NULL default '',
+	user_email varchar(100) NOT NULL default '',
+	user_url varchar(100) NOT NULL default '',
+	user_registered datetime NOT NULL default '0000-00-00 00:00:00',
+	user_activation_key varchar(255) NOT NULL default '',
+	user_status int(11) NOT NULL default '0',
+	display_name varchar(250) NOT NULL default '',
+	PRIMARY KEY  (ID),
+	KEY user_login_key (user_login),
+	KEY user_nicename (user_nicename),
+	KEY user_email (user_email)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_usermeta (
+	umeta_id bigint(20) unsigned NOT NULL auto_increment,
+	user_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (umeta_id),
+	KEY user_id (user_id),
+	KEY meta_key (meta_key(191))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_blogs (
+	blog_id bigint(20) unsigned NOT NULL auto_increment,
+	site_id bigint(20) unsigned NOT NULL default '0',
+	domain varchar(200) NOT NULL default '',
+	path varchar(100) NOT NULL default '',
+	registered datetime NOT NULL default '0000-00-00 00:00:00',
+	last_updated datetime NOT NULL default '0000-00-00 00:00:00',
+	public tinyint(2) NOT NULL default '1',
+	archived tinyint(2) NOT NULL default '0',
+	mature tinyint(2) NOT NULL default '0',
+	spam tinyint(2) NOT NULL default '0',
+	deleted tinyint(2) NOT NULL default '0',
+	lang_id int(11) NOT NULL default '0',
+	PRIMARY KEY  (blog_id),
+	KEY domain (domain(50),path(5)),
+	KEY lang_id (lang_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_blogmeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	blog_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY meta_key (meta_key(191)),
+	KEY blog_id (blog_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_registration_log (
+	ID bigint(20) unsigned NOT NULL auto_increment,
+	email varchar(255) NOT NULL default '',
+	IP varchar(30) NOT NULL default '',
+	blog_id bigint(20) unsigned NOT NULL default '0',
+	date_registered datetime NOT NULL default '0000-00-00 00:00:00',
+	PRIMARY KEY  (ID),
+	KEY IP (IP)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_site (
+	id bigint(20) unsigned NOT NULL auto_increment,
+	domain varchar(200) NOT NULL default '',
+	path varchar(100) NOT NULL default '',
+	PRIMARY KEY  (id),
+	KEY domain (domain(140),path(51))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_sitemeta (
+	meta_id bigint(20) unsigned NOT NULL auto_increment,
+	site_id bigint(20) unsigned NOT NULL default '0',
+	meta_key varchar(255) default NULL,
+	meta_value longtext,
+	PRIMARY KEY  (meta_id),
+	KEY meta_key (meta_key(191)),
+	KEY site_id (site_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_signups (
+	signup_id bigint(20) unsigned NOT NULL auto_increment,
+	domain varchar(200) NOT NULL default '',
+	path varchar(100) NOT NULL default '',
+	title longtext NOT NULL,
+	user_login varchar(60) NOT NULL default '',
+	user_email varchar(100) NOT NULL default '',
+	registered datetime NOT NULL default '0000-00-00 00:00:00',
+	activated datetime NOT NULL default '0000-00-00 00:00:00',
+	active tinyint(1) NOT NULL default '0',
+	activation_key varchar(50) NOT NULL default '',
+	meta longtext,
+	PRIMARY KEY  (signup_id),
+	KEY activation_key (activation_key),
+	KEY user_email (user_email),
+	KEY user_login_email (user_login,user_email),
+	KEY domain_path (domain(140),path(51))
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- INSERT INTO wp_posts (post_author, post_date, post_content, post_title, post_excerpt, post_status, post_name, to_ping, pinged, post_content_filtered, post_type) VALUES (1, '2024-01-09 10:00:00', 'c', 'T1', '', 'publish', 'p1', '', '', '', 'post'), (2, '2024-01-08 10:00:00', 'c', 'T2', '', 'Publish', 'p2', '', '', '', 'post'), (0, '2024-01-07 10:00:00', 'c', 'T3', '', 'publish', 'p3', '', '', '', 'Post'), (1, '2024-01-06 10:00:00', 'c', 'T4', '', 'draft', 'p4', '', '', '', 'post'), (2, '2024-01-05 10:00:00', 'c', 'T5', '', 'publish', 'p5', '', '', '', 'page'), (0, '2024-01-04 10:00:00', 'c', 'T6', '', 'PUBLISH', 'p6', '', '', '', 'post'), (1, '2024-01-03 10:00:00', 'c', 'T7', '', 'inherit', 'p7', '', '', '', 'revision'), (2, '2024-01-02 10:00:00', 'c', 'T8', '', 'publish', 'p8', '', '', '', 'post')
+ok affected=8 insert_id=1
+-- INSERT INTO wp_term_relationships (object_id, term_taxonomy_id) VALUES (1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 2), (1, 2), (7, 1), (8, 1)
+ok affected=9 insert_id=0
+-- INSERT INTO wp_postmeta (post_id, meta_key, meta_value) VALUES (1, '_Thumb', 'a'), (2, '_thumb', 'b'), (3, NULL, 'c'), (4, REPEAT('k', 200), 'd'), (5, CONCAT(REPEAT('k', 191), 'x'), 'e'), (6, CONCAT(REPEAT('k', 191), 'X'), 'f'), (7, CONCAT(REPEAT('k', 191), 'a'), 'g')
+ok affected=7 insert_id=1
+-- SELECT ID FROM wp_posts WHERE post_type = 'POST' ORDER BY ID
+1
+2
+3
+4
+6
+8
+
+-- SELECT ID FROM wp_posts WHERE 'POST' = post_type ORDER BY ID
+1
+2
+3
+4
+6
+8
+
+-- SELECT ID FROM wp_posts WHERE post_status <> 'PUBLISH' ORDER BY ID
+4
+7
+
+-- SELECT ID FROM wp_posts WHERE post_status < 'p' ORDER BY ID
+4
+7
+
+-- SELECT ID FROM wp_posts WHERE post_status >= 'Publish' ORDER BY ID
+1
+2
+3
+5
+6
+8
+
+-- SELECT ID FROM wp_posts WHERE post_status <= 'inherit' ORDER BY ID
+4
+7
+
+-- SELECT ID FROM wp_posts WHERE post_status > 'D' ORDER BY ID
+1
+2
+3
+4
+5
+6
+7
+8
+
+-- SELECT meta_id FROM wp_postmeta WHERE meta_key <=> '_THUMB' ORDER BY meta_id
+1
+2
+
+-- SELECT meta_id FROM wp_postmeta WHERE meta_key <> '_thumb' ORDER BY meta_id
+4
+5
+6
+7
+
+-- SELECT meta_id FROM wp_postmeta WHERE meta_value = 'A' ORDER BY meta_id
+1
+
+-- SELECT ID FROM wp_posts WHERE post_type IN ('POST') ORDER BY ID
+1
+2
+3
+4
+6
+8
+
+-- SELECT ID FROM wp_posts WHERE post_type NOT IN ('post') ORDER BY ID
+5
+7
+
+-- SELECT meta_id FROM wp_postmeta WHERE meta_key NOT IN ('_thumb') ORDER BY meta_id
+4
+5
+6
+7
+
+-- SELECT meta_id FROM wp_postmeta WHERE meta_key IN ('_Thumb') ORDER BY meta_id
+1
+2
+
+-- SELECT meta_id FROM wp_postmeta WHERE meta_key NOT IN (NULL) ORDER BY meta_id
+
+-- SELECT ID FROM wp_posts WHERE post_type IN ('page', 'POST') ORDER BY ID
+1
+2
+3
+4
+5
+6
+8
+
+-- SELECT COUNT(*) FROM wp_posts WHERE ( post_status = 'publish' ) AND post_type NOT IN ('page')
+5
+
+-- SELECT ID FROM wp_posts WHERE post_type = 'POST' COLLATE utf8mb4_bin ORDER BY ID
+
+-- SELECT ID FROM wp_posts WHERE post_type = 'Post' COLLATE utf8mb4_bin ORDER BY ID
+3
+
+-- SELECT ID FROM wp_posts WHERE post_name = 1 ORDER BY ID
+
+-- SELECT ID FROM wp_posts WHERE post_author = '1' ORDER BY ID
+1
+4
+7
+
+-- SELECT ID FROM wp_posts WHERE post_author IN ('2') ORDER BY ID
+2
+5
+8
+
+-- UPDATE wp_posts SET post_title = 'U' WHERE post_status = 'PUBLISH' AND post_type NOT IN ('page')
+ok affected=5 insert_id=0
+-- SELECT ID, post_title FROM wp_posts ORDER BY ID
+1 | U
+2 | U
+3 | U
+4 | T4
+5 | T5
+6 | U
+7 | T7
+8 | U
+
+-- DELETE FROM wp_postmeta WHERE meta_key IN ('_THUMB')
+ok affected=2 insert_id=0
+-- SELECT meta_id FROM wp_postmeta ORDER BY meta_id
+3
+4
+5
+6
+7
+
+-- INSERT INTO wp_posts (post_author, post_date, post_content, post_title, post_excerpt, post_status, post_name, to_ping, pinged, post_content_filtered, post_type) VALUES (3, '2024-02-01 00:00:00', 'c', 'S9', '', 'publish', 's9', '', '', '', 'post'), (1, '2024-02-01 00:00:00', 'c', 'S10', '', 'draft', 's10', '', '', '', 'post'), (2, '2024-02-01 00:00:00', 'c', 'S11', '', 'future', 's11', '', '', '', 'post'), (1, '2024-02-01 00:00:00', 'c', 'S12', '', 'publish', 's12', '', '', '', 'post'), (0, '2024-02-01 00:00:00', 'c', 'S13', '', 'trash', 's13', '', '', '', 'post'), (5, '2024-02-01 00:00:00', 'c', 'S14', '', 'Draft', 's14', '', '', '', 'post')
+ok affected=6 insert_id=9
+-- SELECT SQL_CALC_FOUND_ROWS wp_posts.ID FROM wp_posts WHERE 1=1 AND wp_posts.post_type = 'post' AND ((wp_posts.post_status <> 'trash' AND wp_posts.post_status <> 'auto-draft')) ORDER BY wp_posts.post_date DESC LIMIT 0, 20
+10
+14
+11
+9
+12
+1
+2
+3
+4
+6
+8
+
+-- SELECT FOUND_ROWS()
+11
+
+-- SELECT wp_posts.ID FROM wp_posts WHERE 1=1 AND wp_posts.post_type = 'post' AND ((wp_posts.post_status = 'publish' OR wp_posts.post_status = 'draft')) ORDER BY wp_posts.post_date ASC LIMIT 0, 20
+8
+6
+4
+3
+2
+1
+10
+14
+9
+12
+
+-- SELECT ID, post_date FROM wp_posts WHERE post_type = 'post' ORDER BY post_date DESC, ID ASC
+9 | 2024-02-01 00:00:00
+10 | 2024-02-01 00:00:00
+11 | 2024-02-01 00:00:00
+12 | 2024-02-01 00:00:00
+13 | 2024-02-01 00:00:00
+14 | 2024-02-01 00:00:00
+1 | 2024-01-09 10:00:00
+2 | 2024-01-08 10:00:00
+3 | 2024-01-07 10:00:00
+4 | 2024-01-06 10:00:00
+6 | 2024-01-04 10:00:00
+8 | 2024-01-02 10:00:00
+
+-- INSERT INTO wp_posts (post_author, post_date, post_content, post_title, post_excerpt, post_status, post_name, to_ping, pinged, post_content_filtered, post_type) VALUES (1, '2024-03-01 00:00:00', 'c', 'J1', '', 'publish', 'j1', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J2', '', 'publish', 'j2', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J3', '', 'publish', 'j3', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J4', '', 'draft', 'j4', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J5', '', 'publish', 'j5', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J6', '', 'publish', 'j6', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J7', '', 'publish', 'j7', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J8', '', 'draft', 'j8', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J9', '', 'publish', 'j9', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J10', '', 'publish', 'j10', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J11', '', 'publish', 'j11', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J12', '', 'draft', 'j12', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J13', '', 'publish', 'j13', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J14', '', 'publish', 'j14', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J15', '', 'publish', 'j15', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J16', '', 'draft', 'j16', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J17', '', 'publish', 'j17', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J18', '', 'publish', 'j18', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J19', '', 'publish', 'j19', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J20', '', 'draft', 'j20', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J21', '', 'publish', 'j21', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J22', '', 'publish', 'j22', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J23', '', 'publish', 'j23', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J24', '', 'draft', 'j24', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J25', '', 'publish', 'j25', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J26', '', 'publish', 'j26', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J27', '', 'publish', 'j27', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J28', '', 'draft', 'j28', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J29', '', 'publish', 'j29', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J30', '', 'publish', 'j30', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J31', '', 'publish', 'j31', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J32', '', 'draft', 'j32', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J33', '', 'publish', 'j33', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J34', '', 'publish', 'j34', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J35', '', 'publish', 'j35', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J36', '', 'draft', 'j36', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J37', '', 'publish', 'j37', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J38', '', 'publish', 'j38', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J39', '', 'publish', 'j39', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J40', '', 'draft', 'j40', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J41', '', 'publish', 'j41', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J42', '', 'publish', 'j42', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J43', '', 'publish', 'j43', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J44', '', 'draft', 'j44', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J45', '', 'publish', 'j45', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J46', '', 'publish', 'j46', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J47', '', 'publish', 'j47', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J48', '', 'draft', 'j48', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J49', '', 'publish', 'j49', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J50', '', 'publish', 'j50', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J51', '', 'publish', 'j51', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J52', '', 'draft', 'j52', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J53', '', 'publish', 'j53', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J54', '', 'publish', 'j54', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J55', '', 'publish', 'j55', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J56', '', 'draft', 'j56', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J57', '', 'publish', 'j57', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J58', '', 'publish', 'j58', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J59', '', 'publish', 'j59', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J60', '', 'draft', 'j60', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J61', '', 'publish', 'j61', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J62', '', 'publish', 'j62', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J63', '', 'publish', 'j63', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J64', '', 'draft', 'j64', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J65', '', 'publish', 'j65', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J66', '', 'publish', 'j66', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J67', '', 'publish', 'j67', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J68', '', 'draft', 'j68', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J69', '', 'publish', 'j69', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J70', '', 'publish', 'j70', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J71', '', 'publish', 'j71', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J72', '', 'draft', 'j72', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J73', '', 'publish', 'j73', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J74', '', 'publish', 'j74', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J75', '', 'publish', 'j75', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J76', '', 'draft', 'j76', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J77', '', 'publish', 'j77', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J78', '', 'publish', 'j78', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J79', '', 'publish', 'j79', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J80', '', 'draft', 'j80', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J81', '', 'publish', 'j81', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J82', '', 'publish', 'j82', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J83', '', 'publish', 'j83', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J84', '', 'draft', 'j84', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J85', '', 'publish', 'j85', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J86', '', 'publish', 'j86', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J87', '', 'publish', 'j87', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J88', '', 'draft', 'j88', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J89', '', 'publish', 'j89', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J90', '', 'publish', 'j90', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J91', '', 'publish', 'j91', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J92', '', 'draft', 'j92', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J93', '', 'publish', 'j93', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J94', '', 'publish', 'j94', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J95', '', 'publish', 'j95', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J96', '', 'draft', 'j96', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J97', '', 'publish', 'j97', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J98', '', 'publish', 'j98', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J99', '', 'publish', 'j99', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J100', '', 'draft', 'j100', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J101', '', 'publish', 'j101', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J102', '', 'publish', 'j102', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J103', '', 'publish', 'j103', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J104', '', 'draft', 'j104', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J105', '', 'publish', 'j105', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J106', '', 'publish', 'j106', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J107', '', 'publish', 'j107', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J108', '', 'draft', 'j108', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J109', '', 'publish', 'j109', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J110', '', 'publish', 'j110', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J111', '', 'publish', 'j111', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J112', '', 'draft', 'j112', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J113', '', 'publish', 'j113', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J114', '', 'publish', 'j114', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J115', '', 'publish', 'j115', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J116', '', 'draft', 'j116', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J117', '', 'publish', 'j117', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J118', '', 'publish', 'j118', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J119', '', 'publish', 'j119', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J120', '', 'draft', 'j120', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J121', '', 'publish', 'j121', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J122', '', 'publish', 'j122', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J123', '', 'publish', 'j123', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J124', '', 'draft', 'j124', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J125', '', 'publish', 'j125', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J126', '', 'publish', 'j126', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J127', '', 'publish', 'j127', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J128', '', 'draft', 'j128', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J129', '', 'publish', 'j129', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J130', '', 'publish', 'j130', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J131', '', 'publish', 'j131', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J132', '', 'draft', 'j132', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J133', '', 'publish', 'j133', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J134', '', 'publish', 'j134', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J135', '', 'publish', 'j135', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J136', '', 'draft', 'j136', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J137', '', 'publish', 'j137', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J138', '', 'publish', 'j138', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J139', '', 'publish', 'j139', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J140', '', 'draft', 'j140', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J141', '', 'publish', 'j141', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J142', '', 'publish', 'j142', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J143', '', 'publish', 'j143', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J144', '', 'draft', 'j144', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J145', '', 'publish', 'j145', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J146', '', 'publish', 'j146', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J147', '', 'publish', 'j147', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J148', '', 'draft', 'j148', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J149', '', 'publish', 'j149', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J150', '', 'publish', 'j150', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J151', '', 'publish', 'j151', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J152', '', 'draft', 'j152', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J153', '', 'publish', 'j153', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J154', '', 'publish', 'j154', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J155', '', 'publish', 'j155', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J156', '', 'draft', 'j156', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J157', '', 'publish', 'j157', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J158', '', 'publish', 'j158', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J159', '', 'publish', 'j159', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J160', '', 'draft', 'j160', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J161', '', 'publish', 'j161', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J162', '', 'publish', 'j162', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J163', '', 'publish', 'j163', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J164', '', 'draft', 'j164', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J165', '', 'publish', 'j165', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J166', '', 'publish', 'j166', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J167', '', 'publish', 'j167', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J168', '', 'draft', 'j168', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J169', '', 'publish', 'j169', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J170', '', 'publish', 'j170', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J171', '', 'publish', 'j171', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J172', '', 'draft', 'j172', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J173', '', 'publish', 'j173', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J174', '', 'publish', 'j174', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J175', '', 'publish', 'j175', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J176', '', 'draft', 'j176', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J177', '', 'publish', 'j177', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J178', '', 'publish', 'j178', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J179', '', 'publish', 'j179', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J180', '', 'draft', 'j180', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J181', '', 'publish', 'j181', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J182', '', 'publish', 'j182', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J183', '', 'publish', 'j183', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J184', '', 'draft', 'j184', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J185', '', 'publish', 'j185', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J186', '', 'publish', 'j186', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J187', '', 'publish', 'j187', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J188', '', 'draft', 'j188', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J189', '', 'publish', 'j189', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J190', '', 'publish', 'j190', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J191', '', 'publish', 'j191', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J192', '', 'draft', 'j192', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J193', '', 'publish', 'j193', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J194', '', 'publish', 'j194', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J195', '', 'publish', 'j195', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J196', '', 'draft', 'j196', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J197', '', 'publish', 'j197', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J198', '', 'publish', 'j198', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J199', '', 'publish', 'j199', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J200', '', 'draft', 'j200', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J201', '', 'publish', 'j201', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J202', '', 'publish', 'j202', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J203', '', 'publish', 'j203', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J204', '', 'draft', 'j204', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J205', '', 'publish', 'j205', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J206', '', 'publish', 'j206', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J207', '', 'publish', 'j207', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J208', '', 'draft', 'j208', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J209', '', 'publish', 'j209', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J210', '', 'publish', 'j210', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J211', '', 'publish', 'j211', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J212', '', 'draft', 'j212', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J213', '', 'publish', 'j213', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J214', '', 'publish', 'j214', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J215', '', 'publish', 'j215', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J216', '', 'draft', 'j216', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J217', '', 'publish', 'j217', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J218', '', 'publish', 'j218', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J219', '', 'publish', 'j219', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J220', '', 'draft', 'j220', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J221', '', 'publish', 'j221', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J222', '', 'publish', 'j222', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J223', '', 'publish', 'j223', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J224', '', 'draft', 'j224', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J225', '', 'publish', 'j225', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J226', '', 'publish', 'j226', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J227', '', 'publish', 'j227', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J228', '', 'draft', 'j228', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J229', '', 'publish', 'j229', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J230', '', 'publish', 'j230', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J231', '', 'publish', 'j231', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J232', '', 'draft', 'j232', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J233', '', 'publish', 'j233', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J234', '', 'publish', 'j234', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J235', '', 'publish', 'j235', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J236', '', 'draft', 'j236', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J237', '', 'publish', 'j237', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J238', '', 'publish', 'j238', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J239', '', 'publish', 'j239', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J240', '', 'draft', 'j240', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J241', '', 'publish', 'j241', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J242', '', 'publish', 'j242', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J243', '', 'publish', 'j243', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J244', '', 'draft', 'j244', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J245', '', 'publish', 'j245', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J246', '', 'publish', 'j246', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J247', '', 'publish', 'j247', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J248', '', 'draft', 'j248', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J249', '', 'publish', 'j249', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J250', '', 'publish', 'j250', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J251', '', 'publish', 'j251', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J252', '', 'draft', 'j252', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J253', '', 'publish', 'j253', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J254', '', 'publish', 'j254', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J255', '', 'publish', 'j255', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J256', '', 'draft', 'j256', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J257', '', 'publish', 'j257', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J258', '', 'publish', 'j258', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J259', '', 'publish', 'j259', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J260', '', 'draft', 'j260', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J261', '', 'publish', 'j261', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J262', '', 'publish', 'j262', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J263', '', 'publish', 'j263', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J264', '', 'draft', 'j264', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J265', '', 'publish', 'j265', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J266', '', 'publish', 'j266', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J267', '', 'publish', 'j267', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J268', '', 'draft', 'j268', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J269', '', 'publish', 'j269', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J270', '', 'publish', 'j270', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J271', '', 'publish', 'j271', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J272', '', 'draft', 'j272', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J273', '', 'publish', 'j273', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J274', '', 'publish', 'j274', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J275', '', 'publish', 'j275', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J276', '', 'draft', 'j276', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J277', '', 'publish', 'j277', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J278', '', 'publish', 'j278', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J279', '', 'publish', 'j279', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J280', '', 'draft', 'j280', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J281', '', 'publish', 'j281', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J282', '', 'publish', 'j282', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J283', '', 'publish', 'j283', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J284', '', 'draft', 'j284', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J285', '', 'publish', 'j285', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J286', '', 'publish', 'j286', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J287', '', 'publish', 'j287', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J288', '', 'draft', 'j288', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J289', '', 'publish', 'j289', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J290', '', 'publish', 'j290', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J291', '', 'publish', 'j291', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J292', '', 'draft', 'j292', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J293', '', 'publish', 'j293', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J294', '', 'publish', 'j294', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J295', '', 'publish', 'j295', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J296', '', 'draft', 'j296', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J297', '', 'publish', 'j297', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J298', '', 'publish', 'j298', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J299', '', 'publish', 'j299', '', '', '', 'post'), (1, '2024-03-01 00:00:00', 'c', 'J300', '', 'draft', 'j300', '', '', '', 'post')
+ok affected=300 insert_id=15
+-- INSERT INTO wp_term_relationships (object_id, term_taxonomy_id) SELECT ID, 1 FROM wp_posts WHERE post_name LIKE 'j%'
+ok affected=300 insert_id=0
+-- INSERT INTO wp_term_relationships (object_id, term_taxonomy_id) SELECT ID, 2 FROM wp_posts WHERE post_name IN ('j1', 'j2', 'j4')
+ok affected=3 insert_id=0
+-- INSERT INTO wp_term_relationships (object_id, term_taxonomy_id) SELECT ID, 10 + ID % 100 FROM wp_posts WHERE post_name LIKE 'j%'
+ok affected=300 insert_id=0
+-- INSERT INTO wp_term_relationships (object_id, term_taxonomy_id) SELECT ID, 10 + (ID + 1) % 100 FROM wp_posts WHERE post_name LIKE 'j%'
+ok affected=300 insert_id=0
+-- INSERT INTO wp_term_relationships (object_id, term_taxonomy_id) SELECT ID, 10 + (ID + 2) % 100 FROM wp_posts WHERE post_name LIKE 'j%'
+ok affected=300 insert_id=0
+-- SELECT COUNT(*) FROM wp_term_relationships, wp_posts WHERE wp_posts.ID = wp_term_relationships.object_id AND post_status IN ('publish') AND post_type IN ('post') AND term_taxonomy_id = 1
+229
+
+-- SELECT COUNT(*) FROM wp_term_relationships, wp_posts WHERE wp_posts.ID = wp_term_relationships.object_id AND post_status IN ('publish') AND post_type IN ('post') AND term_taxonomy_id = 2
+4
+
+-- SELECT wp_term_relationships.object_id, wp_posts.post_status FROM wp_term_relationships, wp_posts WHERE wp_posts.ID = wp_term_relationships.object_id AND post_type = 'post' AND term_taxonomy_id = 1 AND post_name LIKE 'j29%'
+43 | publish
+304 | publish
+305 | publish
+306 | draft
+307 | publish
+308 | publish
+309 | publish
+310 | draft
+311 | publish
+312 | publish
+313 | publish
+

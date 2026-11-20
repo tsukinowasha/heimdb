@@ -1,0 +1,841 @@
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t0 (c0 INT, c1 INT)
+ok affected=0 insert_id=0
+-- INSERT INTO t0 VALUES (NULL,1),(1,NULL)
+ok affected=2 insert_id=0
+-- SELECT t0.c0 = t0.c1 AS ref0, SUM(1) AS ref1 FROM t0 GROUP BY ref0
+NULL | 2
+
+-- CREATE TABLE t1 (id INT PRIMARY KEY, c0 INT, c1 INT)
+ok affected=0 insert_id=0
+-- INSERT INTO t1 VALUES (1,NULL,NULL),(2,1,1),(3,1,NULL),(4,2,1),(5,NULL,1)
+ok affected=5 insert_id=0
+-- SELECT t1.c0 = t1.c1 AS ref0, SUM(1) AS ref1 FROM t1 GROUP BY ref0 ORDER BY ref0
+NULL | 3
+0 | 1
+1 | 1
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE g (a INT, b INT, k INT)
+ok affected=0 insert_id=0
+-- INSERT INTO g VALUES (NULL,1,1),(5,2,1)
+ok affected=2 insert_id=0
+-- SELECT k, a FROM g GROUP BY k
+1 | NULL
+
+-- SELECT k, a, b FROM g GROUP BY k
+1 | NULL | 1
+
+-- CREATE TABLE pm (meta_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, post_id BIGINT UNSIGNED NOT NULL DEFAULT 0, meta_key VARCHAR(255) DEFAULT NULL, meta_value LONGTEXT, KEY post_id (post_id), KEY meta_key (meta_key(191)))
+ok affected=0 insert_id=0
+-- INSERT INTO pm (post_id, meta_key, meta_value) VALUES (1, '_price', NULL), (1, '_price', '10'), (2, '_price', '20'), (2, '_price', NULL)
+ok affected=4 insert_id=1
+-- SELECT post_id, meta_value, COUNT(*) FROM pm WHERE meta_key = '_price' GROUP BY post_id ORDER BY post_id
+1 | NULL | 2
+2 | 20 | 2
+
+-- SELECT post_id, meta_value FROM pm GROUP BY post_id ORDER BY post_id
+1 | NULL
+2 | 20
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE pm
+ok affected=0 insert_id=0
+-- DROP TABLE g
+ok affected=0 insert_id=0
+-- DROP TABLE t1
+ok affected=0 insert_id=0
+-- DROP TABLE t0
+ok affected=0 insert_id=0
+-- CREATE TABLE t (id INT PRIMARY KEY, s VARCHAR(100)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- INSERT INTO t VALUES (1, CONCAT('ab', UNHEX('EFBFBD'), 'cd')), (2, 'abcd'), (3, UNHEX('EFBFBD'))
+ok affected=3 insert_id=0
+-- SELECT id, CHAR_LENGTH(s), LENGTH(s) FROM t ORDER BY id
+1 | 5 | 7
+2 | 4 | 4
+3 | 1 | 3
+
+-- SELECT id FROM t WHERE s LIKE '%ab%' ORDER BY id
+1
+2
+
+-- SELECT id FROM t WHERE s LIKE 'ab_cd' ORDER BY id
+1
+
+-- SELECT id FROM t WHERE s LIKE CONCAT('%', UNHEX('EFBFBD'), '%') ORDER BY id
+1
+3
+
+-- SELECT id FROM t WHERE s LIKE '_' ORDER BY id
+3
+
+-- SELECT id FROM t WHERE s NOT LIKE '%cd' ORDER BY id
+3
+
+-- CREATE TABLE wp_posts (ID BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, post_title TEXT NOT NULL, post_content LONGTEXT NOT NULL, post_excerpt TEXT NOT NULL, post_type VARCHAR(20) NOT NULL DEFAULT 'post', post_status VARCHAR(20) NOT NULL DEFAULT 'publish') DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- INSERT INTO wp_posts (post_title, post_content, post_excerpt) VALUES (CONCAT('caf', UNHEX('EFBFBD'), ' menu'), CONCAT('今日の', UNHEX('EFBFBD'), 'ランチ'), ''), ('plain', 'ランチ 100%', ''), ('x_y', 'body', '')
+ok affected=3 insert_id=1
+-- SELECT ID FROM wp_posts WHERE 1=1 AND (((wp_posts.post_title LIKE '%ランチ%') OR (wp_posts.post_excerpt LIKE '%ランチ%') OR (wp_posts.post_content LIKE '%ランチ%'))) AND wp_posts.post_type = 'post' AND ((wp_posts.post_status = 'publish')) ORDER BY wp_posts.ID
+1
+2
+
+-- SELECT ID FROM wp_posts WHERE post_title LIKE '%menu%' ORDER BY ID
+1
+
+-- SELECT ID FROM wp_posts WHERE post_content LIKE '%100\%%' ORDER BY ID
+2
+
+-- SELECT ID FROM wp_posts WHERE post_title LIKE 'x\_y' ORDER BY ID
+3
+
+-- SELECT ID, CHAR_LENGTH(post_title), CHAR_LENGTH(post_content) FROM wp_posts ORDER BY ID
+1 | 9 | 7
+2 | 5 | 8
+3 | 3 | 4
+
+-- DROP TABLE wp_posts
+ok affected=0 insert_id=0
+-- DROP TABLE t
+ok affected=0 insert_id=0
+-- CREATE TABLE z (id INT PRIMARY KEY, txt VARCHAR(100)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- INSERT INTO z VALUES (1, '## z'), (2, '## y'), (3, '## za'), (4, '## x'), (5, '## 中 body'), (6, 'plain'), (7, '##nospaces')
+ok affected=7 insert_id=0
+-- SELECT id FROM z WHERE txt LIKE '## %' ORDER BY id
+1
+2
+3
+4
+5
+
+-- SELECT id FROM z WHERE txt NOT LIKE '## %' ORDER BY id
+6
+7
+
+-- SELECT id FROM z WHERE txt LIKE 'ab%' OR txt LIKE '## z%' ORDER BY id
+1
+3
+
+-- SELECT SUM(txt LIKE '## %') FROM z
+5
+
+-- SELECT id FROM z WHERE id IN (SELECT id FROM z WHERE txt LIKE '## %') ORDER BY id
+1
+2
+3
+4
+5
+
+-- SELECT d.id FROM (SELECT id FROM z WHERE txt LIKE '## %') d ORDER BY d.id
+1
+2
+3
+4
+5
+
+-- CREATE TABLE u (ID INT PRIMARY KEY, display_name VARCHAR(250)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- INSERT INTO u VALUES (1, '山田太郎'), (2, 'yamada'), (3, 'yamaz'), (4, 'Yamazaki'), (5, '山本')
+ok affected=5 insert_id=0
+-- SELECT ID FROM u WHERE display_name LIKE '山田%' ORDER BY ID
+1
+
+-- SELECT ID FROM u WHERE display_name LIKE '山%' ORDER BY ID
+1
+5
+
+-- SELECT ID FROM u WHERE display_name LIKE 'yama%' ORDER BY ID
+2
+3
+4
+
+-- CREATE TABLE wp_users (ID BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, user_login VARCHAR(60) NOT NULL DEFAULT '', user_nicename VARCHAR(50) NOT NULL DEFAULT '', user_email VARCHAR(100) NOT NULL DEFAULT '', user_url VARCHAR(100) NOT NULL DEFAULT '', display_name VARCHAR(250) NOT NULL DEFAULT '', KEY user_login_key (user_login), KEY user_nicename (user_nicename), KEY user_email (user_email)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- INSERT INTO wp_users (user_login, user_nicename, user_email, display_name) VALUES ('yamada', 'yamada', 'yamada@example.com', '山田太郎'), ('yamaz', 'yamaz', 'z@example.com', 'Yamaz'), ('yamazaki', 'yamazaki', 'zaki@example.com', '山崎'), ('suzuki', 'suzuki', 's@example.com', '鈴木'), ('yama', 'yama', 'y@example.com', 'やま'), ('yamaＺa', 'yamaz-2', 'z2@example.com', 'Ｚ')
+ok affected=6 insert_id=1
+-- SELECT ID FROM wp_users WHERE 1=1 AND (user_login LIKE 'yama%' OR user_url LIKE 'yama%' OR user_email LIKE 'yama%' OR user_nicename LIKE 'yama%' OR display_name LIKE 'yama%') ORDER BY user_login ASC
+5
+1
+2
+6
+3
+
+-- SELECT ID FROM wp_users WHERE 1=1 AND (user_login LIKE 'yama%' OR user_email LIKE 'yama%' OR user_nicename LIKE 'yama%' OR display_name LIKE 'yama%') ORDER BY user_login ASC
+5
+1
+2
+6
+3
+
+-- SELECT ID, user_login FROM wp_users WHERE user_login LIKE 'yama%' ORDER BY user_login ASC, ID
+5 | yama
+1 | yamada
+2 | yamaz
+6 | yamaＺa
+3 | yamazaki
+
+-- SELECT ID FROM wp_users WHERE user_login NOT LIKE 'yama%' ORDER BY ID
+4
+
+-- SELECT ID FROM wp_users WHERE display_name LIKE '山%' ORDER BY ID
+1
+3
+
+-- SELECT COUNT(*) FROM wp_users WHERE user_email LIKE 'z%'
+3
+
+-- CREATE TABLE wp_options (option_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, option_name VARCHAR(191) NOT NULL DEFAULT '', option_value LONGTEXT NOT NULL, autoload VARCHAR(20) NOT NULL DEFAULT 'yes', UNIQUE KEY option_name (option_name)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- INSERT INTO wp_options (option_name, option_value) VALUES ('widget_zoo', 'a'), ('widget_block', 'b'), ('widget_日本', 'c'), ('widgets', 'd'), ('widgez', 'e'), ('_transient_zz', 'f'), ('_transient_aa', 'g')
+ok affected=7 insert_id=1
+-- SELECT option_name FROM wp_options WHERE option_name LIKE 'widget%' ORDER BY option_name
+widget_block
+widget_zoo
+widget_日本
+widgets
+
+-- SELECT option_name FROM wp_options WHERE option_name LIKE 'widget\_%' ORDER BY option_name
+widget_block
+widget_zoo
+widget_日本
+
+-- SELECT option_name FROM wp_options WHERE option_name LIKE '\_transient\_%' ORDER BY option_name
+_transient_aa
+_transient_zz
+
+-- SELECT COUNT(*) FROM wp_options WHERE option_name LIKE 'widget_日%'
+1
+
+-- DELETE FROM wp_options WHERE option_name LIKE 'widget%'
+ok affected=4 insert_id=0
+-- SELECT option_name FROM wp_options ORDER BY option_name
+_transient_aa
+_transient_zz
+widgez
+
+-- CREATE TABLE b (id INT PRIMARY KEY, txt VARCHAR(50) COLLATE utf8mb4_bin, KEY txt (txt))
+ok affected=0 insert_id=0
+-- INSERT INTO b VALUES (1, 'apple'), (2, 'apricot'), (3, 'banana'), (4, 'apZ'), (5, 'aq'), (6, 'Apple'), (7, 'ap中')
+ok affected=7 insert_id=0
+-- SELECT id FROM b WHERE txt LIKE 'ap%' ORDER BY id
+1
+2
+4
+7
+
+-- SELECT id FROM b WHERE txt NOT LIKE 'ap%' ORDER BY id
+3
+5
+6
+
+-- CREATE TABLE g (id INT PRIMARY KEY, txt VARCHAR(50) COLLATE utf8mb4_general_ci, KEY txt (txt))
+ok affected=0 insert_id=0
+-- INSERT INTO g VALUES (1, 'apple'), (2, 'APRICOT'), (3, 'banana'), (4, 'ap中'), (5, 'apz')
+ok affected=5 insert_id=0
+-- SELECT id FROM g WHERE txt LIKE 'ap%' ORDER BY id
+1
+2
+4
+5
+
+-- CREATE TABLE a9 (id INT PRIMARY KEY, txt VARCHAR(50) COLLATE utf8mb4_0900_ai_ci, KEY txt (txt))
+ok affected=0 insert_id=0
+-- INSERT INTO a9 VALUES (1, '## z'), (2, '## y'), (3, '## 中'), (4, '#'), (5, '## é')
+ok affected=5 insert_id=0
+-- SELECT id FROM a9 WHERE txt LIKE '## %' ORDER BY id
+1
+2
+3
+5
+
+-- CREATE TABLE s5 (id INT PRIMARY KEY, txt VARCHAR(5), KEY txt (txt)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
+ok affected=0 insert_id=0
+-- INSERT INTO s5 VALUES (1, 'abcde'), (2, 'abcdz'), (3, 'abcd')
+ok affected=3 insert_id=0
+-- SELECT id FROM s5 WHERE txt LIKE 'abcde%' ORDER BY id
+1
+
+-- SELECT id FROM s5 WHERE txt LIKE 'abcd%' ORDER BY id
+1
+2
+3
+
+-- DROP TABLE s5
+ok affected=0 insert_id=0
+-- DROP TABLE a9
+ok affected=0 insert_id=0
+-- DROP TABLE g
+ok affected=0 insert_id=0
+-- DROP TABLE b
+ok affected=0 insert_id=0
+-- DROP TABLE wp_options
+ok affected=0 insert_id=0
+-- DROP TABLE wp_users
+ok affected=0 insert_id=0
+-- DROP TABLE u
+ok affected=0 insert_id=0
+-- DROP TABLE z
+ok affected=0 insert_id=0
+-- CREATE TABLE emptytable (i INT PRIMARY KEY, v INT)
+ok affected=0 insert_id=0
+-- SELECT MAX(i) FROM emptytable
+NULL
+
+-- SELECT MIN(i) FROM emptytable
+NULL
+
+-- SELECT COALESCE(MAX(i), 0) + 1 FROM emptytable
+1
+
+-- SELECT MAX(i) + 1, MAX(i) IS NULL FROM emptytable
+NULL | 1
+
+-- SELECT MAX(v) FROM emptytable
+NULL
+
+-- SELECT MAX(i) AS m FROM emptytable
+NULL
+
+-- INSERT INTO emptytable VALUES (1, 1), (2, 2)
+ok affected=2 insert_id=0
+-- SELECT MAX(i) FROM emptytable WHERE i > 5
+NULL
+
+-- SELECT MIN(i) FROM emptytable WHERE i > 5
+NULL
+
+-- SELECT MAX(i) FROM emptytable
+2
+
+-- SELECT MIN(i) FROM emptytable
+1
+
+-- SELECT MAX(i) FROM emptytable WHERE i < 2
+1
+
+-- SELECT MIN(i) FROM emptytable WHERE i > 1
+2
+
+-- SELECT MAX(i) FROM emptytable GROUP BY v ORDER BY 1
+1
+2
+
+-- SELECT MAX(i) FROM emptytable WHERE i > 5 GROUP BY v
+
+-- CREATE TABLE three_pk (pk1 INT, pk2 INT, pk3 INT, PRIMARY KEY (pk1, pk2, pk3))
+ok affected=0 insert_id=0
+-- INSERT INTO three_pk VALUES (1, 0, 10), (1, 0, 5)
+ok affected=2 insert_id=0
+-- SELECT MAX(pk3) FROM three_pk WHERE pk1=1 AND pk2=0
+10
+
+-- SELECT MAX(pk3) FROM three_pk WHERE pk1=2 AND pk2=0
+NULL
+
+-- SELECT MIN(pk3) FROM three_pk WHERE pk1=2 AND pk2=0
+NULL
+
+-- SELECT MAX(pk1) FROM three_pk WHERE pk1=2
+NULL
+
+-- SELECT MAX(pk1) FROM three_pk
+1
+
+-- SELECT MAX(pk3) FROM three_pk WHERE pk1=2 AND pk2=0 GROUP BY pk1, pk2
+
+-- SELECT (SELECT MAX(i) FROM emptytable WHERE i > 5) IS NULL
+1
+
+-- SELECT COUNT(*) FROM (SELECT MAX(i) AS m FROM emptytable WHERE i > 5) d
+1
+
+-- SELECT pk1 FROM three_pk WHERE pk3 > (SELECT COALESCE(MAX(i), 0) FROM emptytable WHERE i > 5) ORDER BY pk3
+1
+1
+
+-- CREATE TABLE wp_custom_log (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, msg TEXT NOT NULL)
+ok affected=0 insert_id=0
+-- SELECT COALESCE(MAX(id), 0) + 1 FROM wp_custom_log
+1
+
+-- SELECT IFNULL(MAX(id), 0) FROM wp_custom_log
+0
+
+-- SELECT MAX(id) FROM wp_custom_log
+NULL
+
+-- CREATE TABLE wp_posts (ID BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, post_type VARCHAR(20) NOT NULL DEFAULT 'post', post_status VARCHAR(20) NOT NULL DEFAULT 'publish')
+ok affected=0 insert_id=0
+-- SELECT MAX(ID) FROM wp_posts
+NULL
+
+-- INSERT INTO wp_posts (post_type) VALUES ('post'), ('page'), ('post')
+ok affected=3 insert_id=1
+-- SELECT MAX(ID) FROM wp_posts
+3
+
+-- SELECT MIN(ID) FROM wp_posts
+1
+
+-- SELECT MAX(ID) FROM wp_posts WHERE ID > 100
+NULL
+
+-- SELECT MAX(ID) FROM wp_posts WHERE post_type = 'attachment'
+NULL
+
+-- DROP TABLE wp_posts
+ok affected=0 insert_id=0
+-- DROP TABLE wp_custom_log
+ok affected=0 insert_id=0
+-- DROP TABLE three_pk
+ok affected=0 insert_id=0
+-- DROP TABLE emptytable
+ok affected=0 insert_id=0
+-- CREATE TABLE customers (id BIGINT PRIMARY KEY)
+ok affected=0 insert_id=0
+-- CREATE TABLE orders (id BIGINT PRIMARY KEY, customer_id BIGINT, status VARCHAR(16), total BIGINT)
+ok affected=0 insert_id=0
+-- INSERT INTO customers VALUES (1), (2)
+ok affected=2 insert_id=0
+-- INSERT INTO orders VALUES (1, 1, 'paid', 10), (2, 1, 'paid', 20), (3, 2, 'paid', 5)
+ok affected=3 insert_id=0
+-- SELECT c.id, COUNT(p1.total) AS total_count, COUNT(p2.id) AS peer_orders FROM customers c JOIN orders p1 ON p1.customer_id = c.id LEFT JOIN orders p2 ON p2.customer_id = c.id AND p2.id <> p1.id WHERE p1.status = 'paid' AND p2.status = 'paid' GROUP BY c.id HAVING COUNT(p2.id) > 0
+1 | 2 | 2
+
+-- SELECT c.id, COUNT(p2.id) AS n FROM customers c JOIN orders p1 ON p1.customer_id = c.id LEFT JOIN orders p2 ON p2.customer_id = c.id AND p2.id <> p1.id GROUP BY c.id HAVING COUNT(p2.id) > 0
+1 | 2
+
+-- SELECT c.id, COUNT(p1.id), COUNT(p2.id) FROM customers c JOIN orders p1 ON p1.customer_id = c.id LEFT JOIN orders p2 ON p2.customer_id = c.id AND p2.id <> p1.id GROUP BY c.id HAVING COUNT(p1.id) > 1 ORDER BY c.id
+1 | 2 | 2
+
+-- SELECT c.id, COUNT(p1.id), COUNT(p2.id) FROM customers c JOIN orders p1 ON p1.customer_id = c.id LEFT JOIN orders p2 ON p2.customer_id = c.id AND p2.id <> p1.id GROUP BY c.id HAVING COUNT(p2.id) = 0 ORDER BY c.id
+2 | 1 | 0
+
+-- SELECT p1.customer_id, SUM(p2.total) FROM orders p1 JOIN orders p2 ON p2.customer_id = p1.customer_id AND p2.id > p1.id GROUP BY p1.customer_id HAVING SUM(p2.total) > 5
+1 | 20
+
+-- CREATE TABLE wp_posts (ID BIGINT UNSIGNED NOT NULL PRIMARY KEY, post_type VARCHAR(20) NOT NULL DEFAULT 'post')
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_postmeta (meta_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, post_id BIGINT UNSIGNED NOT NULL DEFAULT 0, meta_key VARCHAR(255) DEFAULT NULL, meta_value LONGTEXT, KEY post_id (post_id))
+ok affected=0 insert_id=0
+-- INSERT INTO wp_posts VALUES (1, 'post'), (2, 'post'), (3, 'page')
+ok affected=3 insert_id=0
+-- INSERT INTO wp_postmeta (post_id, meta_key, meta_value) VALUES (1, 'color', 'red'), (1, 'size', 'L'), (1, 'size', 'M'), (2, 'color', 'blue'), (3, 'size', 'S')
+ok affected=5 insert_id=1
+-- SELECT p.ID, COUNT(m1.meta_id), COUNT(m2.meta_id) FROM wp_posts p JOIN wp_postmeta m1 ON m1.post_id = p.ID AND m1.meta_key = 'color' LEFT JOIN wp_postmeta m2 ON m2.post_id = p.ID AND m2.meta_key = 'size' GROUP BY p.ID HAVING COUNT(m2.meta_id) > 1 ORDER BY p.ID
+1 | 2 | 2
+
+-- SELECT p.ID FROM wp_posts p JOIN wp_postmeta m1 ON m1.post_id = p.ID LEFT JOIN wp_postmeta m2 ON m2.post_id = p.ID AND m2.meta_id <> m1.meta_id GROUP BY p.ID HAVING COUNT(m2.meta_id) > 0 AND COUNT(m1.meta_id) > 1 ORDER BY p.ID
+1
+
+-- DROP TABLE wp_postmeta
+ok affected=0 insert_id=0
+-- DROP TABLE wp_posts
+ok affected=0 insert_id=0
+-- DROP TABLE orders
+ok affected=0 insert_id=0
+-- DROP TABLE customers
+ok affected=0 insert_id=0
+-- CREATE TABLE s (id INT PRIMARY KEY, d DATETIME, tag VARCHAR(10))
+ok affected=0 insert_id=0
+-- INSERT INTO s VALUES (1, '2020-01-01 00:00:00', 'keep'), (2, '2021-01-01 00:00:00', 'skip'), (3, '2030-01-01 00:00:00', 'skip')
+ok affected=3 insert_id=0
+-- SELECT MAX(d), (SELECT MAX(d) FROM s WHERE tag = 'keep') FROM s
+2030-01-01 00:00:00 | 2020-01-01 00:00:00
+
+-- SELECT COUNT(id), (SELECT COUNT(id) FROM s WHERE tag = 'keep') FROM s
+3 | 1
+
+-- SELECT SUM(id), (SELECT SUM(id) FROM s WHERE tag = 'keep') FROM s
+6 | 1
+
+-- SELECT MIN(id), (SELECT MIN(id) FROM s WHERE tag = 'skip') FROM s
+1 | 2
+
+-- SELECT MIN(d) AS min_d, (SELECT MIN(d) AS min_d FROM s WHERE tag = 'skip') FROM s
+2020-01-01 00:00:00 | 2021-01-01 00:00:00
+
+-- SELECT COUNT(*), (SELECT COUNT(*) FROM s WHERE tag = 'keep') FROM s
+3 | 1
+
+-- SELECT tag, MAX(d), (SELECT MAX(d) FROM s s2 WHERE s2.tag = 'keep') FROM s GROUP BY tag ORDER BY tag
+keep | 2020-01-01 00:00:00 | 2020-01-01 00:00:00
+skip | 2030-01-01 00:00:00 | 2020-01-01 00:00:00
+
+-- SELECT tag, COUNT(id) FROM s GROUP BY tag HAVING COUNT(id) > (SELECT COUNT(id) FROM s WHERE tag = 'keep') ORDER BY tag
+skip | 2
+
+-- SELECT s.tag, MAX(s.id), (SELECT MAX(s3.id) FROM s s3 WHERE s3.tag = s.tag AND s3.id < 3) FROM s GROUP BY s.tag ORDER BY s.tag
+keep | 1 | 1
+skip | 3 | 2
+
+-- CREATE TABLE wp_posts (ID BIGINT UNSIGNED NOT NULL PRIMARY KEY, post_date DATETIME NOT NULL, post_type VARCHAR(20) NOT NULL DEFAULT 'post', post_status VARCHAR(20) NOT NULL DEFAULT 'publish')
+ok affected=0 insert_id=0
+-- INSERT INTO wp_posts VALUES (1, '2024-01-01 00:00:00', 'post', 'publish'), (2, '2025-01-01 00:00:00', 'post', 'draft'), (3, '2026-01-01 00:00:00', 'page', 'publish')
+ok affected=3 insert_id=0
+-- SELECT COUNT(ID), (SELECT COUNT(ID) FROM wp_posts WHERE post_status = 'publish') FROM wp_posts
+3 | 2
+
+-- SELECT MAX(post_date), (SELECT MAX(post_date) FROM wp_posts WHERE post_type = 'post') FROM wp_posts
+2026-01-01 00:00:00 | 2025-01-01 00:00:00
+
+-- SELECT post_type, COUNT(ID), (SELECT COUNT(ID) FROM wp_posts WHERE post_status = 'draft') FROM wp_posts GROUP BY post_type ORDER BY post_type
+page | 1 | 1
+post | 2 | 1
+
+-- DROP TABLE wp_posts
+ok affected=0 insert_id=0
+-- DROP TABLE s
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- SELECT YEAR('0000-00-00'), MONTH('0000-00-00'), DAY('0000-00-00'), DAYOFMONTH('0000-00-00'), QUARTER('0000-00-00')
+0 | 0 | 0 | 0 | 0
+
+-- SELECT DAYOFWEEK('0000-00-00'), WEEKDAY('0000-00-00'), DAYOFYEAR('0000-00-00'), DAYNAME('0000-00-00'), MONTHNAME('0000-00-00')
+NULL | NULL | NULL | NULL | NULL
+
+-- SELECT WEEK('0000-00-00'), YEARWEEK('0000-00-00'), WEEKOFYEAR('0000-00-00'), TO_DAYS('0000-00-00'), DATE('0000-00-00')
+NULL | NULL | NULL | NULL | 0000-00-00
+
+-- SELECT DATEDIFF('0000-00-00', '2020-10-10'), DATEDIFF('2020-10-10', '0000-00-00')
+NULL | NULL
+
+-- SELECT DATE_ADD(0, INTERVAL 1 DAY), DATE_ADD('0000-00-00', INTERVAL 1 DAY), DATE_SUB('0000-00-00', INTERVAL 1 DAY), TIMESTAMPADD(DAY, 1, '0000-00-00')
+NULL | NULL | NULL | NULL
+
+-- SELECT DATE_ADD(false, INTERVAL 1 DAY), DAY(0), MONTH(false), DAYNAME(0)
+NULL | 0 | 0 | NULL
+
+-- SELECT DATE_FORMAT('0000-00-00', '%Y-%m-%d'), DATE_FORMAT('0000-00-00 00:00:00', '%Y-%m-%d %H:%i:%s'), DATE_FORMAT('0000-00-00', '%y/%c/%e')
+0000-00-00 | 0000-00-00 00:00:00 | 00/0/0
+
+-- SELECT DATE_FORMAT('0000-00-00', '%W'), DATE_FORMAT('0000-00-00', '%M %Y')
+NULL | NULL
+
+-- SELECT EXTRACT(MONTH FROM '0000-00-00'), EXTRACT(YEAR_MONTH FROM '0000-00-00'), EXTRACT(DAY FROM '0000-00-00'), EXTRACT(YEAR FROM '0000-00-00')
+0 | 0 | 0 | 0
+
+-- SELECT '0000-00-00' + INTERVAL 1 DAY, '0000-00-00 00:00:00' - INTERVAL 1 DAY
+NULL | NULL
+
+-- SELECT MONTH('2024-03-05'), DAY('2024-03-05'), DAYOFWEEK('2024-03-05'), QUARTER('2024-03-05'), DATEDIFF('2024-03-05', '2024-01-01'), DATE_ADD('2024-03-05', INTERVAL 1 DAY), DATE_FORMAT('2024-03-05', '%Y-%m-%d %W')
+3 | 5 | 3 | 1 | 64 | 2024-03-06 | 2024-03-05 Tuesday
+
+-- CREATE TABLE wp_posts (ID BIGINT UNSIGNED NOT NULL PRIMARY KEY, post_date DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', post_date_gmt DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00', post_status VARCHAR(20) NOT NULL DEFAULT 'publish')
+ok affected=0 insert_id=0
+-- INSERT INTO wp_posts VALUES (1, '2024-03-05 10:00:00', '2024-03-05 01:00:00', 'publish'), (2, '2024-04-01 09:00:00', '0000-00-00 00:00:00', 'draft'), (3, '2024-04-02 09:00:00', '0000-00-00 00:00:00', 'auto-draft')
+ok affected=3 insert_id=0
+-- SELECT ID, YEAR(post_date_gmt), MONTH(post_date_gmt), DAY(post_date_gmt), DAYOFWEEK(post_date_gmt), DATEDIFF(post_date_gmt, '2020-01-01'), DATE_FORMAT(post_date_gmt, '%Y-%m-%d') FROM wp_posts ORDER BY ID
+1 | 2024 | 3 | 5 | 3 | 1525 | 2024-03-05
+2 | 0 | 0 | 0 | NULL | NULL | 0000-00-00
+3 | 0 | 0 | 0 | NULL | NULL | 0000-00-00
+
+-- SELECT ID, DATE(post_date_gmt), DAYNAME(post_date_gmt), WEEK(post_date_gmt), DATE_ADD(post_date_gmt, INTERVAL 1 DAY), post_date_gmt + INTERVAL 9 HOUR FROM wp_posts ORDER BY ID
+1 | 2024-03-05 | Tuesday | 9 | 2024-03-06 01:00:00 | 2024-03-05 10:00:00
+2 | 0000-00-00 | NULL | NULL | NULL | NULL
+3 | 0000-00-00 | NULL | NULL | NULL | NULL
+
+-- SELECT YEAR(post_date_gmt) AS y, MONTH(post_date_gmt) AS m, COUNT(*) FROM wp_posts GROUP BY y, m ORDER BY y, m
+0 | 0 | 2
+2024 | 3 | 1
+
+-- SELECT ID FROM wp_posts WHERE MONTH(post_date_gmt) = 0 ORDER BY ID
+2
+3
+
+-- SELECT ID FROM wp_posts WHERE DATEDIFF(NOW(), post_date_gmt) > 30 ORDER BY ID
+1
+
+-- SELECT ID, post_date_gmt = '0000-00-00 00:00:00' FROM wp_posts ORDER BY ID
+1 | 0
+2 | 1
+3 | 1
+
+-- SELECT DATE_FORMAT('0000-00-00', '%a'), DATE_FORMAT('0000-00-00', '%A'), DATE_FORMAT('0000-00-00', '%b'), DATE_FORMAT('0000-00-00', '%c'), DATE_FORMAT('0000-00-00', '%D'), DATE_FORMAT('0000-00-00', '%d'), DATE_FORMAT('0000-00-00', '%e'), DATE_FORMAT('0000-00-00', '%f'), DATE_FORMAT('0000-00-00', '%H'), DATE_FORMAT('0000-00-00', '%h'), DATE_FORMAT('0000-00-00', '%I')
+NULL | A | NULL | 0 | 0th | 00 | 0 | 000000 | 00 | 12 | 12
+
+-- SELECT DATE_FORMAT(post_date_gmt, '%a'), DATE_FORMAT(post_date_gmt, '%A'), DATE_FORMAT(post_date_gmt, '%b'), DATE_FORMAT(post_date_gmt, '%c'), DATE_FORMAT(post_date_gmt, '%D'), DATE_FORMAT(post_date_gmt, '%d'), DATE_FORMAT(post_date_gmt, '%e'), DATE_FORMAT(post_date_gmt, '%f'), DATE_FORMAT(post_date_gmt, '%H'), DATE_FORMAT(post_date_gmt, '%h'), DATE_FORMAT(post_date_gmt, '%I') FROM wp_posts WHERE ID = 2
+NULL | A | NULL | 0 | 0th | 00 | 0 | 000000 | 00 | 12 | 12
+
+-- SELECT DATE_FORMAT('0000-00-00', '%i'), DATE_FORMAT('0000-00-00', '%j'), DATE_FORMAT('0000-00-00', '%k'), DATE_FORMAT('0000-00-00', '%l'), DATE_FORMAT('0000-00-00', '%M'), DATE_FORMAT('0000-00-00', '%m'), DATE_FORMAT('0000-00-00', '%p'), DATE_FORMAT('0000-00-00', '%r'), DATE_FORMAT('0000-00-00', '%S'), DATE_FORMAT('0000-00-00', '%s'), DATE_FORMAT('0000-00-00', '%T')
+00 | 000 | 0 | 12 | NULL | 00 | AM | 12:00:00 AM | 00 | 00 | 00:00:00
+
+-- SELECT DATE_FORMAT(post_date_gmt, '%i'), DATE_FORMAT(post_date_gmt, '%j'), DATE_FORMAT(post_date_gmt, '%k'), DATE_FORMAT(post_date_gmt, '%l'), DATE_FORMAT(post_date_gmt, '%M'), DATE_FORMAT(post_date_gmt, '%m'), DATE_FORMAT(post_date_gmt, '%p'), DATE_FORMAT(post_date_gmt, '%r'), DATE_FORMAT(post_date_gmt, '%S'), DATE_FORMAT(post_date_gmt, '%s'), DATE_FORMAT(post_date_gmt, '%T') FROM wp_posts WHERE ID = 2
+00 | 000 | 0 | 12 | NULL | 00 | AM | 12:00:00 AM | 00 | 00 | 00:00:00
+
+-- SELECT DATE_FORMAT('0000-00-00', '%U'), DATE_FORMAT('0000-00-00', '%u'), DATE_FORMAT('0000-00-00', '%V'), DATE_FORMAT('0000-00-00', '%v'), DATE_FORMAT('0000-00-00', '%W'), DATE_FORMAT('0000-00-00', '%w'), DATE_FORMAT('0000-00-00', '%X'), DATE_FORMAT('0000-00-00', '%x'), DATE_FORMAT('0000-00-00', '%Y'), DATE_FORMAT('0000-00-00', '%y'), DATE_FORMAT('0000-00-00', '%%')
+613566757 | 613566757 | 613566757 | 01 | NULL | NULL | 0000 | 0001 | 0000 | 00 | %
+
+-- SELECT DATE_FORMAT(post_date_gmt, '%U'), DATE_FORMAT(post_date_gmt, '%u'), DATE_FORMAT(post_date_gmt, '%V'), DATE_FORMAT(post_date_gmt, '%v'), DATE_FORMAT(post_date_gmt, '%W'), DATE_FORMAT(post_date_gmt, '%w'), DATE_FORMAT(post_date_gmt, '%X'), DATE_FORMAT(post_date_gmt, '%x'), DATE_FORMAT(post_date_gmt, '%Y'), DATE_FORMAT(post_date_gmt, '%y'), DATE_FORMAT(post_date_gmt, '%%') FROM wp_posts WHERE ID = 2
+613566757 | 613566757 | 613566757 | 01 | NULL | NULL | 0000 | 0001 | 0000 | 00 | %
+
+-- SELECT ID, STR_TO_DATE(DATE_FORMAT(post_date_gmt, '%Y-%m-%d'), '%Y-%m-%d'), STR_TO_DATE(DATE_FORMAT(post_date_gmt, '%Y-%m-%d %H:%i:%s'), '%Y-%m-%d %H:%i:%s') FROM wp_posts ORDER BY ID
+1 | 2024-03-05 | 2024-03-05 01:00:00
+2 | 0000-00-00 | 0000-00-00 00:00:00
+3 | 0000-00-00 | 0000-00-00 00:00:00
+
+-- SELECT STR_TO_DATE('0000-00-00', '%Y-%m-%d'), STR_TO_DATE('00/00/0000', '%m/%d/%Y'), STR_TO_DATE('2024-00-00', '%Y-%m-%d'), STR_TO_DATE('0', '%Y')
+0000-00-00 | 0000-00-00 | NULL | NULL
+
+-- SELECT STR_TO_DATE('000000', '%y%m%d'), STR_TO_DATE('00-00-00', '%y-%m-%d'), STR_TO_DATE('0000-00-00', '%y-%m-%d'), STR_TO_DATE('0-0-0', '%Y-%m-%d'), STR_TO_DATE('00-0-0', '%Y-%m-%d')
+NULL | NULL | NULL | NULL | NULL
+
+-- SELECT STR_TO_DATE('000-00-00', '%Y-%m-%d'), STR_TO_DATE('00000-00-00', '%Y-%m-%d'), STR_TO_DATE('0000-0-0', '%Y-%m-%d'), STR_TO_DATE('0000/00/00', '%Y/%m/%d'), STR_TO_DATE('0000-00-00', '%Y-%c-%e'), STR_TO_DATE('00000000', '%Y%m%d')
+0000-00-00 | NULL | 0000-00-00 | 0000-00-00 | 0000-00-00 | 0000-00-00
+
+-- SELECT STR_TO_DATE('0000-00-00', '%Y-%m-%d %H:%i:%s'), STR_TO_DATE('0000-00-00abc', '%Y-%m-%d'), STR_TO_DATE('0000-00-00', '%d-%m-%Y'), STR_TO_DATE('00.00.0000', '%d.%m.%Y'), STR_TO_DATE('00', '%m'), STR_TO_DATE('0000-00', '%Y-%m'), STR_TO_DATE('00:00:00', '%H:%i:%s')
+0000-00-00 00:00:00 | 0000-00-00 | NULL | 0000-00-00 | 0000-00-00 | 0000-00-00 | 00:00:00
+
+-- SELECT STR_TO_DATE('2024-01-00', '%Y-%m-%d'), STR_TO_DATE('0000-01-00', '%Y-%m-%d'), STR_TO_DATE('0000-00-01', '%Y-%m-%d')
+NULL | NULL | NULL
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SELECT STR_TO_DATE('0000-00-00', '%Y-%m-%d'), STR_TO_DATE('0000-00-00 00:00:00', '%Y-%m-%d %H:%i:%s')
+NULL | NULL
+
+-- DROP TABLE wp_posts
+ok affected=0 insert_id=0
+-- CREATE TABLE foo (id VARCHAR(36) PRIMARY KEY)
+ok affected=0 insert_id=0
+-- CREATE TABLE bar (id VARCHAR(36) PRIMARY KEY, foo_id VARCHAR(36) NOT NULL, approved_on DATETIME(3))
+ok affected=0 insert_id=0
+-- INSERT INTO foo VALUES ('foo-1'),('foo-2'),('foo-3'),('foo-4'),('foo-5'),('foo-6'),('foo-7'),('foo-8')
+ok affected=8 insert_id=0
+-- INSERT INTO bar VALUES ('bar-1','foo-1','2026-07-14 07:18:04.000'),('bar-2','foo-2','2026-07-14 07:18:03.000'),('bar-3','foo-3','2026-07-14 07:18:05.000'),('bar-4','foo-4','2026-07-14 07:18:01.000'),('bar-5','foo-5','2026-07-14 07:18:08.000'),('bar-6','foo-6','2026-07-14 07:18:02.000'),('bar-7','foo-7','2026-07-14 07:18:07.000'),('bar-8','foo-8','2026-07-14 07:18:00.000')
+ok affected=8 insert_id=0
+-- SELECT * FROM foo ORDER BY (SELECT MAX(r.approved_on) FROM bar r WHERE r.foo_id = foo.id) ASC LIMIT 1
+foo-8
+
+-- SELECT * FROM foo ORDER BY (SELECT MAX(r.approved_on) FROM bar r WHERE r.foo_id = foo.id) DESC LIMIT 2
+foo-5
+foo-7
+
+-- SELECT * FROM foo ORDER BY (SELECT MAX(r.approved_on) FROM bar r WHERE r.foo_id = foo.id) ASC LIMIT 4
+foo-8
+foo-4
+foo-6
+foo-2
+
+-- SELECT * FROM foo ORDER BY (SELECT MAX(r.approved_on) FROM bar r WHERE r.foo_id = foo.id) DESC
+foo-5
+foo-7
+foo-3
+foo-1
+foo-2
+foo-6
+foo-4
+foo-8
+
+-- SELECT f.id, (SELECT r.id FROM bar r WHERE r.foo_id <> f.id ORDER BY CONCAT(r.approved_on, '') DESC, r.id LIMIT 1) FROM foo f ORDER BY f.id
+foo-1 | bar-5
+foo-2 | bar-5
+foo-3 | bar-5
+foo-4 | bar-5
+foo-5 | bar-7
+foo-6 | bar-5
+foo-7 | bar-5
+foo-8 | bar-5
+
+-- SELECT f.id, (SELECT r.id FROM bar r WHERE r.foo_id >= f.id ORDER BY LOWER(r.id) LIMIT 1) FROM foo f ORDER BY f.id
+foo-1 | bar-1
+foo-2 | bar-2
+foo-3 | bar-3
+foo-4 | bar-4
+foo-5 | bar-5
+foo-6 | bar-6
+foo-7 | bar-7
+foo-8 | bar-8
+
+-- CREATE TABLE t (id INT PRIMARY KEY, k INT)
+ok affected=0 insert_id=0
+-- INSERT INTO t VALUES (1, 2), (2, 1), (3, 2), (4, 1), (5, 2)
+ok affected=5 insert_id=0
+-- SELECT t1.id, (SELECT t2.id FROM t t2 WHERE t2.id <> t1.id ORDER BY t2.k + 0, t2.id LIMIT 1) FROM t t1 ORDER BY t1.id
+1 | 2
+2 | 4
+3 | 2
+4 | 2
+5 | 2
+
+-- SELECT COUNT(*) FROM (SELECT id FROM t ORDER BY RAND()) d
+5
+
+-- SELECT SUM(id) FROM (SELECT id FROM t ORDER BY RAND()) d
+15
+
+-- SELECT COUNT(DISTINCT id) FROM (SELECT id FROM t ORDER BY RAND() LIMIT 3) d
+3
+
+-- CREATE TABLE wp_posts (ID BIGINT UNSIGNED NOT NULL PRIMARY KEY, post_title TEXT NOT NULL)
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_comments (comment_ID BIGINT UNSIGNED NOT NULL PRIMARY KEY, comment_post_ID BIGINT UNSIGNED NOT NULL DEFAULT 0, comment_date DATETIME NOT NULL, KEY comment_post_ID (comment_post_ID))
+ok affected=0 insert_id=0
+-- INSERT INTO wp_posts VALUES (1, 'a'), (2, 'b'), (3, 'c'), (4, 'd')
+ok affected=4 insert_id=0
+-- INSERT INTO wp_comments VALUES (1, 1, '2024-01-03 00:00:00'), (2, 2, '2024-01-05 00:00:00'), (3, 3, '2024-01-01 00:00:00'), (4, 1, '2024-01-02 00:00:00'), (5, 4, '2024-01-04 00:00:00')
+ok affected=5 insert_id=0
+-- SELECT p.ID FROM wp_posts p ORDER BY (SELECT MAX(c.comment_date) FROM wp_comments c WHERE c.comment_post_ID = p.ID) DESC LIMIT 2
+2
+4
+
+-- SELECT p.ID FROM wp_posts p ORDER BY (SELECT MAX(c.comment_date) FROM wp_comments c WHERE c.comment_post_ID = p.ID) ASC LIMIT 3
+3
+1
+4
+
+-- SELECT p.ID, (SELECT c.comment_ID FROM wp_comments c WHERE c.comment_post_ID = p.ID ORDER BY DATE(c.comment_date) DESC LIMIT 1) FROM wp_posts p ORDER BY p.ID
+1 | 1
+2 | 2
+3 | 3
+4 | 5
+
+-- DROP TABLE wp_comments
+ok affected=0 insert_id=0
+-- DROP TABLE wp_posts
+ok affected=0 insert_id=0
+-- DROP TABLE t
+ok affected=0 insert_id=0
+-- DROP TABLE bar
+ok affected=0 insert_id=0
+-- DROP TABLE foo
+ok affected=0 insert_id=0
+-- CREATE TABLE t0 (c0 INT, c1 INT)
+ok affected=0 insert_id=0
+-- INSERT INTO t0 VALUES (1, -2)
+ok affected=1 insert_id=0
+-- SELECT * FROM t0 WHERE NOT EXISTS (SELECT 1 FROM (SELECT 1) alias0 WHERE (CASE -1 WHEN t0.c1 THEN false END))
+1 | -2
+
+-- SELECT * FROM t0 WHERE EXISTS (SELECT 1 FROM (SELECT 1) alias0 WHERE (CASE -1 WHEN t0.c1 THEN false END))
+
+-- CREATE TABLE t1 (c0 INT PRIMARY KEY)
+ok affected=0 insert_id=0
+-- INSERT INTO t1 VALUES (1)
+ok affected=1 insert_id=0
+-- SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM (SELECT 1) AS subQuery WHERE WEEKDAY(t1.c0))
+1
+
+-- CREATE TABLE t2 (c0 DOUBLE)
+ok affected=0 insert_id=0
+-- INSERT INTO t2 VALUES (-1)
+ok affected=1 insert_id=0
+-- SELECT * FROM t2 WHERE NOT EXISTS (SELECT 1 FROM (SELECT 1) AS sq WHERE LOG(t2.c0))
+-1
+
+-- SELECT * FROM t2 WHERE NOT EXISTS (SELECT 1 FROM (SELECT 1) AS sq WHERE SQRT(t2.c0))
+-1
+
+-- CREATE TABLE u (a INT PRIMARY KEY, b INT)
+ok affected=0 insert_id=0
+-- INSERT INTO u VALUES (1, 10), (2, NULL), (3, 30)
+ok affected=3 insert_id=0
+-- SELECT a FROM u WHERE NOT EXISTS (SELECT 1 FROM t1 WHERE u.b > 15) ORDER BY a
+1
+2
+
+-- SELECT a FROM u WHERE EXISTS (SELECT 1 FROM t1 WHERE u.b > 15) ORDER BY a
+3
+
+-- SELECT a FROM u WHERE NOT EXISTS (SELECT 1 FROM t1 WHERE t1.c0 = 1 AND u.b + 0 > 15) ORDER BY a
+1
+2
+
+-- SELECT a FROM u WHERE a NOT IN (SELECT c0 FROM t1 WHERE u.b > 15) ORDER BY a
+1
+2
+3
+
+-- SELECT a FROM u WHERE NOT EXISTS (SELECT 1 FROM t1 WHERE u.a > 1) ORDER BY a
+1
+
+-- CREATE TABLE wp_posts (ID BIGINT UNSIGNED NOT NULL PRIMARY KEY, post_parent BIGINT UNSIGNED NOT NULL DEFAULT 0, post_type VARCHAR(20) NOT NULL DEFAULT 'post', menu_order INT DEFAULT NULL)
+ok affected=0 insert_id=0
+-- CREATE TABLE wp_postmeta (meta_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, post_id BIGINT UNSIGNED NOT NULL DEFAULT 0, meta_key VARCHAR(255) DEFAULT NULL, meta_value LONGTEXT, KEY post_id (post_id))
+ok affected=0 insert_id=0
+-- INSERT INTO wp_posts VALUES (1, 0, 'post', 1), (2, 1, 'attachment', NULL), (3, 0, 'page', 5)
+ok affected=3 insert_id=0
+-- INSERT INTO wp_postmeta (post_id, meta_key, meta_value) VALUES (1, '_thumbnail_id', '2'), (3, '_edit_lock', '1')
+ok affected=2 insert_id=1
+-- SELECT p.ID FROM wp_posts p WHERE NOT EXISTS (SELECT 1 FROM wp_postmeta m WHERE m.post_id = p.ID AND p.post_type = 'post') ORDER BY p.ID
+2
+3
+
+-- SELECT p.ID FROM wp_posts p WHERE NOT EXISTS (SELECT 1 FROM wp_postmeta m WHERE m.meta_key = '_edit_lock' AND p.menu_order > 2) ORDER BY p.ID
+1
+2
+
+-- SELECT p.ID FROM wp_posts p WHERE NOT EXISTS (SELECT 1 FROM wp_postmeta m WHERE m.meta_key = '_edit_lock' AND CASE p.post_type WHEN 'page' THEN 1 END) ORDER BY p.ID
+1
+2
+
+-- SELECT p.ID FROM wp_posts p WHERE EXISTS (SELECT 1 FROM wp_postmeta m WHERE m.meta_key = '_thumbnail_id' AND p.post_parent = 0) ORDER BY p.ID
+1
+3
+
+-- CREATE TABLE wp_term_relationships (object_id BIGINT UNSIGNED NOT NULL DEFAULT 0, term_taxonomy_id BIGINT UNSIGNED NOT NULL DEFAULT 0, term_order INT NOT NULL DEFAULT 0, PRIMARY KEY (object_id, term_taxonomy_id))
+ok affected=0 insert_id=0
+-- INSERT INTO wp_term_relationships (object_id, term_taxonomy_id) VALUES (1, 10), (2, 10), (3, 11)
+ok affected=3 insert_id=0
+-- SELECT p.ID FROM wp_posts p LEFT JOIN wp_postmeta m ON m.post_id = p.ID AND m.meta_key = '_thumbnail_id' WHERE NOT EXISTS (SELECT 1 FROM wp_term_relationships tr WHERE tr.object_id = p.ID AND m.meta_id > 0) ORDER BY p.ID
+2
+3
+
+-- SELECT p.ID FROM wp_posts p LEFT JOIN wp_postmeta m ON m.post_id = p.ID AND m.meta_key = '_thumbnail_id' WHERE NOT EXISTS (SELECT 1 FROM wp_term_relationships tr WHERE tr.object_id = p.ID AND m.post_id = 1) ORDER BY p.ID
+2
+3
+
+-- SELECT p.ID FROM wp_posts p LEFT JOIN wp_postmeta m ON m.post_id = p.ID AND m.meta_key = '_thumbnail_id' WHERE NOT EXISTS (SELECT 1 FROM wp_term_relationships tr WHERE tr.object_id = p.ID AND m.post_id = p.ID) ORDER BY p.ID
+2
+3
+
+-- SELECT p.ID FROM wp_posts p LEFT JOIN wp_postmeta m ON m.post_id = p.ID AND m.meta_key = '_thumbnail_id' WHERE NOT EXISTS (SELECT 1 FROM wp_term_relationships tr WHERE tr.object_id = p.ID AND m.meta_id IN (1, 3)) ORDER BY p.ID
+2
+3
+
+-- SELECT p.ID FROM wp_posts p LEFT JOIN wp_postmeta m ON m.post_id = p.ID AND m.meta_key = '_thumbnail_id' WHERE p.ID NOT IN (SELECT tr.object_id FROM wp_term_relationships tr WHERE m.meta_id > 0) ORDER BY p.ID
+2
+3
+
+-- SELECT p.ID FROM wp_posts p LEFT JOIN wp_postmeta m ON m.post_id = p.ID AND m.meta_key = '_thumbnail_id' WHERE EXISTS (SELECT 1 FROM wp_term_relationships tr WHERE tr.object_id = p.ID AND m.meta_id > 0) ORDER BY p.ID
+1
+
+-- SELECT p.ID FROM wp_postmeta m RIGHT JOIN wp_posts p ON m.post_id = p.ID AND m.meta_key = '_thumbnail_id' WHERE NOT EXISTS (SELECT 1 FROM wp_term_relationships tr WHERE tr.object_id = p.ID AND m.meta_id > 0) ORDER BY p.ID
+2
+3
+
+-- SELECT d.ID FROM (SELECT p.ID, m.meta_id FROM wp_posts p LEFT JOIN wp_postmeta m ON m.post_id = p.ID AND m.meta_key = '_thumbnail_id') d WHERE NOT EXISTS (SELECT 1 FROM wp_term_relationships tr WHERE tr.object_id = d.ID AND d.meta_id > 0) ORDER BY d.ID
+2
+3
+
+-- SELECT p.ID FROM wp_posts p WHERE NOT EXISTS (SELECT 1 FROM wp_term_relationships tr WHERE tr.object_id = p.ID AND NOT EXISTS (SELECT 1 FROM wp_postmeta m WHERE m.post_id = tr.object_id AND p.post_type = 'post')) ORDER BY p.ID
+1
+
+-- SELECT p.ID FROM wp_posts p JOIN wp_postmeta m ON m.post_id = p.ID WHERE NOT EXISTS (SELECT 1 FROM wp_term_relationships tr LEFT JOIN wp_postmeta m ON m.post_id = tr.object_id AND m.meta_key = '_thumbnail_id' WHERE tr.object_id = p.ID AND NOT EXISTS (SELECT 1 FROM wp_posts q WHERE q.ID = tr.object_id AND m.meta_id > 0)) ORDER BY p.ID
+1
+
+-- SELECT p.ID FROM wp_posts p WHERE NOT EXISTS (SELECT 1 FROM wp_term_relationships tr LEFT JOIN wp_postmeta m ON m.post_id = tr.object_id AND m.meta_key = '_thumbnail_id' WHERE tr.object_id = p.ID AND NOT EXISTS (SELECT 1 FROM wp_posts q WHERE q.ID = tr.object_id AND m.meta_id > 0)) ORDER BY p.ID
+1
+
+-- DROP TABLE wp_term_relationships
+ok affected=0 insert_id=0
+-- DROP TABLE wp_postmeta
+ok affected=0 insert_id=0
+-- DROP TABLE wp_posts
+ok affected=0 insert_id=0
+-- DROP TABLE u
+ok affected=0 insert_id=0
+-- DROP TABLE t2
+ok affected=0 insert_id=0
+-- DROP TABLE t1
+ok affected=0 insert_id=0
+-- DROP TABLE t0
+ok affected=0 insert_id=0

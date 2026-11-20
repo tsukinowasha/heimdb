@@ -1,0 +1,347 @@
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- SET time_zone = '+00:00'
+ok
+-- CREATE TABLE t (i INT PRIMARY KEY, e ENUM('it''s','b'), s SET('a''b','c'))
+ok affected=0 insert_id=0
+-- SELECT COLUMN_NAME, COLUMN_TYPE FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 't' ORDER BY ORDINAL_POSITION
+i | int
+e | enum('it''s','b')
+s | set('a''b','c')
+
+-- INSERT INTO t VALUES (1, 'it''s', 'a''b'), (2, 'b', 'c,a''b')
+ok affected=2 insert_id=0
+-- SELECT * FROM t ORDER BY i
+1 | it's | a'b
+2 | b | a'b,c
+
+-- SELECT i FROM t WHERE e = 'it''s'
+1
+
+-- CREATE TABLE q3 (i INT PRIMARY KEY, e ENUM('a\\b','c','d\'e'))
+ok affected=0 insert_id=0
+-- SELECT COLUMN_NAME, COLUMN_TYPE FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'q3' ORDER BY ORDINAL_POSITION
+i | int
+e | enum('a\\b','c','d''e')
+
+-- INSERT INTO q3 VALUES (1, 'a\\b'), (2, 'd''e')
+ok affected=2 insert_id=0
+-- SELECT i, e FROM q3 ORDER BY i
+1 | a\b
+2 | d'e
+
+-- SELECT i FROM q3 WHERE e = 'a\\b'
+1
+
+-- ALTER TABLE q3 ADD COLUMN f ENUM('x''y','z') NOT NULL DEFAULT 'x''y'
+ok
+-- ALTER TABLE q3 MODIFY e ENUM('a\\b','c','d''e','f''g')
+ok
+-- SELECT COLUMN_NAME, COLUMN_TYPE FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'q3' ORDER BY ORDINAL_POSITION
+i | int
+e | enum('a\\b','c','d''e','f''g')
+f | enum('x''y','z')
+
+-- SELECT i, e, f FROM q3 ORDER BY i
+1 | a\b | x'y
+2 | d'e | x'y
+
+-- DROP TABLE q3
+ok affected=0 insert_id=0
+-- DROP TABLE t
+ok affected=0 insert_id=0
+-- CREATE TABLE MiXeDcAsE (i INT PRIMARY KEY, j INT)
+ok affected=0 insert_id=0
+-- INSERT INTO MiXeDcAsE VALUES (1,1),(2,2)
+ok affected=2 insert_id=0
+-- UPDATE MiXeDcAsE SET j = 999 WHERE i IN (SELECT 1)
+ok affected=1 insert_id=0
+-- SELECT * FROM MiXeDcAsE ORDER BY i
+1 | 999
+2 | 2
+
+-- CREATE TABLE wp_Posts (ID INT PRIMARY KEY, j INT)
+ok affected=0 insert_id=0
+-- INSERT INTO wp_Posts VALUES (1,1),(2,2)
+ok affected=2 insert_id=0
+-- UPDATE wp_Posts SET j = 5 WHERE ID IN (SELECT 2)
+ok affected=1 insert_id=0
+-- SELECT * FROM wp_Posts ORDER BY ID
+1 | 1
+2 | 5
+
+-- CREATE TABLE WPX_posts (ID INT PRIMARY KEY, post_status VARCHAR(20))
+ok affected=0 insert_id=0
+-- CREATE TABLE WPX_postmeta (meta_id INT PRIMARY KEY, post_id INT, meta_value VARCHAR(20))
+ok affected=0 insert_id=0
+-- INSERT INTO WPX_posts VALUES (1, 'draft')
+ok affected=1 insert_id=0
+-- INSERT INTO WPX_postmeta VALUES (1, 1, 'publish')
+ok affected=1 insert_id=0
+-- UPDATE WPX_posts p INNER JOIN WPX_postmeta pm ON pm.post_id = p.ID SET p.post_status = pm.meta_value
+ok affected=1 insert_id=0
+-- SELECT * FROM WPX_posts
+1 | publish
+
+-- UPDATE WPX_posts INNER JOIN WPX_postmeta ON WPX_postmeta.post_id = WPX_posts.ID SET WPX_posts.post_status = 'x'
+ok affected=1 insert_id=0
+-- SELECT * FROM WPX_posts
+1 | x
+
+-- CREATE TABLE Items(ItemID CHAR(38) NOT NULL PRIMARY KEY, Version INT)
+ok affected=0 insert_id=0
+-- INSERT INTO Items VALUES ('1234', 1)
+ok affected=1 insert_id=0
+-- CREATE TABLE Items2(ItemID CHAR(38) NOT NULL PRIMARY KEY, Version INT)
+ok affected=0 insert_id=0
+-- INSERT INTO Items2 VALUES ('1234', 2)
+ok affected=1 insert_id=0
+-- UPDATE Items INNER JOIN Items2 ON (Items.ItemID = Items2.ItemID) SET Items.Version = Items2.Version WHERE Items.Version != Items2.Version
+ok affected=1 insert_id=0
+-- SELECT * FROM Items
+1234 | 2
+
+-- UPDATE Items INNER JOIN Items2 ON (Items.ItemID = Items2.ItemID) SET Items.Version = 7, Items2.Version = Items2.Version
+ok affected=1 insert_id=0
+-- SELECT * FROM Items
+1234 | 7
+
+-- SELECT * FROM Items2
+1234 | 2
+
+-- UPDATE Items INNER JOIN Items2 ON (Items.ItemID = Items2.ItemID) SET Items.Version = Items2.Version + 1, Items2.Version = 9
+ok affected=2 insert_id=0
+-- SELECT i.Version, j.Version FROM Items i JOIN Items2 j ON i.ItemID = j.ItemID
+3 | 9
+
+-- DROP TABLE Items2
+ok affected=0 insert_id=0
+-- DROP TABLE Items
+ok affected=0 insert_id=0
+-- DROP TABLE WPX_postmeta
+ok affected=0 insert_id=0
+-- DROP TABLE WPX_posts
+ok affected=0 insert_id=0
+-- DROP TABLE wp_Posts
+ok affected=0 insert_id=0
+-- DROP TABLE MiXeDcAsE
+ok affected=0 insert_id=0
+-- CREATE TABLE src (v BIGINT UNSIGNED)
+ok affected=0 insert_id=0
+-- INSERT INTO src VALUES (4294967296), (65536), (256), (18446744073709551615)
+ok affected=4 insert_id=0
+-- CREATE TABLE dst (v INT UNSIGNED, s SMALLINT UNSIGNED, t TINYINT UNSIGNED)
+ok affected=0 insert_id=0
+-- SET sql_mode = ''
+ok
+-- INSERT INTO dst SELECT v, v, v FROM src
+ok affected=4 insert_id=0
+-- SHOW WARNINGS
+Warning | 1264 | Out of range value for column 'v' at row 1
+Warning | 1264 | Out of range value for column 's' at row 1
+Warning | 1264 | Out of range value for column 't' at row 1
+Warning | 1264 | Out of range value for column 's' at row 2
+Warning | 1264 | Out of range value for column 't' at row 2
+Warning | 1264 | Out of range value for column 't' at row 3
+Warning | 1264 | Out of range value for column 'v' at row 4
+Warning | 1264 | Out of range value for column 's' at row 4
+Warning | 1264 | Out of range value for column 't' at row 4
+
+-- SELECT v, s, t FROM dst ORDER BY v, s, t
+256 | 256 | 255
+65536 | 65535 | 255
+4294967295 | 65535 | 255
+4294967295 | 65535 | 255
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- INSERT INTO dst (v) SELECT v FROM src WHERE v = 4294967296
+ok affected=1 insert_id=0
+-- SELECT COUNT(*), MAX(v) FROM dst
+5 | 4294967295
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE dst
+ok affected=0 insert_id=0
+-- DROP TABLE src
+ok affected=0 insert_id=0
+-- CREATE TABLE t (id INT PRIMARY KEY, name VARCHAR(255), tx TEXT) DEFAULT CHARSET=utf8mb4
+ok affected=0 insert_id=0
+-- INSERT IGNORE INTO t VALUES (1, UNHEX('5353442031544220322E3585204E564D65'), 'a')
+ok affected=1 insert_id=0
+-- SHOW WARNINGS
+Warning | 1366 | Incorrect string value: '\x85 NVMe' for column 'name' at row 1
+
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- INSERT INTO t VALUES (2, UNHEX('85'), UNHEX('61FF62')), (3, UNHEX('E3818285E38182'), UNHEX('E381'))
+ok affected=2 insert_id=0
+-- SHOW WARNINGS
+Warning | 1366 | Incorrect string value: '\x85' for column 'name' at row 1
+Warning | 1366 | Incorrect string value: '\xFFb' for column 'tx' at row 1
+Warning | 1366 | Incorrect string value: '\x85\xE3\x81\x82' for column 'name' at row 2
+Warning | 1366 | Incorrect string value: '\xE3\x81' for column 'tx' at row 2
+
+-- UPDATE t SET name = UNHEX('61626364FE') WHERE id = 1
+ok affected=1 insert_id=0
+-- SHOW WARNINGS
+Warning | 1366 | Incorrect string value: '\xFE' for column 'name' at row 1
+
+-- INSERT INTO t VALUES (4, UNHEX('787985616263646566676869'), UNHEX('F09F98'))
+ok affected=1 insert_id=0
+-- SHOW WARNINGS
+Warning | 1366 | Incorrect string value: '\x85abcde...' for column 'name' at row 1
+Warning | 1366 | Incorrect string value: '\xF0\x9F\x98' for column 'tx' at row 1
+
+-- SELECT id, HEX(name), HEX(tx) FROM t ORDER BY id
+1 | 61626364 | 61
+2 |  | 61
+3 | E38182 | 
+4 | 7879 | 
+
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- DROP TABLE t
+ok affected=0 insert_id=0
+-- CREATE TABLE t (i INT PRIMARY KEY, e ENUM('abc','def'), s SET('x','y'), e2 ENUM('p','q') NOT NULL)
+ok affected=0 insert_id=0
+-- INSERT INTO t VALUES (1,'abc','x,y','q'),(2,'def','y','p'),(3,NULL,'','q'),(4,'abc',NULL,'p')
+ok affected=4 insert_id=0
+-- ALTER TABLE t MODIFY e VARCHAR(10)
+ok
+-- ALTER TABLE t MODIFY s VARCHAR(10)
+ok
+-- ALTER TABLE t MODIFY e2 TEXT NOT NULL
+ok
+-- SELECT * FROM t ORDER BY i
+1 | abc | x,y | q
+2 | def | y | p
+3 | NULL |  | q
+4 | abc | NULL | p
+
+-- SELECT i FROM t WHERE e = 'def' AND s = 'y' AND e2 = 'p'
+2
+
+-- DROP TABLE t
+ok affected=0 insert_id=0
+-- CREATE TABLE test (pk INT PRIMARY KEY, v1 INT, dt DATETIME NOT NULL DEFAULT '2000-01-01 00:00:00' ON UPDATE CURRENT_TIMESTAMP)
+ok affected=0 insert_id=0
+-- INSERT INTO test (pk, v1) VALUES (1, 1), (2, 2)
+ok affected=2 insert_id=0
+-- INSERT INTO test(pk, v1) VALUES (1, 2) ON DUPLICATE KEY UPDATE v1 = VALUES(v1)
+ok affected=2 insert_id=0
+-- SELECT pk, v1, dt = '2000-01-01 00:00:00' FROM test ORDER BY pk
+1 | 2 | 0
+2 | 2 | 1
+
+-- INSERT INTO test(pk, v1) VALUES (2, 2) ON DUPLICATE KEY UPDATE v1 = VALUES(v1)
+ok affected=0 insert_id=0
+-- SELECT pk, v1, dt = '2000-01-01 00:00:00' FROM test ORDER BY pk
+1 | 2 | 0
+2 | 2 | 1
+
+-- INSERT INTO test(pk, v1) VALUES (2, 5), (3, 3) ON DUPLICATE KEY UPDATE v1 = v1 + 1, dt = '2001-01-01 00:00:00'
+ok affected=3 insert_id=0
+-- SELECT pk, v1, dt FROM test WHERE pk IN (2, 3) ORDER BY pk
+2 | 3 | 2001-01-01 00:00:00
+3 | 3 | 2000-01-01 00:00:00
+
+-- INSERT IGNORE INTO test(pk, v1) VALUES (3, 3) ON DUPLICATE KEY UPDATE v1 = 3
+ok affected=0 insert_id=0
+-- SELECT pk, v1, dt = '2000-01-01 00:00:00' FROM test WHERE pk = 3
+3 | 3 | 1
+
+-- CREATE TABLE t2 (id VARCHAR(64) PRIMARY KEY, val INT, updated_at DATETIME NOT NULL DEFAULT '2000-01-01 00:00:00' ON UPDATE CURRENT_TIMESTAMP)
+ok affected=0 insert_id=0
+-- INSERT INTO t2 (id, val) VALUES ('a', 1), ('b', 1)
+ok affected=2 insert_id=0
+-- WITH r(id) AS (SELECT 'a') UPDATE t2 SET val = 2 WHERE id IN (SELECT id FROM r)
+
+-- SELECT id, val, updated_at > '2000-01-01 00:00:00' FROM t2 ORDER BY id
+a | 2 | 1
+b | 1 | 0
+
+-- WITH r(id) AS (SELECT 'b') UPDATE t2 SET val = 1 WHERE id IN (SELECT id FROM r)
+
+-- SELECT id, val, updated_at > '2000-01-01 00:00:00' FROM t2 ORDER BY id
+a | 2 | 1
+b | 1 | 0
+
+-- DROP TABLE t2
+ok affected=0 insert_id=0
+-- DROP TABLE test
+ok affected=0 insert_id=0
+-- CREATE TABLE t (id INT PRIMARY KEY, v INT, w VARCHAR(10), u DATETIME NOT NULL DEFAULT '2000-01-01 00:00:00' ON UPDATE CURRENT_TIMESTAMP, ts TIMESTAMP NULL DEFAULT '2000-01-01 00:00:00' ON UPDATE CURRENT_TIMESTAMP)
+ok affected=0 insert_id=0
+-- INSERT INTO t (id, v, w) VALUES (1, 1, 'a'), (2, 2, 'b'), (3, 3, 'c')
+ok affected=3 insert_id=0
+-- UPDATE t SET v = 1 WHERE id = 1
+ok affected=0 insert_id=0
+-- SELECT id, u = '2000-01-01 00:00:00', ts = '2000-01-01 00:00:00' FROM t ORDER BY id
+1 | 1 | 1
+2 | 1 | 1
+3 | 1 | 1
+
+-- UPDATE t SET v = 2 WHERE id IN (1, 2)
+ok affected=1 insert_id=0
+-- SELECT id, u = '2000-01-01 00:00:00', ts = '2000-01-01 00:00:00' FROM t ORDER BY id
+1 | 0 | 0
+2 | 1 | 1
+3 | 1 | 1
+
+-- UPDATE t SET w = 'c', v = v WHERE id = 3
+ok affected=0 insert_id=0
+-- UPDATE t SET u = '2001-01-01 00:00:00' WHERE id = 3
+ok affected=1 insert_id=0
+-- SELECT id, u, ts = '2000-01-01 00:00:00' FROM t WHERE id = 3
+3 | 2001-01-01 00:00:00 | 0
+
+-- UPDATE t SET v = 3, u = u WHERE id = 3
+ok affected=0 insert_id=0
+-- SELECT id, u, ts = '2000-01-01 00:00:00' FROM t WHERE id = 3
+3 | 2001-01-01 00:00:00 | 0
+
+-- DROP TABLE t
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE t (id INT PRIMARY KEY, v INT, u DATETIME NOT NULL DEFAULT '2000-01-01 00:00:00' ON UPDATE CURRENT_TIMESTAMP)
+ok affected=0 insert_id=0
+-- INSERT INTO t (id, v) VALUES (1, 1), (2, 2)
+ok affected=2 insert_id=0
+-- UPDATE t SET v = 1 WHERE id = 1
+ok affected=0 insert_id=0
+-- INSERT INTO t (id, v) VALUES (2, 2) ON DUPLICATE KEY UPDATE v = VALUES(v)
+ok affected=0 insert_id=0
+-- SELECT id, u = '2000-01-01 00:00:00' FROM t ORDER BY id
+1 | 1
+2 | 1
+
+-- UPDATE t SET v = 5 WHERE id = 1
+ok affected=1 insert_id=0
+-- INSERT INTO t (id, v) VALUES (2, 6) ON DUPLICATE KEY UPDATE v = VALUES(v)
+ok affected=2 insert_id=0
+-- SELECT id, v, u = '2000-01-01 00:00:00' FROM t ORDER BY id
+1 | 5 | 0
+2 | 6 | 0
+
+-- DROP TABLE t
+ok affected=0 insert_id=0
+-- SET SESSION sql_mode = DEFAULT
+ok
+-- CREATE TABLE test_table (id INT PRIMARY KEY, value INT, category VARCHAR(50))
+ok affected=0 insert_id=0
+-- INSERT INTO test_table VALUES (1, 100, 'A'), (2, 200, 'B'), (3, 300, 'A')
+ok affected=3 insert_id=0
+-- SELECT SUM(value) FROM test_table LIMIT 0
+
+-- SELECT category, SUM(value) FROM test_table GROUP BY category LIMIT 0
+
+-- SELECT COUNT(*) FROM test_table LIMIT 0
+
+-- SELECT SUM(value) FROM test_table LIMIT 1
+600
+
+-- DROP TABLE test_table
+ok affected=0 insert_id=0

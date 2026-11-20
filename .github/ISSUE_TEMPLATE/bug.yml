@@ -1,0 +1,30 @@
+name: Bug report
+description: HeimDB crashes, returns an error, loses data, or misbehaves (not a difference from MySQL's results)
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: HeimDB version
+      description: The Docker image tag, or `heimdb_build_info` in the metrics. If you do not know it, say where you got the binary.
+      placeholder: "0.3.0"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Include error messages and log lines.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: SQL statements, `CALL heimdb_*` procedures, WordPress actions or plugin names and versions.
+      render: sql
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Docker or binary, OS and architecture, flags or environment variables, replica or not.

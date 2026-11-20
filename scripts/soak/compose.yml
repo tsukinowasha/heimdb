@@ -1,0 +1,47 @@
+# 長時間の負荷試験の WordPress（docs/bench.md の「段階 108」）。HeimDB はこの compose の外で動かす（手元ならホスト、
+# GCE なら DB の VM。そのときは db.sh を SOAK_BIND=0.0.0.0 で起動し、SOAK_DB_HOST に VM の IP を渡す）。
+# 外への HTTP と WP-Cron の自動の起動を止める（cron は writer.sh が毎分流す）。
+#
+#   SOAK_DB_HOST=host.docker.internal:3356 docker compose -f scripts/soak/compose.yml up -d wp
+#   docker compose -f scripts/soak/compose.yml run --rm -T cli wp option get home
+name: heimdb-soak
+
+x-env: &env
+  WORDPRESS_DB_HOST: ${SOAK_DB_HOST:-host.docker.internal:3356}
+  WORDPRESS_DB_USER: root
+  WORDPRESS_DB_PASSWORD: ${SOAK_DB_PASSWORD:-rootpw}
+  WORDPRESS_DB_NAME: ${SOAK_DB_NAME:-wpbench}
+  WORDPRESS_CONFIG_EXTRA: |
+    define('WP_HOME', 'http://localhost:${SOAK_WP_PORT:-18183}');
+    define('WP_SITEURL', WP_HOME);
+    define('SAVEQUERIES', true);
+    define('WP_HTTP_BLOCK_EXTERNAL', true);
+    define('DISABLE_WP_CRON', true);
+    define('AUTOMATIC_UPDATER_DISABLED', true);
+
+services:
+  wp:
+    image: wordpress:php8.3-apache
+    ports: ["${SOAK_WP_PORT:-18183}:80"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment: *env
+    volumes:
+      - wp:/var/www/html
+      - ../bench/mu-plugins:/var/www/html/wp-content/mu-plugins:ro
+
+  cli:
+    image: wordpress:cli
+    profiles: ["cli"]
+    user: "33:33"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment: *env
+    volumes:
+      - wp:/var/www/html
+      - ../bench/mu-plugins:/var/www/html/wp-content/mu-plugins:ro
+      - .:/soak:ro
+    depends_on: [wp]
+
+volumes:
+  wp:

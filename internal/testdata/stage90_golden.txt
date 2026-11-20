@@ -1,0 +1,68 @@
+-- SET SESSION sql_mode = 'NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+ok
+-- CREATE TABLE p (id INT PRIMARY KEY, a VARCHAR(50), b INT, c VARCHAR(300), d VARBINARY(10), UNIQUE KEY ab (a,b), UNIQUE KEY cpre (c(5)), UNIQUE KEY dk (d))
+ok
+-- INSERT INTO p VALUES (1,'x',1,'hello world',X'0031'),(2,NULL,NULL,'zzz',NULL)
+ok
+-- INSERT INTO p VALUES (1,'y',2,'q',NULL)
+error 1062 (23000): Duplicate entry '1' for key 'p.PRIMARY'
+-- INSERT INTO p VALUES (3,'x',1,'q2',NULL)
+error 1062 (23000): Duplicate entry 'x-1' for key 'p.ab'
+-- INSERT INTO p VALUES (4,'w',1,'hello there',NULL)
+error 1062 (23000): Duplicate entry 'hello' for key 'p.cpre'
+-- INSERT INTO p VALUES (5,'v',1,'q5',X'0031')
+error 1062 (23000): Duplicate entry '\x001' for key 'p.dk'
+-- UPDATE p SET id=1 WHERE id=2
+error 1062 (23000): Duplicate entry '1' for key 'p.PRIMARY'
+-- UPDATE p SET a='x', b=1 WHERE id=2
+error 1062 (23000): Duplicate entry 'x-1' for key 'p.ab'
+-- INSERT IGNORE INTO p VALUES (1,'y',2,'q',NULL),(3,'x',1,'q2',NULL)
+ok
+-- SHOW WARNINGS
+Warning | 1062 | Duplicate entry '1' for key 'p.PRIMARY'
+Warning | 1062 | Duplicate entry 'x-1' for key 'p.ab'
+
+-- INSERT INTO p VALUES (1,'z',3,'q9',NULL) ON DUPLICATE KEY UPDATE a='odku'
+ok
+-- REPLACE INTO p VALUES (2,'rep',4,'q10',NULL)
+ok
+-- SELECT id, a, b, c FROM p ORDER BY id
+1 | odku | 1 | hello world
+2 | rep | 4 | q10
+
+-- CREATE TEMPORARY TABLE tt (id INT PRIMARY KEY)
+ok
+-- INSERT INTO tt VALUES (1),(1)
+error 1062 (23000): Duplicate entry '1' for key 'tt.PRIMARY'
+-- CREATE TABLE `we-ird` (k VARCHAR(5), UNIQUE KEY `my key` (k))
+ok
+-- INSERT INTO `we-ird` VALUES ('a'),('A')
+error 1062 (23000): Duplicate entry 'A' for key 'we-ird.my key'
+-- CREATE TABLE f (id INT PRIMARY KEY, d DATETIME, x DECIMAL(5,2), UNIQUE KEY dx (d,x))
+ok
+-- INSERT INTO f VALUES (1,'2025-01-02 03:04:05',1.5),(2,'2025-01-02 03:04:05',1.5)
+error 1062 (23000): Duplicate entry '2025-01-02 03:04:05-1.50' for key 'f.dx'
+-- CREATE TABLE l (id INT PRIMARY KEY, v VARCHAR(255), w VARCHAR(191), UNIQUE KEY lv (v), UNIQUE KEY lw (w))
+ok
+-- INSERT INTO l VALUES (1,'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx','éééééééééééééééééééééééééééééééééééééééé')
+ok
+-- INSERT INTO l VALUES (2,'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx','q')
+error 1062 (23000): Duplicate entry 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' for key 'l.lv'
+-- INSERT INTO l VALUES (3,'q','éééééééééééééééééééééééééééééééééééééééé')
+error 1062 (23000): Duplicate entry 'éééééééééééééééééééééééééééééééé' for key 'l.lw'
+-- CREATE TABLE kl (u VARCHAR(10) NOT NULL, v INT, UNIQUE KEY uk (u))
+ok
+-- INSERT INTO kl VALUES ('a',1),('a',2)
+error 1062 (23000): Duplicate entry 'a' for key 'kl.uk'
+-- CREATE TABLE ad (id INT PRIMARY KEY, v INT)
+ok
+-- INSERT INTO ad VALUES (1,7),(2,7)
+ok
+-- ALTER TABLE ad ADD UNIQUE KEY av (v)
+error 1062 (23000): Duplicate entry '7' for key 'ad.av'
+-- CREATE UNIQUE INDEX av2 ON ad (v)
+error 1062 (23000): Duplicate entry '7' for key 'ad.av2'
+-- CREATE TABLE tx (id INT PRIMARY KEY, t TEXT, UNIQUE KEY tk (t(3)))
+ok
+-- INSERT INTO tx VALUES (1,'abcdef'),(2,'abcxyz')
+error 1062 (23000): Duplicate entry 'abc' for key 'tx.tk'

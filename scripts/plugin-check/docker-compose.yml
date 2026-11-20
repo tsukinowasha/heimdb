@@ -1,0 +1,35 @@
+# activate.sh が使う WordPress（docs/plugins.md）。HeimDB はホストの HEIMDB_PORT で動かす（activate.sh が起動する）。
+name: heimdb-plugin-check
+
+x-wp-env: &wp-env
+  WORDPRESS_DB_HOST: host.docker.internal:${HEIMDB_PORT:-3336}
+  WORDPRESS_DB_USER: root
+  WORDPRESS_DB_PASSWORD: ${HEIMDB_ROOT_PASSWORD:-plugin-check}
+  WORDPRESS_DB_NAME: wordpress
+  WORDPRESS_DEBUG: "1"
+
+services:
+  wordpress:
+    image: wordpress:php8.3-apache
+    ports:
+      - "127.0.0.1:${WP_PORT:-18090}:80"
+    environment: *wp-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - wp:/var/www/html
+      - ${PLUGIN_DIR:-./empty}:/plugins:ro
+
+  cli:
+    image: wordpress:cli
+    profiles: ["cli"]
+    user: "33:33"
+    environment: *wp-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - wp:/var/www/html
+      - ${PLUGIN_DIR:-./empty}:/plugins:ro
+
+volumes:
+  wp:
