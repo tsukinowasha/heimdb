@@ -6,9 +6,10 @@ import (
 )
 
 // 接続の照合順序は、接続のときにクライアントが伝えたものになり、サーバの既定は MySQL 8.0 と同じ utf8mb4_0900_ai_ci
-// （docs/plan.md の段階 90）。期待する値は、本物の MySQL 8.0.46 に同じドライバでつないで確かめたもの（utf8mb3 も
-// MySQL は utf8mb4_general_ci にする）。latin1 だけは、MySQL は latin1 になるが、HeimDB は文字セットを utf8mb4 の
-// ままにし、既定の照合順序にする。
+// （docs/plan.md の段階 90）。期待する値は、本物の MySQL 8.0.46 に同じドライバでつないで確かめたもの。utf8mb3 と
+// latin1 だけは、MySQL は utf8mb3_general_ci と latin1 になるが、HeimDB は文字セットを utf8mb4 のままにし、utf8mb3 は
+// utf8mb4_general_ci、latin1 は既定の照合順序にする（比べの結果は utf8mb3 の MySQL と同じ）。go-sql-driver 1.10.1 までは
+// 表にない名前（utf8mb3_general_ci）を黙って既定の ID にしていたので、ここでは表の名前の utf8_general_ci（ID 33）を使う。
 func TestHandshakeCollation(t *testing.T) {
 	bin := heimdbBinary(t)
 	srv := startArgs(t, bin, "-data", t.TempDir(), "-root-password", "pw")
@@ -18,7 +19,7 @@ func TestHandshakeCollation(t *testing.T) {
 		aA, aFull, kana, one int
 	}
 	for _, c := range []struct {
-		collation string // go-sql-driver が接続のときに伝える照合順序
+		collation string // go-sql-driver が接続のときに伝える照合順序（ドライバの表の名前。utf8_general_ci は utf8mb3 の ID 33）
 		want      result
 	}{
 		{"utf8mb4_0900_ai_ci", result{"utf8mb4_0900_ai_ci", "utf8mb4", "utf8mb4_0900_ai_ci", 1, 1, 1, 1}},
@@ -26,7 +27,7 @@ func TestHandshakeCollation(t *testing.T) {
 		{"utf8mb4_unicode_ci", result{"utf8mb4_unicode_ci", "utf8mb4", "utf8mb4_0900_ai_ci", 1, 1, 1, 1}},
 		{"utf8mb4_unicode_520_ci", result{"utf8mb4_unicode_520_ci", "utf8mb4", "utf8mb4_0900_ai_ci", 1, 1, 1, 1}},
 		{"utf8mb4_bin", result{"utf8mb4_bin", "utf8mb4", "utf8mb4_0900_ai_ci", 0, 0, 0, 0}},
-		{"utf8mb3_general_ci", result{"utf8mb4_general_ci", "utf8mb4", "utf8mb4_0900_ai_ci", 1, 0, 0, 0}},
+		{"utf8_general_ci", result{"utf8mb4_general_ci", "utf8mb4", "utf8mb4_0900_ai_ci", 1, 0, 0, 0}},
 		{"latin1_swedish_ci", result{"utf8mb4_0900_ai_ci", "utf8mb4", "utf8mb4_0900_ai_ci", 1, 1, 1, 1}},
 	} {
 		t.Run(c.collation, func(t *testing.T) {
