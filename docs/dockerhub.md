@@ -28,7 +28,7 @@ A database for WordPress with branches and time travel. It speaks the MySQL prot
 
 > **Development preview.** The data format is version 8 since 0.2.41. A newer version converts older data when it starts; an older version refuses newer data. When a version changes the format so that older versions cannot open the data, its minor version goes up (0.3.x to 0.4.0). Pin a version and keep backups.
 
-HeimDB is built only for WordPress. Views, triggers, stored procedures and full-text search are not supported and return explicit errors. So is SQL that reads or writes files on the server (`LOAD_FILE()`, `SELECT ... INTO OUTFILE`, `LOAD DATA`).
+HeimDB is built only for WordPress. Views, triggers, stored procedures, full-text search and character sets other than utf8mb4 are not supported and return explicit errors. So is SQL that reads or writes files on the server (`LOAD_FILE()`, `SELECT ... INTO OUTFILE`, `LOAD DATA`).
 
 ## Tags
 
@@ -349,10 +349,11 @@ docker run -d -p 3306:3306 -v heimdb-data:/data -v heimdb-backups:/backups \
 | `-shutdown-timeout` | `30s` | How long to wait for running statements on stop |
 | `-branch-procedures` | `false` | Lets a user with only a branch's database call diff, resolve, changes and restore on the branch it is connected to, given `GRANT EXECUTE` (pass `''` as the branch; also `HEIMDB_BRANCH_PROCEDURES=1`) |
 | `-memory-limit` | 80% of the container limit | Memory limit (like `4G`; or set `HEIMDB_MEMORY_LIMIT`; `0` disables). Near it, a statement fails with error 1041 and its transaction is rolled back, instead of the process running out of memory |
+| `-rebuild-indexes` | `true` | After start, rebuild in the background main's indexes made without entries by 0.2.40 or earlier (or set `HEIMDB_REBUILD_INDEXES=false`). Since 0.2.42 |
 | `-tls-cert`, `-tls-key` | | Enable TLS with these files (mount them readable by UID 65532) |
 | `-metrics-addr` | | Serve Prometheus metrics at `/metrics` on this address (like `0.0.0.0:9104`; no authentication, so do not publish the port; read it from the same Docker network). Since 0.2.21 |
 
-Read-only replicas and the remaining flags are documented in the source repository, which is not public yet.
+Read-only replicas and the remaining flags are documented in [`docs/operations.md`](https://github.com/tsukinowasha/heimdb/blob/main/docs/operations.md).
 
 - Stop with `docker stop` (SIGTERM). Give it more time than `-shutdown-timeout` (`docker stop -t 60`, or `stop_grace_period` in Compose).
 - To restore from a backup, start HeimDB with the backup directory as its data directory.

@@ -29,12 +29,12 @@ HeimDB is WordPress-only, and accepts the following. They return an explicit err
 
 ## Recorded differences
 
-This section collects, by topic, the differences between HeimDB and real MySQL 8.0 that were only recorded or accepted in stages 110 to 124 ("record only", "accepted differences", and pre-existing differences that were found and not fixed). Differences fixed in later stages are not included.
+This section collects, by topic, the differences between HeimDB and real MySQL 8.0 that were only recorded or accepted in stages 110 to 124 ("only recorded", "accepted differences", and pre-existing differences that were found and not fixed). Differences fixed in later stages are not included.
 
 - Each item keeps the wording from when it was recorded (the MySQL result, the HeimDB result, and a repro statement only where the record has one). The items were not checked again on MySQL after being written here. When an item is taken up as a candidate in a later stage, it is checked again on real MySQL.
 - "WordPress" says whether the item is hit on the WordPress core or WooCommerce paths (yes, no, plugins only). This was judged from the record. Where the record does not say, it was judged by whether WordPress core and WooCommerce issue statements of that form, and the note says "(inferred)".
 - Within a stage, we fix only regressions caused by that stage's changes, and pre-existing differences that give wrong results on WordPress core or WooCommerce paths ([`CLAUDE.md`](../CLAUDE.md)). Other differences are added here as candidates for the next stage. When one is fixed, its item is removed.
-- A summary of each stage is in "Development steps" in [`plan.md`](plan.md), and the engine changes are in the change list ([`engine.md`](engine.md#change-list)). Upstream PRs skipped in stage 110 are in [`engine-upstream.md`](engine-upstream.md). The "record only" items from before stage 109 are not collected here yet (they were in the stage records of the pre-publication history).
+- A summary of each stage is in "Development steps" in [`plan.md`](plan.md), and the engine changes are in the change list ([`engine.md`](engine.md#change-list)). Upstream PRs skipped in stage 110 are in [`engine-upstream.md`](engine-upstream.md). The differences only recorded before stage 109 are not collected here yet (they were in the stage records of the pre-publication history).
 
 | Topic | Items | Hit on WordPress (yes / plugins only) |
 | --- | --- | --- |
@@ -90,7 +90,7 @@ This section collects, by topic, the differences between HeimDB and real MySQL 8
 - **Sub-second constants are not rounded to the column precision (equality between an indexed DATETIME(0) column and a fractional constant)** (stage 116. WordPress: no)
   - MySQL: only with the index ref access method, rounds the constant to the column's digits and returns the row. HeimDB: does not return it (the same as MySQL without the index)
   - Repro: `post_date = FROM_UNIXTIME(1704189600.5)`
-  - Note: moved from stage 114, and made record-only in the review of the stage 116 plan. The same kind as COLLATE on ENUM
+  - Note: moved from stage 114, and changed to only recorded in the review of the stage 116 plan. The same kind as COLLATE on ENUM
 - **Under the default sql_mode, = with a string that has extra characters after the zero date succeeds** (stage 116. WordPress: no)
   - MySQL: 1525. HeimDB: the zero-date rows
   - Repro: `d = '0000-00-00 00:00:00x'`
@@ -131,7 +131,7 @@ This section collects, by topic, the differences between HeimDB and real MySQL 8
 - **String constant + interval gets a time, and sub-seconds are rounded to seconds** (stage 116. WordPress: no)
   - MySQL: '2024-01-02'. HeimDB: a time is added. '... 10:00:00.5' + INTERVAL 1 DAY is rounded to seconds
   - Repro: `'2024-01-01' + INTERVAL 1 DAY`
-  - Note: a pre-existing difference found before the 4th review
+  - Note: a pre-existing difference (found in the 4th review)
 - **`INTERVAL 1.5 SECOND` is rounded to 2 seconds** (stage 116. WordPress: no)
   - MySQL: adds 1.5 seconds. HeimDB: rounds to 2 seconds
   - Repro: `INTERVAL 1.5 SECOND`
@@ -578,7 +578,7 @@ This section collects, by topic, the differences between HeimDB and real MySQL 8
 - **`IN (SELECT ... LIMIT n)` succeeds** (stage 116. WordPress: no)
   - MySQL: 1235. HeimDB: runs it
   - Repro: `IN (SELECT ... LIMIT n)`
-  - Note: found in stage 115, and made record-only in the review of the stage 116 plan
+  - Note: found in stage 115, and changed to only recorded in the review of the stage 116 plan
 - **The form that aggregates outer columns in a HAVING subquery** (stage 116. WordPress: no)
   - MySQL: aggregates in the outer query (1242 in the stage 115 record). HeimDB: aggregates inside the subquery
   - Repro: `SELECT SUM(x) FROM t6 ... HAVING ...`
@@ -715,10 +715,10 @@ This section collects, by topic, the differences between HeimDB and real MySQL 8
   - Note: the results are the same; it is a performance difference. Hits min_max_price and stock_quantity of WooCommerce's wc_product_meta_lookup. New tables and indexes have entries since stage 117. Since stage 121, production rebuilds the old indexes on main one by one in the background after startup (`-rebuild-indexes`; "Rebuilding old indexes" in docs/operations.md). Indexes on branches, and indexes the background process skipped (unique indexes with duplicates, indexes over 5 million rows (1 million for unique ones), and indexes whose write lock could not be taken within 5 seconds), are rebuilt by the user with `CALL heimdb_rebuild_indexes()` (a log message at startup says so; docs/procedures.md). Until they are rebuilt, unique indexes can hold duplicate rows, because `CREATE UNIQUE INDEX` on 0.2.38 or earlier created them without checking for duplicates (the rebuild stops with 1062)
 - **When a branch is created from a past point and that point is in the middle of an index build, the branch sees the half-built entries** (stage 121. WordPress: no)
   - HeimDB: if the time in `heimdb_branch_create('b', 'main', '<time>')` falls in the middle of an index build that commits in several batches (`CREATE INDEX`, ALTER that rewrites the table, `heimdb_rebuild_indexes`, the rebuild after startup), the branch keeps the previous definition and sees the parent's half-built entries. If the index is rebuilt on that branch, the parent's entries for rows deleted on the branch remain
-  - Note: a pre-existing problem. In stage 121, creation from the current point was made to take the parent's write lock (so the branch is not split off in the middle of a build). For past points a lock cannot prevent it. The hosting side creates branches from the current point. Checking with the time of the in-progress marker whether a past point is in the middle of a build, and rejecting it, is a candidate for the next stage
+  - Note: a pre-existing problem. In stage 121, creation from the current point was made to take the parent's write lock (so the branch is not split off in the middle of a build). For past points a lock cannot prevent it. Branches are usually created from the current point. Checking with the time of the in-progress marker whether a past point is in the middle of a build, and rejecting it, is a candidate for the next stage
 - **Branch creation waits for write transactions on the parent** (stage 121. WordPress: no)
   - HeimDB: the branch is created after taking the parent's write lock, so if a long transaction is open on the parent, it waits up to `-lock-wait-timeout`, and after that gives 1205
   - Note: by design (so as not to see the half-built entries above). It does not wait if the calling connection's transaction holds the parent's lock. Creation takes the exclusive lock for branch operations (`branchOpMu`) while holding the parent's lock, so while `heimdb_branch_drop` of another branch waits for that branch's transactions (up to 2 seconds; after that the drop is rejected), writes to the parent wait along with the creation (review of the stage 121 implementation; this does not deadlock)
 - **After upgrading, Wordfence and MainWP Child issue one ALTER that changes FLOAT and DOUBLE columns to (M,D) types** (stage 120. WordPress: plugins only)
   - HeimDB: FLOAT(10,7), DOUBLE(17,6) UNSIGNED, and FLOAT(11,4) columns in tables created on 0.2.40 or earlier stay `float` and `double` after the upgrade (the definitions are read as data format version 7). MainWP Child's dbDelta and Wordfence's upgrade process see the difference between the type in DESCRIBE and their definition, issue `ALTER TABLE ... CHANGE COLUMN` once, and rewrite the table (this takes time on large tables such as `wfHits`). After that, no ALTER is issued, as in MySQL
-  - Note: an operational note (by design). After that ALTER, `heimdb_branch_sync` to branches split off before the ALTER is rejected because the table definitions differ (definitions differ in `sync.go`; the existing behaviour). Merges go through the path for column type changes (coldiff)
+  - Note: an operational note (by design). After that ALTER, `heimdb_branch_sync` to branches split off before the ALTER is rejected because the table definitions differ (definitions differ in `sync.go`; the existing behavior). Merges go through the path for column type changes (coldiff)

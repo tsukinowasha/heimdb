@@ -218,7 +218,7 @@ At stage 40, apart from paths and import order, nothing differed from the origin
 ## Rules for changing the engine
 
 - For each change, add a short row to the "Change list" in this document (stage, what was changed and where, a short reason), and write the full change and reason in the "Engine changes" section of that stage's record in `docs/stages/` (in English, from stage 130 on; records of earlier stages are in the pre-publication history and not in this repository). Add differences from MySQL that are only recorded to [`differences.md`](differences.md). Add tests (HeimDB-side tests or engine tests).
-- In each file whose contents you change, add the line `// Modified by Tsukinowa Inc.: <what was changed> (docs/engine.md)` below the copyright notice at the top.
+- In each file whose contents you change, add the line `// Modified by Tsukinowa Inc.: <what was changed> (docs/engine.md)` below the copyright notice at the top. The existing lines are in Japanese; new lines are written in English.
 - When a change makes upstream tests fail, fix the tests too and write the reason (such as removing a feature WordPress does not need).
 - At import, the upstream tests passed 53,301 cases in 27 packages and skipped 416 (the same as v0.20.0 as is). After stage 42, 53,208 passed and 414 were skipped (for the tests of removed features). After stage 66, 53,227 pass and 411 are skipped (3 tests that were skipped unconditionally were deleted).
 
@@ -237,6 +237,6 @@ The `go vet` checks that `go test` runs automatically pass in the engine too (th
 2. Apply the diff with its paths moved under `internal/sqlengine/` and the import paths rewritten (`git apply --directory=internal/sqlengine`). If it does not apply (files HeimDB changed, or upstream code after a large rewrite), move it by hand. Read HeimDB's fixes in the same place (rows of the change list), and write which one to keep and why.
 3. Add it to the change list with the upstream commit. Make one commit per import, and check that reverting the commit makes the tests fail.
 
-All PRs merged upstream after v0.20.0 (up to `c57d5b4c1` on main, 2026-11-09) were reviewed and sorted in stage 110 ([`engine-upstream.md`](engine-upstream.md): candidates to import, skipped, not reproduced, no effect). What happened to the 3 items listed at stage 40 (LIKE escapes, zero datetimes, ENUM quoting) is also there. Next time upstream is reviewed, start after `c57d5b4c1`.
+All PRs merged upstream after v0.20.0 (up to `c57d5b4c1` on main, 2026-11-09) were reviewed and sorted in stage 110 ([`engine-upstream.md`](engine-upstream.md): applied, skipped, not reproduced, not applicable). What happened to the 3 items listed at stage 40 (LIKE escapes, zero datetimes, ENUM quoting) is also there. Next time upstream is reviewed, start after `c57d5b4c1`.
 
 Upstream vulnerability advisories (GitHub's advisories for go-mysql-server and vitess) are fetched every week by the `advisories` job of `vuln` in CI, which fails if any have not been checked (stage 127). How to check them, and how to decide whether to import a fix with the steps above or add it to `.github/known-advisories.txt`, are in "Checking for vulnerabilities" in [`operations.md`](operations.md).

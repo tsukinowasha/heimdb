@@ -11,7 +11,7 @@ A database for WordPress with branches and time travel. It speaks the MySQL prot
 - **Memory limit**: `-memory-limit` (by default 80% of the container's limit) caps the process. A statement that would pass it stops with error 1041 and its transaction is rolled back; the process keeps running.
 - **Managed with SQL**: branches, merges, restores, backups and status are `CALL heimdb_*` procedures, usable from any MySQL client.
 - **Prometheus metrics**: statement counts and times, connections, memory, disk, GC and replication at `/metrics`.
-- **Online and encrypted backups**: a consistent backup of all branches and the history while running, optionally encrypted with [age](https://age-encryption.org/).
+- **Online and encrypted backups**: a consistent backup of all branches and the history while running (writes wait while it is taken), optionally encrypted with [age](https://age-encryption.org/).
 - **Replicas**: read-only replicas that apply production's commits, synchronous by default (like MySQL's semi-synchronous replication), with manual promotion.
 - **Change watch**: logs a warning when rows that change in a site takeover change (a new administrator, `siteurl`, `default_role`, activated plugins, ...). Find the time and restore to just before it.
 - **TLS and slow query log**: TLS for client connections and replication, and a slow query log that can be switched on while running.
@@ -23,7 +23,7 @@ HeimDB is built only for WordPress. Views, triggers, stored procedures, full-tex
 
 ## Performance
 
-On the same WordPress and data (5,202 posts, 20,000 comments, no object cache) on a GCE n2-standard-4, compared with MySQL 8.0 with Docker's default settings:
+On the same WordPress and data (5,002 posts, 200 pages, 20,000 comments, no object cache) on a GCE n2-standard-4, compared with MySQL 8.0 with Docker's default settings:
 
 - A page's DB time is 1.5 to 2.1 times MySQL's, and the whole page 1.1 to 1.3 times (search is faster than MySQL). Adding a comment and updating an option are faster than MySQL.
 - Under load, the maximum rate is 88% of MySQL's, with no errors or disconnects past the maximum or with 500 connections.

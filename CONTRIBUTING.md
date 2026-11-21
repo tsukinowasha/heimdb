@@ -4,7 +4,7 @@ Thank you for your interest in HeimDB. Bug reports, reports of differences from 
 
 ## Scope
 
-HeimDB is built only for WordPress (core, wp-cli, mysqldump and plugins). SQL that WordPress and its plugins do not issue is deliberately unsupported and returns an explicit error; we keep it that way rather than add general MySQL features. Where MySQL's behaviour is unspecified (for example, the order of rows that compare equal), HeimDB follows what MySQL actually does.
+HeimDB is built only for WordPress (core, wp-cli, mysqldump and plugins). SQL that WordPress and its plugins do not issue is deliberately unsupported and returns an explicit error; we keep it that way rather than add general MySQL features. Where MySQL's behavior is unspecified (for example, the order of rows that compare equal), HeimDB follows what MySQL actually does.
 
 ## Reporting issues
 

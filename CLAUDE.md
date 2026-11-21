@@ -5,7 +5,7 @@ A branching database built only for WordPress. The plan and background are in `d
 ## Working rules
 
 - Work through the development stages one at a time. Do not start the next stage until its completion criteria are met. At the start of each stage, present a plan and get approval before implementing.
-- The SQL engine is a fork of go-mysql-server v0.20.0 in `internal/sqlengine` (`docs/engine.md`). For interfaces, the code in `internal/sqlengine` and the `memory` package are the reference, not memory or explanations on the web.
+- The SQL engine is a fork of go-mysql-server v0.20.0 in `internal/sqlengine` (`docs/engine.md`). For interfaces, the code in `internal/sqlengine` and the `memory` package are the reference, not recollection or explanations on the web.
 - When changing the engine, add a short row to the change list in `docs/engine.md` (what was changed where, and why), and write the details and reasons in the "Engine changes" section of that stage's record in `docs/stages/`. Add tests, and put a change marker (`// Modified by Tsukinowa Inc.: ...`) at the top of each file whose contents changed. Record it the same way when bringing in upstream fixes. The character set tables (`sql/encodings`) are read from the original module and not upgraded (collation weights affect the data format).
 - Before changing the key design or encoding, update `docs/plan.md` (or `docs/design.md`) first, then implement. Keep existing data readable ("Data format version" in `docs/plan.md`). When changing it, raise the version and migrate existing data at startup.
 - Write unit tests for encoding, MVCC reads and branch layering. Check ordering properties with property tests.

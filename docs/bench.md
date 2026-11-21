@@ -1,6 +1,6 @@
 # Performance: WordPress on HeimDB and MySQL 8.0
 
-The latest measurements of HeimDB against MySQL 8.0 on the same WordPress and data. Each section names the HeimDB version and date it was measured with; later releases did not change those paths unless noted. The tools are in `scripts/bench/`.
+The latest measurements of HeimDB against MySQL 8.0 on the same WordPress and data. Each section names the HeimDB version and date it was measured with; the values have not been re-measured with later releases. The tools are in `scripts/bench/`.
 
 - [Summary](#summary)
 - [Pages, writes and concurrency](#pages-writes-and-concurrency)
@@ -18,7 +18,7 @@ Speed is not a goal in itself: public pages are expected to be served from a pag
 
 ## Pages, writes and concurrency
 
-Measured 2026-11-19 with HeimDB 0.2.42.
+Measured 2026-11-19 with the build released as HeimDB 0.2.42.
 
 ### Setup
 
@@ -26,7 +26,7 @@ Measured 2026-11-19 with HeimDB 0.2.42.
 - Two WordPress containers (`wordpress:php8.3-apache`, WordPress 7.1.4) that differ only in the database host (`scripts/bench/docker-compose.yml`). No object cache and no page cache.
   - MySQL: Docker `mysql:8.0.46` with the default settings (`innodb_buffer_pool_size` 128 MiB), port forwarded with `-p`.
   - HeimDB: the Linux binary on the host, `-db wpbench`, other flags at their defaults (block cache 128 MiB).
-- Data (`wpbench`): 5,002 posts (bodies about 1.7 KB), 200 pages, 100 categories, 200 tags, 25,006 post meta rows, 20,001 comments (60 on the newest post). It was generated with `scripts/bench/generate.sh` and `data.sql`, and loaded into both servers from the same mysqldump. Each server started with an empty data directory before the load.
+- Data (`wpbench`): 5,002 posts (bodies about 1.7 KB), 200 pages, 100 categories, 200 tags, 25,006 post meta rows, 20,001 comments (60 on the newest post). It is a copy of the data generated with `scripts/bench/generate.sh` and `data.sql`, grown by earlier benchmark runs, and was loaded into both servers from the same mysqldump. Each server started with an empty data directory before the load.
 - DB time and query counts come from `SAVEQUERIES` and a mu-plugin (`scripts/bench/mu-plugins/bench-db-time.php`) that puts them in response headers. `SAVEQUERIES` is on for both, which adds some PHP time.
 - Pages: `scripts/bench/pages.py --newest 5003 --cat 1 --runs 30` (one request at a time, median). Concurrency: `ab -c 10 -t 30`. Writes: `scripts/bench/writes.php` 100 times inside one PHP process (`wp eval-file`), DB time per operation.
 - HeimDB was measured twice, reloading the data each time, and the values are the average. MySQL was measured with every run (6 runs).
@@ -61,7 +61,7 @@ Under `ab -c 10` the pages per second are 86 to 90% of MySQL's, with no failed r
 
 ## Under load
 
-Measured 2026-11-19 with HeimDB 0.2.42; the two-connection case was measured again with 0.2.45, which fixed it (see [Two connections](#two-connections)).
+Measured 2026-11-19 with HeimDB 0.2.42; the two-connection case was measured again when 0.2.45 fixed it (see [Two connections](#two-connections)).
 
 ### Setup
 
@@ -163,7 +163,7 @@ Neither server grows in time or memory over 30 minutes. HeimDB's live heap after
 
 ### Two connections
 
-0.2.42 did not scale from 1 to 2 connections (1.57 times, using only 136% CPU), because the Go runtime ran both connections' goroutines on one thread. 0.2.45 wakes an idle thread when a statement starts while another connection is open. Same setup, 0.2.42-equivalent build ("before") and 0.2.45 ("after"):
+0.2.42 did not scale from 1 to 2 connections (1.57 times, using only 136% CPU), because the Go runtime ran both connections' goroutines on one thread. 0.2.45 wakes an idle thread when a statement starts, no other connection is in a statement, and another connection is open. Same setup, `main` before the fix (0.2.44, "before") and 0.2.45 ("after"):
 
 | Connections | MySQL pages/s | Before | After | MySQL CPU per 1,000 statements | Before | After |
 |---|---|---|---|---|---|---|
@@ -177,7 +177,7 @@ Neither server grows in time or memory over 30 minutes. HeimDB's live heap after
 
 ## Memory
 
-Measured 2026-10-16 and 17 on a GCE n2-standard-4, with HeimDB 0.2.11's code for these paths (not changed since). The table is shaped like `wp_postmeta` (same indexes) with 3.1 million rows and `meta_value` of about 20 bytes. Peak RSS is `VmHWM`, reset with `clear_refs` just before each statement, with a fresh server per statement. "No limit" ran in a 12 GiB cgroup; "limit" ran in a 4 GiB container with `-memory-limit 3276M`.
+Measured 2026-10-16 and 17 on a GCE n2-standard-4, with the builds released as HeimDB 0.2.11; these paths have not been re-measured since. The table is shaped like `wp_postmeta` (same indexes) with 3.1 million rows and `meta_value` of about 20 bytes. Peak RSS is `VmHWM`, reset with `clear_refs` just before each statement, with a fresh server per statement. "No limit" ran in a 12 GiB cgroup; "limit" ran in a 4 GiB container with `-memory-limit 3276M`.
 
 ### Resident memory
 
@@ -186,7 +186,7 @@ Measured 2026-10-16 and 17 on a GCE n2-standard-4, with HeimDB 0.2.11's code for
 | Just after opening | 477 MiB | 200 MiB | 127 MiB |
 | After reading every row (`COUNT(*)`, `LIKE`) | 503 MiB | 195 MiB | 127 MiB |
 
-About 70 MiB of the live heap does not depend on the number of rows (36 MiB of it is the collation weight tables). With 500,000 rows the live heap is 42 MiB after starting and 178 MiB after reading (cache 134 MiB): resident memory barely depends on table size.
+About 70 MiB of the live heap does not depend on the number of rows (36 MiB of it is the collation weight tables). On a local machine with 500,000 rows, the live heap is 42 MiB after starting and 178 MiB after reading (cache 134 MiB): resident memory barely depends on table size.
 
 ### Operations that grow with the rows they touch (peak RSS)
 

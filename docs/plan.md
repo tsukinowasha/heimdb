@@ -183,6 +183,8 @@ The goal of the first demo is "write a post in WordPress, delete it, and read th
 
 The detailed per-stage records (background, method, results, fixes from review, differences only recorded) were kept in the pre-publication history and are not in this repository. From stage 130 on, each stage's record (background, method, results, review fixes, and an "Engine changes" section) is written in English under `docs/stages/`. Code comments that point to stage N in docs/plan.md refer to stage N of this table. The differences from MySQL that each stage only recorded (stages 110 to 120) are collected in [`docs/differences.md`](differences.md).
 
+Commit IDs cited in the documents for stages up to 129 (such as `65d845f`) are from the pre-publication history and are not in this repository's history (it was squashed into one commit when it was published).
+
 | Stage | Summary |
 | --- | --- |
 | 0 | Understand the go-mysql-server interfaces |
@@ -239,17 +241,17 @@ The detailed per-stage records (background, method, results, fixes from review, 
 | 50 | Performance fixes, round 2 (REST API responses, term counts, category list) |
 | 51 | LEFT JOIN in category and tag lists (outer join simplification) |
 | 52 | Make integer type checks cheaper |
-| 53 | Memory of ALTER TABLE on large tables (reported by the hosting side) |
+| 53 | Memory of ALTER TABLE on large tables |
 | 54 | Faster LIKE matching for search |
-| 55 | Do not exhaust memory on large tables (second request from the hosting side) |
+| 55 | Do not exhaust memory on large tables |
 | 56 | Catalog of plugins that work with HeimDB |
 | 57 | Accept ascii columns and quoted engine names, as MySQL does |
-| 58 | Keep the site running at the memory limit (follow-up to the hosting side's request) |
-| 59 | Reduce memory of large writes, merges and restores (the hosting side's second request) |
-| 60 | Tables excluded from merges, and machine-readable merge results (requested by the hosting side) |
+| 58 | Keep the site running at the memory limit |
+| 59 | Reduce memory of large writes, merges and restores |
+| 60 | Tables excluded from merges, and machine-readable merge results |
 | 61 | Separate plugins' `int` AUTO_INCREMENT ranges per branch |
 | 62 | Notify when only one of a pair of tables is restored |
-| 63 | Let branch users call the procedures for their own branch (requested by the hosting side) |
+| 63 | Let branch users call the procedures for their own branch |
 | 64 | Do not treat automatic duplicates with identical contents as conflicts (Issue #5) |
 | 65 | Remove unneeded code and tests outside the engine (A) |
 | 66 | Remove unused tests and tools from the engine fork (C) |
@@ -267,16 +269,16 @@ The detailed per-stage records (background, method, results, fixes from review, 
 | 78 | Performance fixes (per-statement and per-row costs) |
 | 79 | Performance fixes (bad plans for light statements, and per-statement costs) |
 | 80 | Performance fixes (JOINs looked up by constant keys, and the first statement per table after a restart) |
-| 81 | Observing slow statements, and a way to stop statements (requested by the hosting side) |
-| 82 | Find and remove connections stuck while holding the write lock (an outage in the hosting side's production) |
+| 81 | Observing slow statements, and a way to stop statements |
+| 82 | Find and remove connections stuck while holding the write lock (an outage in production) |
 | 83 | meta_query JOIN plans and per-row speed (the headless API) |
 | 84 | REST statements whose plans differ from MySQL (the headless API) |
 | 85 | Match MySQL for string-to-number conversion |
-| 86 | Use equality with expressions between comma-joined tables as join conditions (a cron job in the hosting side's production) |
-| 87 | Open backups in environments with different privileges, and encrypted backups (requested by the hosting side) |
+| 86 | Use equality with expressions between comma-joined tables as join conditions (a cron job in production) |
+| 87 | Open backups in environments with different privileges, and encrypted backups |
 | 88 | Issues found while checking 0.2.28 (`/backups` ownership in the image, log text), and small differences from MySQL (double formatting, DECIMAL range, string-number `IN`) |
 | 89 | Dependencies and the Go version (2 High findings from Docker Scout) |
-| 90 | Connection collation and collation mix errors (reported by the hosting side) |
+| 90 | Connection collation and collation mix errors |
 | 91 | Test suite that checks MySQL compatibility from PHP (wpdb) |
 | 92 | In non-strict writes, adjust values that do not fit the column and store them, as MySQL does |
 | 93 | `SHOW WARNINGS` after a failed statement, handling of values equal under the collation, `sql_mode` default |
@@ -284,7 +286,7 @@ The detailed per-stage records (background, method, results, fixes from review, 
 | 95 | Estimate rows dropped by conditions outside the range (meta_query two_filters) |
 | 96 | Reduce per-row cost (top of the profile measured on GCE) |
 | 97 | Do not fetch rows that `SQL_CALC_FOUND_ROWS` only counts |
-| 98 | Use the index for equality on values just below one that covers over 90% of rows (reported by the hosting side) |
+| 98 | Use the index for equality on values just below one that covers over 90% of rows |
 | 99 | Do not open a row reader for each lookup in a lookup JOIN |
 | 100 | Rewrite the benchmark statements to the form WordPress actually sends, and compare with MySQL again on GCE |
 | 101 | Match MySQL's JOIN order for two meta conditions plus a sort on another key |
