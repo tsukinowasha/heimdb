@@ -29,10 +29,12 @@ dbip() { gcloud compute instances describe $DBI "${P[@]}" --format='get(networkI
 
 case "$1" in
 create)
-	gcloud compute firewall-rules create $TAG-iap-ssh "${G[@]}" --network default --direction INGRESS \
-		--source-ranges 35.235.240.0/20 --allow tcp:22 --target-tags $TAG
-	gcloud compute firewall-rules create $TAG-internal "${G[@]}" --network default --direction INGRESS \
-		--source-tags $TAG --allow tcp:22,tcp:3307,tcp:3316 --target-tags $TAG
+	gcloud compute firewall-rules describe $TAG-iap-ssh "${G[@]}" >/dev/null 2>&1 ||
+		gcloud compute firewall-rules create $TAG-iap-ssh "${G[@]}" --network default --direction INGRESS \
+			--source-ranges 35.235.240.0/20 --allow tcp:22 --target-tags $TAG
+	gcloud compute firewall-rules describe $TAG-internal "${G[@]}" >/dev/null 2>&1 ||
+		gcloud compute firewall-rules create $TAG-internal "${G[@]}" --network default --direction INGRESS \
+			--source-tags $TAG --allow tcp:22,tcp:3307,tcp:3316 --target-tags $TAG
 	# The database instance has a second disk for the backups that go to another filesystem (run.sh K).
 	gcloud compute instances create $DBI "${P[@]}" --machine-type n2-standard-4 --image-family debian-12 \
 		--image-project debian-cloud --boot-disk-size 50GB --boot-disk-type pd-balanced --tags $TAG \
@@ -73,8 +75,8 @@ fetch)
 	(cd "$2" && tar xzf res-db.tgz && tar xzf res-load.tgz)
 	;;
 delete)
-	gcloud compute instances delete $DBI $LDI "${P[@]}" --quiet
-	gcloud compute firewall-rules delete $TAG-iap-ssh $TAG-internal "${G[@]}" --quiet
+	gcloud compute instances delete $DBI $LDI "${P[@]}" --quiet || true
+	gcloud compute firewall-rules delete $TAG-iap-ssh $TAG-internal "${G[@]}" --quiet || true
 	gcloud compute firewall-rules list "${G[@]}" --filter "name~^$TAG"
 	gcloud compute instances list --project "$GCE_PROJECT"
 	gcloud compute disks list --project "$GCE_PROJECT"

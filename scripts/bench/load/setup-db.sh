@@ -15,7 +15,7 @@ sudo docker pull wordpress:cli
 chmod +x heimdb dbctl.sh sample.py
 # The second disk (gce.sh create) holds the backups that go to another filesystem.
 if [ -e /dev/disk/by-id/google-bk ] && ! mountpoint -q /mnt/bk; then
-	sudo mkfs.ext4 -q -F /dev/disk/by-id/google-bk
+	sudo blkid /dev/disk/by-id/google-bk >/dev/null || sudo mkfs.ext4 -q -F /dev/disk/by-id/google-bk
 	sudo mkdir -p /mnt/bk
 	sudo mount /dev/disk/by-id/google-bk /mnt/bk
 	sudo chown "$USER" /mnt/bk

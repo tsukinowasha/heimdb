@@ -41,7 +41,7 @@ func main() {
 	interval := flag.Duration("interval", 10*time.Second, "length of the intervals in the series (0: none)")
 	stmtTimeout := flag.Duration("stmt-timeout", 60*time.Second, "time limit of one statement (0: none); a statement over it closes its connection")
 	dialTimeout := flag.Duration("dial-timeout", 10*time.Second, "time limit of connecting and the session statements")
-	side := flag.String("side", "", "statement run on its own connection during the measured window, such as 'CALL heimdb_backup()'")
+	side := flag.String("side", "", "statement run on its own connection during the measured window, such as 'CALL heimdb_backup()' (the run waits for one that started before the end)")
 	sideFirst := flag.Duration("side-first", 10*time.Second, "first run of -side, from the start of the measured window")
 	sideEvery := flag.Duration("side-every", 0, "time between runs of -side (0: once)")
 	label := flag.String("label", "", "label copied to the result")

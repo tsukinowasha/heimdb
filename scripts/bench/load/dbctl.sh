@@ -68,7 +68,7 @@ start-heimdb)
 	stop_all
 	rm -rf $B/hdata $B/bk /mnt/bk/bk
 	if [ -n "${SEED:-}" ]; then
-		cp -a $B/seed-$SEED $B/hdata
+		cp -a $B/seed-$SEED $B/hdata || { echo "no seed $SEED"; exit 1; }
 	else
 		mkdir -p $B/hdata
 	fi
@@ -98,7 +98,7 @@ make-seed)
 		client -P3316 -uroot -prootpw wpbench -e 'CREATE TABLE wp_ballast (id bigint unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY, body longtext NOT NULL)'
 		while [ "$(du -sm $B/hdata | cut -f1)" -lt "$MB" ]; do
 			for _ in $(seq 10); do
-				client -P3316 -uroot -prootpw wpbench -e 'INSERT INTO wp_ballast (body) SELECT post_content FROM wp_posts'
+				client -P3316 -uroot -prootpw wpbench -e 'INSERT INTO wp_ballast (body) SELECT post_content FROM wp_posts' || exit 1
 			done
 		done
 		client -P3316 -uroot -prootpw -N -e 'SELECT COUNT(*) FROM wpbench.wp_ballast'

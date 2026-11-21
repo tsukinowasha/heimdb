@@ -6,7 +6,7 @@ import (
 )
 
 // A side statement (-side) runs on its own connection at fixed times during the measured window, for example
-// CALL heimdb_backup() every 20 seconds (docs/bench.md, "During a backup"). The result lists each run, and splits
+// CALL heimdb_backup() every 30 seconds (docs/bench.md, "During a backup"). The result lists each run, and splits
 // the page times into the pages whose time overlapped a run and the others.
 
 // SideRun is one run of the side statement.
@@ -18,7 +18,7 @@ type SideRun struct {
 }
 
 // runSide runs cfg.Side at mStart+SideFirst, then every SideEvery, until tEnd. A run that has not finished by
-// the next time delays the next run (runs never overlap).
+// the next time delays the next run (runs never overlap). A run that starts before tEnd is waited for, even past it.
 func runSide(ctx context.Context, w *Workload, dial Dialer, cfg Config, mStart, tEnd time.Time) []SideRun {
 	var runs []SideRun
 	var c Conn
@@ -32,13 +32,13 @@ func runSide(ctx context.Context, w *Workload, dial Dialer, cfg Config, mStart, 
 		if !at.Before(tEnd) || !sleepUntil(ctx, at) {
 			return runs
 		}
-		start := time.Now()
-		if !start.Before(tEnd) {
-			return runs
-		}
 		var err error
 		if c == nil {
 			c, err = dialSession(ctx, w, dial, cfg)
+		}
+		start := time.Now()
+		if !start.Before(tEnd) {
+			return runs
 		}
 		if err == nil {
 			_, _, err = c.Run(ctx, cfg.Side, true, 0)
