@@ -1,17 +1,18 @@
 # HeimDB
 
-WordPress 専用のブランチ型 DB。計画と背景は `docs/plan.md` を参照。
+A branching database built only for WordPress. The plan and background are in `docs/plan.md`.
 
-## 作業ルール
+## Working rules
 
-- 開発ステップの段階を 1 つずつ進める。完了条件を満たすまで次の段階に手を付けない。各段階の始めに計画を提示し、承認を得てから実装する。
-- SQL エンジンは go-mysql-server v0.20.0 を `internal/sqlengine` にフォークしたもの（`docs/engine.md`）。インターフェースは記憶やネット上の解説ではなく、`internal/sqlengine` のコードと `memory` パッケージを正とする。
-- エンジンを変えるときは、`docs/engine.md` の変更の一覧に短い行（変えた所と何を変えたか、理由）を足し、詳しい変更と理由はその段階の `docs/stages/` のファイルの「エンジンの変更」に書く。テストを足し、中身を変えたファイルの頭に変更の印（`// Modified by Tsukinowa Inc.: ...`）を付ける。上流の修正を取り込むときも記録する。文字コードの表（`sql/encodings`）は元のモジュールから読み、上げない（照合順序の重みがデータ形式に響く）。
-- キー設計と符号化を変える場合は、先に `docs/plan.md`（または `docs/design.md`）を更新してから実装する。既存のデータは読めるようにする（`docs/plan.md` の「データ形式のバージョン」）。変えるときはバージョンを上げ、既存のデータを起動時に移す処理を入れる。
-- 符号化、MVCC の読み出し、ブランチの重ね合わせには単体テストを書く。順序の性質はプロパティテストで確かめる。
-- WordPress の互換性は `docs/plan.md` の「検証方法」の手順で、必ずベースラインと比較して判断する。失敗の原因は推測で直さず、ログのクエリで再現してから直す。
-- 仕様上は不定でも MySQL が実際にどう振る舞うかを優先して合わせる（例: 同順位の並び順）。合わせるときは、本物の MySQL で `EXPLAIN` などを使って根拠を確認する。
-- WordPress 専用として割り切ってよい。WordPress が発行しない SQL は、明示的なエラーを返す形で非対応にする。接続を切ったり panic したりしてはいけない。
-- 段階の中で直すのは、その段階の変更による回帰と、前からの違いのうち WordPress 本体か WooCommerce の経路で結果が誤るものだけにする。ほかは `docs/differences.md` に記録し、次の段階の候補にする。1 段階は 4〜5 コミット、レビューは 2 回までにする。
-- 各段階の終わりに、完了条件の確認結果（テスト件数とベースラインとの差）を報告する。
-- 製品名は `HeimDB` と書く（文書、コメント、ログ、エラーの先頭の `HeimDB: `）。コードとして打つ名前や参照される名前は小文字の `heimdb` のまま（コマンド名、モジュールのパス、`heimdb_*` の手続き、環境変数 `HEIMDB_*`、ファイルのパス）。
+- Work through the development stages one at a time. Do not start the next stage until its completion criteria are met. At the start of each stage, present a plan and get approval before implementing.
+- The SQL engine is a fork of go-mysql-server v0.20.0 in `internal/sqlengine` (`docs/engine.md`). For interfaces, the code in `internal/sqlengine` and the `memory` package are the reference, not memory or explanations on the web.
+- When changing the engine, add a short row to the change list in `docs/engine.md` (what was changed where, and why), and write the details and reasons in the "Engine changes" section of that stage's record in `docs/stages/`. Add tests, and put a change marker (`// Modified by Tsukinowa Inc.: ...`) at the top of each file whose contents changed. Record it the same way when bringing in upstream fixes. The character set tables (`sql/encodings`) are read from the original module and not upgraded (collation weights affect the data format).
+- Before changing the key design or encoding, update `docs/plan.md` (or `docs/design.md`) first, then implement. Keep existing data readable ("Data format version" in `docs/plan.md`). When changing it, raise the version and migrate existing data at startup.
+- Write unit tests for encoding, MVCC reads and branch layering. Check ordering properties with property tests.
+- Judge WordPress compatibility with the procedure in "Validation method" in `docs/plan.md`, always comparing against the baseline. Do not fix failures by guessing; reproduce them with the queries from the log first, then fix.
+- Even where the spec leaves behavior undefined, match what MySQL actually does (for example, the order of ties). When matching, confirm the basis on real MySQL with `EXPLAIN` and similar.
+- It is fine to be WordPress-only. SQL that WordPress does not send is unsupported, by returning an explicit error. Never drop the connection or panic.
+- Within a stage, fix only regressions caused by that stage's changes and existing differences that give wrong results on the paths of WordPress core or WooCommerce. Record the others in `docs/differences.md` as candidates for later stages. A stage is 4 to 5 commits, with at most 2 reviews.
+- At the end of each stage, report the results of checking the completion criteria (test counts and the difference from the baseline).
+- Write the documents, the stage records and commit messages in English. Only `README.ja.md` is in Japanese; keep it in step with `README.md`.
+- Write the product name as `HeimDB` (in documents, comments, logs, and the `HeimDB: ` prefix of errors). Names typed or referenced as code stay lowercase `heimdb` (the command name, module path, `heimdb_*` procedures, `HEIMDB_*` environment variables, file paths).

@@ -4,43 +4,32 @@ English | [日本語](README.ja.md)
 
 A database for WordPress with branches and time travel. It speaks the MySQL protocol, and WordPress, wp-cli and mysqldump see it as MySQL 8.0, so you only change the database host.
 
-- **Time travel**: read the data as of any past time, and restore a site to that time (a restore can be undone too).
-- **Branches**: create a staging copy of production instantly without copying data, review the diff, and merge it back. Comments that arrived on production in the meantime are kept.
+- **Time travel**: read the data as of any past time with `AS OF`, and restore a site to that time (a restore can be undone too).
+- **Branches**: create a staging copy of production instantly without copying data, review the diff, and merge it back. The merge knows WordPress's tables: comments and users that arrived on production in the meantime are kept, and the site URL is not overwritten.
+- **Drop-in for MySQL**: WordPress, wp-cli and mysqldump connect as to MySQL 8.0. Move a site in with mysqldump and the `mysql` command, and back out to MySQL the same way.
+- **One site per process**: a process serves one WordPress database (`-db`) and its branches (`wordpress@staging`), with its own data directory. Run one process per site.
+- **Memory limit**: `-memory-limit` (by default 80% of the container's limit) caps the process. A statement that would pass it stops with error 1041 and its transaction is rolled back; the process keeps running.
+- **Managed with SQL**: branches, merges, restores, backups and status are `CALL heimdb_*` procedures, usable from any MySQL client.
+- **Prometheus metrics**: statement counts and times, connections, memory, disk, GC and replication at `/metrics`.
+- **Online and encrypted backups**: a consistent backup of all branches and the history while running, optionally encrypted with [age](https://age-encryption.org/).
+- **Replicas**: read-only replicas that apply production's commits, synchronous by default (like MySQL's semi-synchronous replication), with manual promotion.
+- **Change watch**: logs a warning when rows that change in a site takeover change (a new administrator, `siteurl`, `default_role`, activated plugins, ...). Find the time and restore to just before it.
+- **TLS and slow query log**: TLS for client connections and replication, and a slow query log that can be switched on while running.
+- **Single binary**: a static Go binary with no cgo, and a Docker image for linux/amd64 and linux/arm64.
 
-> **Development preview.** The data format is version 8 since 0.2.41. Data written by older versions (formats 1 to 7) is converted when HeimDB starts; if a future version changes the format, that version converts the data when it starts. Older versions cannot open upgraded data. When a release changes the format that way, its minor version goes up (0.3.x to 0.4.0); other releases raise the patch version. Take backups and pin a version (see "HeimDB のバージョンを上げる" in [`docs/operations.md`](docs/operations.md)). Differences from MySQL are in [`docs/differences.md`](docs/differences.md), the plan and history in [`docs/plan.md`](docs/plan.md).
+> **Development preview.** The data format is version 8 since 0.2.41. Data written by older versions (formats 1 to 7) is converted when HeimDB starts; if a future version changes the format, that version converts the data when it starts. Older versions cannot open upgraded data. When a release changes the format that way, its minor version goes up (0.3.x to 0.4.0); other releases raise the patch version. Take backups and pin a version (see "Upgrading HeimDB" in [`docs/operations.md`](docs/operations.md)). Differences from MySQL are in [`docs/differences.md`](docs/differences.md), the plan and history in [`docs/plan.md`](docs/plan.md).
 
 HeimDB is built only for WordPress. Views, triggers, stored procedures, full-text search and character sets other than utf8mb4 are not supported and return explicit errors.
 
-Most documents under `docs/` are in Japanese. This README, [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md) and the [Docker Hub page](https://hub.docker.com/r/tsukinowa/heimdb) are in English.
-
 ## Performance
 
-Compared with MySQL 8.0 on the same WordPress and data (5,202 posts, 20,000 comments, no object cache), 2026-11-19, HeimDB 0.2.42. One GCE n2-standard-4 (Tokyo, pd-balanced); MySQL with Docker's default settings. Method and all values: [`docs/bench.md`](docs/bench.md).
+On the same WordPress and data (5,202 posts, 20,000 comments, no object cache) on a GCE n2-standard-4, compared with MySQL 8.0 with Docker's default settings:
 
-| Page (median) | HeimDB total | MySQL total | HeimDB DB time | MySQL DB time |
-|---|---|---|---|---|
-| Front page | 114 ms | 97 ms | 30 ms | 15 ms |
-| Single post (60 comments) | 196 ms | 175 ms | 37 ms | 19 ms |
-| Category, page 2 (5,001 posts) | 130 ms | 103 ms | 46 ms | 21 ms |
-| Search | 145 ms | 189 ms | 56 ms | 103 ms |
-| REST API (100 posts) | 330 ms | 276 ms | 102 ms | 59 ms |
-| Admin dashboard | 126 ms | 100 ms | 68 ms | 44 ms |
-| Posts list (admin) | 156 ms | 131 ms | 73 ms | 50 ms |
+- A page's DB time is 1.5 to 2.1 times MySQL's, and the whole page 1.1 to 1.3 times (search is faster than MySQL). Adding a comment and updating an option are faster than MySQL.
+- Under load, the maximum rate is 88% of MySQL's, with no errors or disconnects past the maximum or with 500 connections.
+- Resident memory is about 500 MiB, almost independent of table size.
 
-| Writes (DB time per operation) and concurrency | HeimDB | MySQL |
-|---|---|---|
-| Create a post | 64 ms | 63 ms |
-| Add a comment | 3.3 ms | 6.5 ms |
-| Update an option | 1.3 ms | 3.1 ms |
-| Delete a post | 43 ms | 46 ms |
-| Front page (10 in parallel) | 22.4 /s | 26.0 /s |
-| Single post (10 in parallel) | 12.3 /s | 13.7 /s |
-
-The pages' DB time is 1.5 to 2.1 times MySQL's, and the whole page 1.1 to 1.3 times (search is faster than MySQL). Speed is not a goal: public pages are expected to be served from a page cache.
-
-Under load (DB and load generator on separate n2-standard-4 instances, the statements of 7 pages from many connections, HeimDB 0.2.42), HeimDB's maximum rate with all 4 vCPUs busy is 88% of MySQL's (57.5 and 65.5 pages a second), and its CPU at the same rate is 1.4 times MySQL's. Beyond the maximum, and with 500 connections, there were no errors or disconnects, and a 30-minute run did not grow in time or memory (RSS about 260 MB, less than half of MySQL's). Details: "段階 126" in [`docs/bench.md`](docs/bench.md).
-
-Resident memory is about 500 MiB, almost independent of table size (measured with 3.1 million rows shaped like `wp_postmeta`). Large writes, merges and restores use memory in proportion to the rows they touch, and stop with error 1041 near `-memory-limit`. Guidance per operation: "メモリの目安" under "運用の注意" in [`docs/operations.md`](docs/operations.md).
+Speed is not a goal: public pages are expected to be served from a page cache. Setup, all values and how to measure: [`docs/bench.md`](docs/bench.md).
 
 ## Build and run
 
@@ -162,7 +151,7 @@ CALL heimdb_rebuild_indexes();          -- give entries to indexes on DECIMAL, S
 
 A backup contains all branches, the history within the retention period, and users and privileges. Starting HeimDB with the backup directory as `-data` brings everything back to that time.
 
-With `-metrics-addr 127.0.0.1:9104`, the same values plus statement counts and times are served in Prometheus format at `/metrics` (for New Relic, Grafana and others). It has no authentication, so do not expose it. Metrics and configuration examples: "指標" in [`docs/operations.md`](docs/operations.md).
+With `-metrics-addr 127.0.0.1:9104`, the same values plus statement counts and times are served in Prometheus format at `/metrics` (for New Relic, Grafana and others). It has no authentication, so do not expose it. Metrics and configuration examples: "Metrics (Prometheus)" in [`docs/operations.md`](docs/operations.md).
 
 Read-only replicas, and promoting one when production fails: [`docs/operations.md`](docs/operations.md).
 
@@ -180,7 +169,7 @@ go test ./internal/backend -run '^$' -fuzz '^FuzzQuery$' -fuzztime 1h -parallel 
 - [`docs/procedures.md`](docs/procedures.md): the `heimdb_*` procedures
 - [`docs/operations.md`](docs/operations.md): flags, Docker, memory, upgrading, replicas, TLS
 - [`docs/plugins.md`](docs/plugins.md): which plugins work with HeimDB and how that is judged (research notes in [`docs/plugins-research.md`](docs/plugins-research.md))
-- [`docs/plan.md`](docs/plan.md): plan, key design, each development stage and its results, how compatibility is verified (comparing WordPress's PHPUnit results with a MySQL baseline)
+- [`docs/plan.md`](docs/plan.md): plan, key design, a summary of each development stage, how compatibility is verified (comparing WordPress's PHPUnit results with a MySQL baseline)
 - [`docs/bench.md`](docs/bench.md): performance and memory compared with MySQL
 - [`docs/engine.md`](docs/engine.md): where the SQL engine (`internal/sqlengine`, a fork of go-mysql-server v0.20.0) comes from and what was changed
 - [`compat/README.md`](compat/README.md): a MySQL compatibility suite run through WordPress's connection (wpdb), compared with recorded results from real MySQL in seconds
