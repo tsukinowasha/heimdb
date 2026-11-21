@@ -483,3 +483,55 @@ func TestCloseRollsBackOpenTransactions(t *testing.T) {
 		t.Errorf("committed row a after reopening: %v %v", ok, err)
 	}
 }
+
+// 読みだけのコミットは、保存していない AUTO_INCREMENT の値があっても、書き込みのロックを待たない（docs/stages/131.md）。
+// 値は、ロックを放した後の次のコミットで保存する。
+func TestReadOnlyCommitDoesNotWaitForAutoIncrement(t *testing.T) {
+	s, dir := openTemp(t)
+	c, err := s.AutoIncrement(MainBranchID, tbl, 1, math.MaxUint64, func() (uint64, error) { return 1, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := c.Next(); v != 1 {
+		t.Fatalf("Next = %d", v)
+	}
+	s.writeMu.Lock() // バックアップがロックを持つ間の代わり
+	done := make(chan error, 1)
+	go func() { done <- s.Begin().Commit() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("read-only Commit: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		s.writeMu.Unlock()
+		t.Fatal("read-only Commit waited for the write lock")
+	}
+	s.writeMu.Unlock()
+	if !s.autoIncrementsDirty() {
+		t.Error("the counter was marked saved without a commit")
+	}
+
+	// ロックが空いていれば、読みだけのコミットが保存する。
+	if err := s.Begin().Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if s.autoIncrementsDirty() {
+		t.Error("the counter is still unsaved after a read-only commit with the lock free")
+	}
+	if v, err := s.getUint64(autoIncKey(MainBranchID, tbl)); err != nil || v != 2 {
+		t.Errorf("saved counter = %d, %v; want 2", v, err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err = Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	c, _ = s.AutoIncrement(MainBranchID, tbl, 1, math.MaxUint64, func() (uint64, error) { return 1, nil })
+	if v := c.Peek(); v != 2 {
+		t.Errorf("Peek after reopen = %d, want 2", v)
+	}
+}

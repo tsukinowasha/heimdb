@@ -505,7 +505,7 @@ func (tx *Txn) Commit() error {
 	}
 	defer tx.close()
 	if tx.count() == 0 {
-		return tx.s.flushAutoIncrements()
+		return tx.s.tryFlushAutoIncrements() // 読みだけのコミットは、書き込みのロックを待たない
 	}
 	// 書き込みを順に読み、仮の時刻のキーをコミット時刻に付け直してコミットのバッチに写す。コミットのバッチは要る大きさで
 	// 確保し、キーと値は直接書き込む（倍々に伸ばしたり、キーを 1 件ずつ作ったりしない。docs/plan.md の段階 59）。

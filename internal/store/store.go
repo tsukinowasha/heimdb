@@ -444,7 +444,12 @@ func (s *Store) updateWaits(size int, waits *Waits, fn func(tx *WriteTx) error) 
 	}
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
+	return s.commitLocked(presized, waits, fn)
+}
 
+// commitLocked は、書き込みのロックを持った状態で fn を 1 つのバッチでコミットする（updateWaits の後半）。presized は
+// コミットのバッチを確保する大きさ（0 なら既定）。
+func (s *Store) commitLocked(presized int, waits *Waits, fn func(tx *WriteTx) error) error {
 	ts := max(uint64(s.now().UnixMicro()), s.lastTS+1)
 	var batch *pebble.Batch
 	if presized > 0 {

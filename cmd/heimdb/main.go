@@ -71,7 +71,7 @@ func main() {
 	rootPassword := flag.String("root-password", "", "password of root@'%', created on the first start (or set HEIMDB_ROOT_PASSWORD)")
 	siteUser := flag.String("site-user", "wordpress", "user for WordPress, created with privileges on the -db database only when -site-password is set and it does not exist yet")
 	sitePassword := flag.String("site-password", "", "password of the -site-user (or set HEIMDB_SITE_PASSWORD)")
-	backupDir := flag.String("backup-dir", "", "directory where CALL heimdb_backup() writes backups (disabled if empty); put it on the same filesystem as -data, as all writes pause while a backup is taken")
+	backupDir := flag.String("backup-dir", "", "directory where CALL heimdb_backup() writes backups (disabled if empty); put it inside -data (e.g. <data>/backups) or on the same mount point, as all writes pause while a backup is taken and elsewhere every file is copied")
 	shutdownTimeout := flag.Duration("shutdown-timeout", 30*time.Second, "how long to wait for running statements on SIGTERM before exiting without closing the store")
 	slowQuery := flag.Duration("slow-query", 0, "log statements that take longer than this (0 disables; change it without a restart with SET GLOBAL long_query_time and slow_query_log)")
 	slowQueryRedact := flag.Bool("slow-query-redact", false, "replace the values in logged slow statements with ?")
@@ -244,14 +244,13 @@ func main() {
 	}
 	pro.BranchProcedures = *branchProcs
 	if *backupDir != "" {
-		// 結果のパスを接続元でも意味のあるものにする。-data と同じ場所に置くと、バックアップの名前によっては Pebble が
-		// 自分のファイルと読み違えるので拒否する。
+		// 結果のパスを接続元でも意味のあるものにする。
 		abs, err := filepath.Abs(*backupDir)
 		if err != nil {
 			logrus.Fatalf("backup dir: %v", err)
 		}
-		if data, err := filepath.Abs(*dataDir); err == nil && filepath.Clean(data) == filepath.Clean(abs) {
-			logrus.Fatalf("-backup-dir must differ from -data")
+		if err := checkBackupDir(*dataDir, abs); err != nil {
+			logrus.Fatal(err)
 		}
 		pro.BackupDir = abs
 		pro.CleanBackupDir()
@@ -487,6 +486,45 @@ func certNames(c *x509.Certificate) string {
 }
 
 // isFlagSet は、コマンドラインでフラグ name を指定したかを返す。
+// checkBackupDir は、-backup-dir の場所を確かめる。-data そのものは、バックアップの名前によっては Pebble が自分の
+// ファイルと読み違えるので拒否する。-data の中のディレクトリ（Docker で 1 つのボリュームに置き、ハードリンクで済ませる
+// ため。docs/stages/131.md）は、-data の直下の名前が Pebble のファイルの名前になりえないときだけ許す。Pebble は、
+// 読めない名前のものを開くときも消すときも飛ばす（pebble の base.ParseFilename）。
+func checkBackupDir(dataDir, backupDir string) error {
+	data, err := filepath.Abs(dataDir)
+	if err != nil {
+		return fmt.Errorf("-data: %w", err)
+	}
+	// シンボリックリンクを解いてから比べる（あるものだけ。バックアップの場所は初めてのバックアップで作る）。
+	data, backupDir = resolveExisting(data), resolveExisting(backupDir)
+	rel, err := filepath.Rel(data, backupDir)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return nil // -data の外
+	}
+	if rel == "." {
+		return errors.New("-backup-dir must differ from -data")
+	}
+	top, _, _ := strings.Cut(rel, string(filepath.Separator))
+	if strings.Contains(top, ".") || top == "LOCK" || top == "CURRENT" || strings.HasPrefix(top, "MANIFEST-") || strings.HasPrefix(top, "OPTIONS-") {
+		return fmt.Errorf("-backup-dir inside -data must be under a directory whose name has no '.' and is not a store file name (got %q)", top)
+	}
+	return nil
+}
+
+// resolveExisting は、p のうち、あるところまでのシンボリックリンクを解いたパスを返す（まだない後ろの部分はそのまま）。
+func resolveExisting(p string) string {
+	rest := ""
+	for q := p; ; q = filepath.Dir(q) {
+		if r, err := filepath.EvalSymlinks(q); err == nil {
+			return filepath.Join(r, rest)
+		}
+		if filepath.Dir(q) == q {
+			return p
+		}
+		rest = filepath.Join(filepath.Base(q), rest)
+	}
+}
+
 func isFlagSet(name string) bool {
 	set := false
 	flag.Visit(func(f *flag.Flag) { set = set || f.Name == name })

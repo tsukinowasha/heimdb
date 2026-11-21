@@ -136,19 +136,37 @@ func markAutoIncrementsSaved(saved []savedAutoIncrement) {
 func (s *Store) FlushAutoIncrements() error { return s.flushAutoIncrements() }
 
 func (s *Store) flushAutoIncrements() error {
-	if s.replica {
+	if s.replica || !s.autoIncrementsDirty() {
 		return nil // レプリカでは書けない（払い出した値は、どの行にも使われていない）
 	}
-	s.aiMu.Lock()
-	dirty := false
-	for _, c := range s.autoIncs {
-		c.mu.Lock()
-		dirty = dirty || c.dirty
-		c.mu.Unlock()
-	}
-	s.aiMu.Unlock()
-	if !dirty {
+	return s.Update(func(*WriteTx) error { return nil })
+}
+
+// tryFlushAutoIncrements は flushAutoIncrements と同じだが、書き込みのロックが持たれていれば待たずに何もしない
+// （書き込みのないコミットから呼ぶ。docs/stages/131.md）。ロックを持つコミット、またはその後のコミットが
+// writeDirtyAutoIncrements で保存する。保存の前に落ちても、カウンタは行の最大値 + 1 から始まる。
+func (s *Store) tryFlushAutoIncrements() error {
+	if s.replica || !s.autoIncrementsDirty() {
 		return nil
 	}
-	return s.Update(func(*WriteTx) error { return nil })
+	if !s.writeMu.TryLock() {
+		return nil
+	}
+	defer s.writeMu.Unlock()
+	return s.commitLocked(0, nil, func(*WriteTx) error { return nil })
+}
+
+// autoIncrementsDirty は、保存していないカウンタがあるかを返す。
+func (s *Store) autoIncrementsDirty() bool {
+	s.aiMu.Lock()
+	defer s.aiMu.Unlock()
+	for _, c := range s.autoIncs {
+		c.mu.Lock()
+		dirty := c.dirty
+		c.mu.Unlock()
+		if dirty {
+			return true
+		}
+	}
+	return false
 }

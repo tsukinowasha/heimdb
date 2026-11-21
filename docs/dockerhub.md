@@ -328,9 +328,9 @@ level=warning msg="HeimDB: watch: wordpress@172.18.0.4 on wordpress: administrat
 Arguments after the image name are passed to HeimDB:
 
 ```sh
-docker run -d -p 3306:3306 -v heimdb-data:/data -v heimdb-backups:/backups \
-  -e HEIMDB_ROOT_PASSWORD='secret' tsukinowa/heimdb:0.3.0 \
-  -backup-dir /backups -slow-query 1s
+docker run -d -p 3306:3306 -v heimdb-data:/data \
+  -e HEIMDB_ROOT_PASSWORD='secret' tsukinowa/heimdb:0.3.1 \
+  -backup-dir /data/backups -slow-query 1s
 ```
 
 | Flag | Default | Meaning |
@@ -339,7 +339,7 @@ docker run -d -p 3306:3306 -v heimdb-data:/data -v heimdb-backups:/backups \
 | `-site-user` | `wordpress` | Name of the WordPress user created with `HEIMDB_SITE_PASSWORD` |
 | `-retention` | `720h` | How long old versions are kept for `AS OF` and restore (0 keeps all) |
 | `-gc-interval` | `1h` | How often old versions are removed |
-| `-backup-dir` | | Where `CALL heimdb_backup()` writes (disabled if empty) |
+| `-backup-dir` | | Where `CALL heimdb_backup()` writes (disabled if empty). Use a directory inside `/data`, such as `/data/backups` (since 0.3.1): a backup then hard-links the data files and takes milliseconds, while on another volume it copies every file and all writes wait meanwhile |
 | `-backup-key` | | `name=path`: `CALL heimdb_backup('<backup>', '<name>')` writes one file `<backup>.tar.gz.age` encrypted to the [age](https://age-encryption.org/) recipients (`age1...`, one per line) in the file at `path`, read at every backup; the recipients are logged, with a warning when the file changed. Repeat for more keys. Since 0.2.28 |
 | `-reset-passwords` | `false` | At startup, set the passwords of `root@'%'` and of an existing `-site-user` to `HEIMDB_ROOT_PASSWORD` and `HEIMDB_SITE_PASSWORD`, keeping the other users (for a store restored from a backup). Since 0.2.28 |
 | `-reset-users` | `false` | At startup, drop every user but `root@'%'` (and the `-site-user`, given `HEIMDB_SITE_PASSWORD`, which keeps its privileges), and set their passwords; missing ones are created. Since 0.2.28 |
