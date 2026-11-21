@@ -1,6 +1,6 @@
 # HeimDB のイメージ（docs/operations.md の「Docker」）。
 #
-#   docker buildx build --platform linux/amd64,linux/arm64 --build-arg VERSION=0.3.0 -t tsukinowa/heimdb:0.3.0 .
+#   docker buildx build --platform linux/amd64,linux/arm64 --build-arg VERSION=0.3.1 -t tsukinowa/heimdb:0.3.1 .
 #
 # ビルドはビルドするマシンのアーキテクチャで行い、GOARCH で目的のアーキテクチャのバイナリを作る（cgo を使わないので
 # エミュレーションは要らない）。依存のライセンスの表示を /licenses に入れる（バイナリを配るので）。
