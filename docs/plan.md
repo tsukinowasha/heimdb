@@ -318,6 +318,7 @@ Commit IDs cited in the documents for stages up to 129 (such as `65d845f`) are f
 | 127 | Scan released artifacts for vulnerabilities in CI on a schedule (toolchain version, published image, advisories for the 2 forked modules) |
 | 128 | Throughput not scaling with 2 connections (wake a sleeping Go thread when a statement starts, and keep a network poller) |
 | 129 | Preparing for publication (removing internal names, English README, contribution and vulnerability reporting channels) |
+| 130 | Measuring the effect of a backup on running queries (reads wait too when the backup copies files; recorded) |
 
 In stages 2 and 3, without indexes, every lookup is a full scan; this is acceptable at test data sizes. Character-set failures in the wpdb group get lower priority; only the dropped-connection problem is fixed, by returning an error for unsupported character sets.
 

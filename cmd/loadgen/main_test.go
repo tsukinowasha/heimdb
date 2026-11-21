@@ -152,6 +152,9 @@ type fakeServer struct {
 	inflight atomic.Int64
 	maxIn    atomic.Int64
 	tagExist bool
+	pauseOn  string // a statement containing this holds every other statement back for pauseFor
+	pauseFor time.Duration
+	pause    sync.RWMutex
 }
 
 func newFake(delay time.Duration) *fakeServer {
@@ -174,6 +177,14 @@ func (c *fakeConn) Run(ctx context.Context, q string, query bool, nsave int) (in
 			break
 		}
 	}
+	if c.f.pauseOn != "" && strings.Contains(q, c.f.pauseOn) {
+		c.f.pause.Lock()
+		time.Sleep(c.f.pauseFor)
+		c.f.pause.Unlock()
+		return 0, nil, nil
+	}
+	c.f.pause.RLock()
+	defer c.f.pause.RUnlock()
 	if c.f.delay > 0 {
 		select {
 		case <-time.After(c.f.delay):
@@ -312,6 +323,38 @@ func TestErrors(t *testing.T) {
 	}
 	if res.Errors["1205"] > res.Pages/2+1 {
 		t.Fatalf("1205 counted %d for %d pages", res.Errors["1205"], res.Pages)
+	}
+}
+
+func TestSide(t *testing.T) {
+	w, _ := ParseWorkload([]byte(`["SELECT 1"]`))
+	f := newFake(time.Millisecond)
+	f.pauseOn, f.pauseFor = "CALL", 100*time.Millisecond
+	cfg := Config{Conns: 4, Rate: 400, Warmup: 50 * time.Millisecond, Duration: time.Second, Seed: 1, DialTimeout: time.Second,
+		Side: "CALL heimdb_backup()", SideFirst: 200 * time.Millisecond, SideEvery: 400 * time.Millisecond}
+	res, err := Run(context.Background(), w, f.dial, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Runs at 0.2 s and 0.6 s; the one at 1.0 s is at the end of the window.
+	if len(res.Side) != 2 {
+		t.Fatalf("side runs %+v", res.Side)
+	}
+	for i, r := range res.Side {
+		if r.Error != "" || r.Ms < 100 || r.StartS < 0.2+0.4*float64(i) || r.StartS > 0.25+0.4*float64(i) {
+			t.Fatalf("side run %d %+v", i, r)
+		}
+	}
+	d, o := res.DuringSide["all"], res.OutsideSide["all"]
+	if d.Count+o.Count != res.Pages || d.Count == 0 || o.Count == 0 {
+		t.Fatalf("split during %d outside %d pages %d", d.Count, o.Count, res.Pages)
+	}
+	// The pages held back by a run wait up to its 100 ms; the others take about 1 ms.
+	if d.Max < 80 || o.P50 > 10 {
+		t.Fatalf("during %+v outside %+v", d, o)
+	}
+	if _, ok := res.DuringSide["write"]; ok {
+		t.Fatalf("write pages in a read-only run: %+v", res.DuringSide)
 	}
 }
 

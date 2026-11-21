@@ -5,6 +5,7 @@ The latest measurements of HeimDB against MySQL 8.0 on the same WordPress and da
 - [Summary](#summary)
 - [Pages, writes and concurrency](#pages-writes-and-concurrency)
 - [Under load](#under-load)
+- [During a backup](#during-a-backup)
 - [Memory](#memory)
 - [How to measure](#how-to-measure)
 
@@ -12,6 +13,7 @@ The latest measurements of HeimDB against MySQL 8.0 on the same WordPress and da
 
 - A page's DB time is 1.5 to 2.1 times MySQL's, and the whole page 1.1 to 1.3 times (search is faster than MySQL). Adding a comment and updating an option are faster than MySQL; creating and deleting a post take about the same.
 - Under load, HeimDB's maximum rate is 88% of MySQL's, and its server CPU at the same rate is 1.4 times MySQL's. Past the maximum and with 500 connections there are no errors or disconnects, and a 30-minute run does not grow in time or memory.
+- A backup to the same filesystem as the data takes 13 to 19 ms and does not change page times. A backup to another disk copies every file while all writes wait, and reads wait with them (11.7 seconds for 2 GB); an encrypted backup does not stop anything, but slows the pages that overlap it.
 - Resident memory is about 500 MiB and barely depends on table size. Large writes, merges and restores use memory in proportion to the rows they touch, and stop with error 1041 before `-memory-limit`.
 
 Speed is not a goal in itself: public pages are expected to be served from a page cache.
@@ -175,6 +177,37 @@ Neither server grows in time or memory over 30 minutes. HeimDB's live heap after
 - 2 connections now give 1.79 times 1 connection (MySQL 1.97 times), and the p99 fell from 146 ms to 104 ms. CPU per statement rises 17% at 2 connections (thread switches); 4 and 8 connections are unchanged.
 - At a fixed 32.3 pages/s with 128 connections, p50 / p95 / p99 went from 70.0 / 124.5 / 139.2 ms to 64.6 / 111.3 / 124.3 ms at the same CPU.
 
+## During a backup
+
+Measured 2026-11-21 with HeimDB 0.3.0 (`main` at the time).
+
+### Setup
+
+- The same two GCE n2-standard-4 instances as [Under load](#under-load). The database instance has a second 50 GB pd-balanced disk for the backups that go to another filesystem. The data is on the boot disk (50 GB pd-balanced, ext4).
+- Data: `wpbench` (16 MiB on disk), and `wpbench` grown to 1.9 GiB with a table that no page reads (`wp_ballast`, copies of the post bodies). Each run started HeimDB on a copy of the same data directory, then warmed it as in Under load.
+- Load: `cmd/loadgen` with reads and writes 95:5 at a fixed 28 pages a second (half of HeimDB's 95:5 maximum) on 64 connections, 120 seconds after a 10-second warm-up. `CALL heimdb_backup()` ran on its own connection at 15 seconds and every 30 seconds (4 backups a run).
+- Cases: no backup; to `-backup-dir` on the data's filesystem; to the second disk; encrypted with `-backup-key` to the data's filesystem.
+- "During" counts the pages whose time (from the scheduled start to the end) overlapped a backup. Each value is the average of 2 runs.
+
+### Results
+
+| Data | Case | Backup time | Pages during a backup (reads / writes) | Read p50 / p99 / max, during | Read p50 / p99 / max, other pages | Write p99, during | Write p99, other pages |
+|---|---|---|---|---|---|---|---|
+| 16 MiB | No backup | — | — | — | 51 / 90 / 104 ms | — | 83 ms |
+| 16 MiB | Same filesystem | 13 ms | 5 / 1 | 45 / 70 / 70 ms | 50 / 86 / 101 ms | 18 ms | 79 ms |
+| 16 MiB | Second disk | 62 ms | 11 / 0 | 65 / 85 / 85 ms | 51 / 90 / 108 ms | — | 84 ms |
+| 16 MiB | Encrypted | 99 ms | 16 / 1 | 72 / 111 / 111 ms | 50 / 88 / 105 ms | 79 ms | 80 ms |
+| 1.9 GiB | No backup | — | — | — | 49 / 86 / 116 ms | — | 84 ms |
+| 1.9 GiB | Same filesystem | 19 ms | 7 / 1 | 57 / 78 / 78 ms | 49 / 88 / 111 ms | 63 ms | 80 ms |
+| 1.9 GiB | Second disk | 11.7 s | 1,187 / 71 | 3.6 s / 12.4 s / 13.4 s | 61 ms / 5.1 s / 6.8 s | 12.9 s | 4.3 s |
+| 1.9 GiB | Encrypted | 5.4 s | 577 / 34 | 63 / 369 / 527 ms | 49 / 91 / 203 ms | 467 ms | 84 ms |
+
+- No errors, disconnects or lock wait timeouts in any run.
+- To the same filesystem, the backup hard-links the data files, and the pages that overlap it are no slower than the others.
+- To the second disk, the backup copies every file (about 170 MiB a second) while holding the write lock. For the 11.7 seconds of each backup, no page finished, reads included: an `INSERT` that waits for the lock has already taken an AUTO_INCREMENT value, and a read-only transaction that commits while a value is unsaved tries to save it and waits for the same lock. After each backup, the queued pages took about 10 seconds to catch up, so the "other pages" are slow too. `heimdb_lock_wait_seconds_total` grew by 104 and 250 seconds in the two runs, and the server logged `heimdb_backup took 11.626s and paused all writes meanwhile` (and the same for each backup).
+- Encrypted, the write lock is held only for the hard links; the 5.4 seconds are spent writing the `.tar.gz.age` file (119 MiB for the 1.9 GiB of data, as the ballast compresses well). The pages that overlap it compete for CPU and disk. Server CPU over the run rose from 121% to 140%. The two runs differed (overlapping read p99 606 and 132 ms).
+- With `wpbench`, every case finishes in about 0.1 seconds or less and the differences are within the run-to-run variation.
+
 ## Memory
 
 Measured 2026-10-16 and 17 on a GCE n2-standard-4, with the builds released as HeimDB 0.2.11; these paths have not been re-measured since. The table is shaped like `wp_postmeta` (same indexes) with 3.1 million rows and `meta_value` of about 20 bytes. Peak RSS is `VmHWM`, reset with `clear_refs` just before each statement, with a fresh server per statement. "No limit" ran in a 12 GiB cgroup; "limit" ran in a 4 GiB container with `-memory-limit 3276M`.
@@ -235,6 +268,13 @@ go build -o loadgen ./cmd/loadgen
 ./loadgen -dsn ... -pages scripts/bench/load/pages-read.json -conns 128 -rate 33 -duration 60s   # 33 pages a second
 ```
 
-On GCE, `scripts/bench/load/gce.sh` creates the two instances, installs the servers and the dump, runs the measurements and fetches the results (`GCE_PROJECT` is required; `create`, `push`, `run`, `fetch`, `delete`). `agg.py` turns the results into the tables above.
+Backups under load (`-side` runs a statement on its own connection during the measured window):
+
+```sh
+./loadgen -dsn ... -pages scripts/bench/load/pages-read.json,scripts/bench/load/pages-write.json -write 0.05 -conns 64 -rate 28 \
+  -duration 120s -interval 1s -side 'CALL heimdb_backup()' -side-first 15s -side-every 30s
+```
+
+On GCE, `scripts/bench/load/gce.sh` creates the two instances, installs the servers and the dump, runs the measurements and fetches the results (`GCE_PROJECT` is required; `create`, `push`, `run`, `fetch`, `delete`). `agg.py` turns the results into the Under load tables, and `run.sh K` with `backup-agg.py` gives the backup table.
 
 Measure on Linux: values measured on macOS differ.

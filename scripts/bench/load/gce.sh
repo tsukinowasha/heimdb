@@ -15,26 +15,39 @@
 set -euo pipefail
 : "${GCE_PROJECT:?set GCE_PROJECT to the GCE project}"
 P=(--project "$GCE_PROJECT" --zone "${GCE_ZONE:-asia-northeast1-b}")
-DBI=heimdb-bench-126-db
-LDI=heimdb-bench-126-load
+DBI=heimdb-bench-db
+LDI=heimdb-bench-load
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../.." && pwd)
-gssh() { gcloud compute ssh "$1" "${P[@]}" --command "$2"; }
-gscp() { gcloud compute scp "${P[@]}" "$@"; }
+# The instances carry the tag heimdb-bench; create adds firewall rules for that tag only (SSH from IAP, and SSH and
+# HeimDB between the two), and delete removes them.
+TAG=heimdb-bench
+gssh() { gcloud compute ssh "$1" "${P[@]}" --tunnel-through-iap --command "$2"; }
+gscp() { gcloud compute scp "${P[@]}" --tunnel-through-iap "$@"; }
+G=(--project "$GCE_PROJECT")
 dbip() { gcloud compute instances describe $DBI "${P[@]}" --format='get(networkInterfaces[0].networkIP)'; }
 
 case "$1" in
 create)
-	for n in $DBI $LDI; do
-		gcloud compute instances create $n "${P[@]}" --machine-type n2-standard-4 --image-family debian-12 \
-			--image-project debian-cloud --boot-disk-size 50GB --boot-disk-type pd-balanced
-	done
+	gcloud compute firewall-rules describe $TAG-iap-ssh "${G[@]}" >/dev/null 2>&1 ||
+		gcloud compute firewall-rules create $TAG-iap-ssh "${G[@]}" --network default --direction INGRESS \
+			--source-ranges 35.235.240.0/20 --allow tcp:22 --target-tags $TAG
+	gcloud compute firewall-rules describe $TAG-internal "${G[@]}" >/dev/null 2>&1 ||
+		gcloud compute firewall-rules create $TAG-internal "${G[@]}" --network default --direction INGRESS \
+			--source-tags $TAG --allow tcp:22,tcp:3307,tcp:3316 --target-tags $TAG
+	# The database instance has a second disk for the backups that go to another filesystem (run.sh K).
+	gcloud compute instances create $DBI "${P[@]}" --machine-type n2-standard-4 --image-family debian-12 \
+		--image-project debian-cloud --boot-disk-size 50GB --boot-disk-type pd-balanced --tags $TAG \
+		--create-disk=name=$DBI-bk,size=50GB,type=pd-balanced,device-name=bk,auto-delete=yes
+	gcloud compute instances create $LDI "${P[@]}" --machine-type n2-standard-4 --image-family debian-12 \
+		--image-project debian-cloud --boot-disk-size 50GB --boot-disk-type pd-balanced --tags $TAG
 	;;
 push)
 	T=$(mktemp -d)
 	mkdir -p "$T/b/mu-plugins" "$T/l"
-	cp "$2" "$T/b/heimdb-0242"
+	cp "$2" "$T/b/heimdb"
 	cp "$3" "$T/b/wpbench.sql"
+	(cd "$ROOT" && go run filippo.io/age/cmd/age-keygen 2>/dev/null) | (cd "$ROOT" && go run filippo.io/age/cmd/age-keygen -y) > "$T/b/age.pub"
 	cp "$ROOT/scripts/bench/docker-compose.yml" "$T/b/"
 	cp "$ROOT/scripts/bench/mu-plugins/"*.php "$T/b/mu-plugins/"
 	cp "$HERE/dbctl.sh" "$HERE/sample.py" "$HERE/capture-writes.php" "$HERE/setup-db.sh" "$T/b/"
@@ -62,8 +75,11 @@ fetch)
 	(cd "$2" && tar xzf res-db.tgz && tar xzf res-load.tgz)
 	;;
 delete)
-	gcloud compute instances delete $DBI $LDI "${P[@]}" --quiet
+	gcloud compute instances delete $DBI $LDI "${P[@]}" --quiet || true
+	gcloud compute firewall-rules delete $TAG-iap-ssh $TAG-internal "${G[@]}" --quiet || true
+	gcloud compute firewall-rules list "${G[@]}" --filter "name~^$TAG"
 	gcloud compute instances list --project "$GCE_PROJECT"
+	gcloud compute disks list --project "$GCE_PROJECT"
 	;;
 *)
 	echo "usage: $0 create|push HEIMDB DUMP|run STAGE...|fetch DIR|delete" >&2

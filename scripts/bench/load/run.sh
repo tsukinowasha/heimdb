@@ -9,6 +9,10 @@
 #   DB=... ./run.sh D <MySQL の最大> <HeimDB の最大>  それぞれの最大の 150% の速さと、500 接続
 #   DB=... ./run.sh E <MySQL の最大>       その 50% の速さで 30 分
 #   DB=... ./run.sh R                      参考: MySQL の innodb_buffer_pool_size=2G で A を 1 回
+#   DB=... ./run.sh K [<pages/s>] [<MB>]  backups under load (docs/bench.md, "During a backup"): 95:5 at <pages/s> (default 28,
+#                                          half of HeimDB's 95:5 maximum) with 64 connections for 120 s, CALL heimdb_backup() at 15 s
+#                                          and every 30 s, with no backup, to the same filesystem, to the second disk and encrypted;
+#                                          on wpbench and on wpbench grown to <MB> MB (default 2000). 2 runs each
 #   DB=... ./run.sh all                    A の後、A の最大（2 回の平均の、接続の数ごとの最大）で B、C、D、E、R を続けて流す（約 3 時間半）
 #
 # 測りのたびにデータを入れ直し（読みだけの A と B は、サーバーを立てるたび）、8 接続で 30 秒流して温め、loadgen も 10 秒温めてから測る。
@@ -117,6 +121,28 @@ E)
 	./loadgen -dsn "$(dsn heimdb)" -pages pages-read.json -conns 8 -duration 30s -warmup 0s -interval 0 -label warm -out /dev/null 2>> res/warm.log
 	one "E-heimdb" heimdb -pages pages-read.json -conns 64 -rate "$R" -duration 30m -warmup 10s -interval 60s
 	;;
+K)
+	RATE=${2:-28}
+	dbc "~/b/dbctl.sh make-seed small" | tee -a res/servers.log
+	dbc "~/b/dbctl.sh make-seed large ${3:-2000}" | tee -a res/servers.log
+	for size in small large; do
+		for r in 1 2; do
+			for c in none same other enc; do
+				dbc "SEED=$size BK=$([ $c = none ] && echo same || echo $c) ~/b/dbctl.sh start-heimdb" | tee -a res/servers.log
+				./loadgen -dsn "$(dsn heimdb)" -pages pages-read.json -conns 8 -duration 30s -warmup 0s -interval 0 -label warm -out /dev/null 2>> res/warm.log
+				side=()
+				case $c in
+				same | other) side=(-side "CALL heimdb_backup()") ;;
+				enc) side=(-side "CALL heimdb_backup('', 'bench')") ;;
+				esac
+				[ $c = none ] || side+=(-side-first 15s -side-every 30s)
+				one "K-$size-r$r-$c" heimdb -pages pages-read.json,pages-write.json -write 0.05 -conns 64 -rate "$RATE" \
+					-duration 120s -warmup 10s -interval 1s "${side[@]}"
+				dbc "ls -la ~/b/bk /mnt/bk/bk 2>/dev/null; du -sm ~/b/hdata" > res/K-$size-r$r-$c.files.txt 2>&1
+			done
+		done
+	done
+	;;
 R)
 	start mysql --innodb-buffer-pool-size=2G
 	sweep "R-mysqlbp2g" mysql
@@ -133,7 +159,7 @@ all)
 	"$0" R > run-R.log 2>&1
 	;;
 *)
-	echo "usage: $0 A|B max|C|D mysql-max heimdb-max|E max|R|all" >&2
+	echo "usage: $0 A|B max|C|D mysql-max heimdb-max|E max|K [rate] [MB]|R|all" >&2
 	exit 2
 	;;
 esac

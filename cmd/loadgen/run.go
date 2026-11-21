@@ -42,6 +42,9 @@ type Config struct {
 	StmtTimeout time.Duration
 	DialTimeout time.Duration
 	RetryDelay  time.Duration
+	Side        string        // a statement run on its own connection during the measured window (side.go)
+	SideFirst   time.Duration // first run of Side, from the start of the measured window
+	SideEvery   time.Duration // time between runs of Side (0: once)
 }
 
 // Result は、測りの結果（JSON で書く）。
@@ -75,6 +78,9 @@ type Result struct {
 	OpenAtStart  int             `json:"connections_open_at_start"`
 	NeverOpened  int             `json:"connections_never_opened"`
 	Series       []Interval      `json:"series,omitempty"`
+	Side         []SideRun       `json:"side,omitempty"`
+	DuringSide   map[string]Dist `json:"during_side_ms,omitempty"`
+	OutsideSide  map[string]Dist `json:"outside_side_ms,omitempty"`
 	Client       *ClientCPU      `json:"client,omitempty"`
 }
 
@@ -167,6 +173,11 @@ func Run(ctx context.Context, w *Workload, dial Dialer, cfg Config) (*Result, er
 	mStart := t0.Add(cfg.Warmup)
 	tEnd := mStart.Add(cfg.Duration)
 	var ticket, counter atomic.Int64
+	var side []SideRun
+	if cfg.Side != "" {
+		wg.Add(1)
+		go func() { defer wg.Done(); side = runSide(ctx, w, dial, cfg, mStart, tEnd) }()
+	}
 	for _, wk := range workers {
 		wg.Add(1)
 		go func() {
@@ -203,6 +214,8 @@ func Run(ctx context.Context, w *Workload, dial Dialer, cfg Config) (*Result, er
 		}
 	}
 	summarize(res, all, cfg)
+	res.Side = side
+	res.DuringSide, res.OutsideSide = splitBySide(all, side)
 	res.Client = cpu0.until(cpu1)
 	return res, nil
 }
