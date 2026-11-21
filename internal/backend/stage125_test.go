@@ -12,7 +12,7 @@ import (
 	"github.com/tsukinowasha/heimdb/internal/sqlengine/sql"
 )
 
-// 段階 125: 全件の走査とエントリだけで作る行で、復号した行を使い回す（docs/stages/121-130.md）。使い回すのは
+// 段階 125: 全件の走査とエントリだけで作る行で、復号した行を使い回す（docs/plan.md の段階 125）。使い回すのは
 // projectIter が値を写す行だけで、行を持ち続ける側（並べ替え、GROUP BY、DISTINCT、結合、副問い合わせ、UNION、
 // INSERT ... SELECT、UPDATE と DELETE、窓関数、PREPARE）の結果が、使い回さない場合と同じことを確かめる。
 
