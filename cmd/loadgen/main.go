@@ -41,6 +41,9 @@ func main() {
 	interval := flag.Duration("interval", 10*time.Second, "length of the intervals in the series (0: none)")
 	stmtTimeout := flag.Duration("stmt-timeout", 60*time.Second, "time limit of one statement (0: none); a statement over it closes its connection")
 	dialTimeout := flag.Duration("dial-timeout", 10*time.Second, "time limit of connecting and the session statements")
+	side := flag.String("side", "", "statement run on its own connection during the measured window, such as 'CALL heimdb_backup()'")
+	sideFirst := flag.Duration("side-first", 10*time.Second, "first run of -side, from the start of the measured window")
+	sideEvery := flag.Duration("side-every", 0, "time between runs of -side (0: once)")
 	label := flag.String("label", "", "label copied to the result")
 	out := flag.String("out", "", "file for the JSON result (default stdout)")
 	flag.Parse()
@@ -85,7 +88,8 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	cfg := Config{Conns: *conns, Rate: *rate, Warmup: *warmup, Duration: *duration, WriteFrac: *write, Seed: *seed,
-		UniqueBase: time.Now().Unix() * 100000, Interval: *interval, StmtTimeout: *stmtTimeout, DialTimeout: *dialTimeout}
+		UniqueBase: time.Now().Unix() * 100000, Interval: *interval, StmtTimeout: *stmtTimeout, DialTimeout: *dialTimeout,
+		Side: *side, SideFirst: *sideFirst, SideEvery: *sideEvery}
 	res, err := Run(ctx, w, dial, cfg)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "loadgen:", err)
@@ -103,4 +107,12 @@ func main() {
 	all := res.Latency["all"]
 	fmt.Fprintf(os.Stderr, "%s %s conns=%d pages/s=%.1f stmts/s=%.0f p50=%.1fms p99=%.1fms failed=%d errors=%v conn_errors=%v connect_failures=%v not_started=%d\n",
 		*label, res.Mode, res.Conns, res.PagesPerS, res.StmtsPerS, all.P50, all.P99, res.FailedPages, res.Errors, res.ConnErrors, res.ConnectFails, res.NotStarted)
+	for _, r := range res.Side {
+		fmt.Fprintf(os.Stderr, "%s side at %.1fs: %.1fms %s\n", *label, r.StartS, r.Ms, r.Error)
+	}
+	if d, ok := res.DuringSide["all"]; ok {
+		o := res.OutsideSide["all"]
+		fmt.Fprintf(os.Stderr, "%s during side: pages=%d p50=%.1fms p99=%.1fms max=%.1fms; outside: pages=%d p50=%.1fms p99=%.1fms max=%.1fms\n",
+			*label, d.Count, d.P50, d.P99, d.Max, o.Count, o.P50, o.P99, o.Max)
+	}
 }
