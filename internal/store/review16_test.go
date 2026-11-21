@@ -1,8 +1,10 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -182,4 +184,61 @@ func TestReview16CheckpointExistingDir(t *testing.T) {
 		t.Fatalf("the first checkpoint was damaged by the second attempt: %v", err)
 	}
 	b.Close()
+}
+
+// -data の中のディレクトリに取ったバックアップ（Docker で 1 つのボリュームに置く。docs/stages/131.md）は、データの
+// ファイルをハードリンクで共有し、元の store の圧縮、閉じて開き直すことで消えたり壊れたりしない。
+func TestCheckpointInsideDataDir(t *testing.T) {
+	s, data := openTemp(t)
+	defineTable(t, s, MainBranchID, tbl, "t")
+	for i := range 3 {
+		writeOn(t, s, MainBranchID, func(tx *Txn) { bput(t, tx, MainBranchID, int64(i), "v") })
+		if err := s.db.Flush(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bk := filepath.Join(data, "backups", "b1")
+	if _, err := s.Checkpoint(bk); err != nil {
+		t.Fatal(err)
+	}
+	ssts, _ := filepath.Glob(filepath.Join(bk, "*.sst"))
+	if len(ssts) == 0 {
+		t.Fatal("no sst in the backup")
+	}
+	a, _ := os.Stat(ssts[0])
+	b, err := os.Stat(filepath.Join(data, filepath.Base(ssts[0])))
+	if err != nil || !os.SameFile(a, b) {
+		t.Errorf("the backup's %s is not a hard link of the data file (%v)", filepath.Base(ssts[0]), err)
+	}
+	// 圧縮で元のファイルは不要になり、Pebble が消す。バックアップの中は消さない。
+	writeOn(t, s, MainBranchID, func(tx *Txn) { bput(t, tx, MainBranchID, 9, "w") })
+	if err := s.db.Compact(context.Background(), []byte{0}, []byte{0xff}, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err = Open(data)
+	if err != nil {
+		t.Fatalf("reopen the data: %v", err)
+	}
+	if n := countKeys(t, s, branchPrefix(MainBranchID)); n == 0 {
+		t.Error("the data lost its rows")
+	}
+	s.Close()
+	c, err := Open(bk)
+	if err != nil {
+		t.Fatalf("open the backup: %v", err)
+	}
+	defer c.Close()
+
+	for i := range 3 {
+		if _, ok, err := c.Begin().GetRowLatest(MainBranchID, tbl, pk(int64(i))); err != nil || !ok {
+			t.Errorf("row %d in the backup: %v, %v", i, ok, err)
+		}
+	}
+	if _, ok, _ := c.Begin().GetRowLatest(MainBranchID, tbl, pk(9)); ok {
+		t.Error("the backup has a row written after it")
+	}
+
 }

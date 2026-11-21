@@ -244,14 +244,13 @@ func main() {
 	}
 	pro.BranchProcedures = *branchProcs
 	if *backupDir != "" {
-		// 結果のパスを接続元でも意味のあるものにする。-data と同じ場所に置くと、バックアップの名前によっては Pebble が
-		// 自分のファイルと読み違えるので拒否する。
+		// 結果のパスを接続元でも意味のあるものにする。
 		abs, err := filepath.Abs(*backupDir)
 		if err != nil {
 			logrus.Fatalf("backup dir: %v", err)
 		}
-		if data, err := filepath.Abs(*dataDir); err == nil && filepath.Clean(data) == filepath.Clean(abs) {
-			logrus.Fatalf("-backup-dir must differ from -data")
+		if err := checkBackupDir(*dataDir, abs); err != nil {
+			logrus.Fatal(err)
 		}
 		pro.BackupDir = abs
 		pro.CleanBackupDir()
@@ -487,6 +486,29 @@ func certNames(c *x509.Certificate) string {
 }
 
 // isFlagSet は、コマンドラインでフラグ name を指定したかを返す。
+// checkBackupDir は、-backup-dir の場所を確かめる。-data そのものは、バックアップの名前によっては Pebble が自分の
+// ファイルと読み違えるので拒否する。-data の中のディレクトリ（Docker で 1 つのボリュームに置き、ハードリンクで済ませる
+// ため。docs/stages/131.md）は、-data の直下の名前が Pebble のファイルの名前になりえないときだけ許す。Pebble は、
+// 読めない名前のものを開くときも消すときも飛ばす（pebble の base.ParseFilename）。
+func checkBackupDir(dataDir, backupDir string) error {
+	data, err := filepath.Abs(dataDir)
+	if err != nil {
+		return fmt.Errorf("-data: %w", err)
+	}
+	rel, err := filepath.Rel(data, backupDir)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return nil // -data の外
+	}
+	if rel == "." {
+		return errors.New("-backup-dir must differ from -data")
+	}
+	top, _, _ := strings.Cut(rel, string(filepath.Separator))
+	if strings.Contains(top, ".") || top == "LOCK" || strings.HasPrefix(top, "MANIFEST-") || strings.HasPrefix(top, "OPTIONS-") {
+		return fmt.Errorf("-backup-dir inside -data must be under a directory whose name has no '.' and is not a store file name (got %q)", top)
+	}
+	return nil
+}
+
 func isFlagSet(name string) bool {
 	set := false
 	flag.Visit(func(f *flag.Flag) { set = set || f.Name == name })
