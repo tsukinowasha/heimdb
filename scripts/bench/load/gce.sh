@@ -15,8 +15,8 @@
 set -euo pipefail
 : "${GCE_PROJECT:?set GCE_PROJECT to the GCE project}"
 P=(--project "$GCE_PROJECT" --zone "${GCE_ZONE:-asia-northeast1-b}")
-DBI=heimdb-bench-126-db
-LDI=heimdb-bench-126-load
+DBI=heimdb-bench-db
+LDI=heimdb-bench-load
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../.." && pwd)
 gssh() { gcloud compute ssh "$1" "${P[@]}" --command "$2"; }
@@ -25,16 +25,19 @@ dbip() { gcloud compute instances describe $DBI "${P[@]}" --format='get(networkI
 
 case "$1" in
 create)
-	for n in $DBI $LDI; do
-		gcloud compute instances create $n "${P[@]}" --machine-type n2-standard-4 --image-family debian-12 \
-			--image-project debian-cloud --boot-disk-size 50GB --boot-disk-type pd-balanced
-	done
+	# The database instance has a second disk for the backups that go to another filesystem (run.sh K).
+	gcloud compute instances create $DBI "${P[@]}" --machine-type n2-standard-4 --image-family debian-12 \
+		--image-project debian-cloud --boot-disk-size 50GB --boot-disk-type pd-balanced \
+		--create-disk=name=$DBI-bk,size=50GB,type=pd-balanced,device-name=bk,auto-delete=yes
+	gcloud compute instances create $LDI "${P[@]}" --machine-type n2-standard-4 --image-family debian-12 \
+		--image-project debian-cloud --boot-disk-size 50GB --boot-disk-type pd-balanced
 	;;
 push)
 	T=$(mktemp -d)
 	mkdir -p "$T/b/mu-plugins" "$T/l"
-	cp "$2" "$T/b/heimdb-0242"
+	cp "$2" "$T/b/heimdb"
 	cp "$3" "$T/b/wpbench.sql"
+	(cd "$ROOT" && go run filippo.io/age/cmd/age-keygen 2>/dev/null) | (cd "$ROOT" && go run filippo.io/age/cmd/age-keygen -y) > "$T/b/age.pub"
 	cp "$ROOT/scripts/bench/docker-compose.yml" "$T/b/"
 	cp "$ROOT/scripts/bench/mu-plugins/"*.php "$T/b/mu-plugins/"
 	cp "$HERE/dbctl.sh" "$HERE/sample.py" "$HERE/capture-writes.php" "$HERE/setup-db.sh" "$T/b/"
@@ -64,6 +67,7 @@ fetch)
 delete)
 	gcloud compute instances delete $DBI $LDI "${P[@]}" --quiet
 	gcloud compute instances list --project "$GCE_PROJECT"
+	gcloud compute disks list --project "$GCE_PROJECT"
 	;;
 *)
 	echo "usage: $0 create|push HEIMDB DUMP|run STAGE...|fetch DIR|delete" >&2
