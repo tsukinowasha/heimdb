@@ -1,1904 +1,84 @@
-# WordPress の性能の比較（本物の MySQL と HeimDB）
+# Performance: WordPress on HeimDB and MySQL 8.0
 
-最適化の前に、同じ WordPress とデータで、本物の MySQL 8.0 と HeimDB の性能の差を測った（2026-10-08、HeimDB は段階 21 の後の a6a09da）。手順と道具は `scripts/bench/`。
+The latest measurements of HeimDB against MySQL 8.0 on the same WordPress and data. Each section names the HeimDB version and date it was measured with; later releases did not change those paths unless noted. The tools are in `scripts/bench/`.
 
-## 条件
+- [Summary](#summary)
+- [Pages, writes and concurrency](#pages-writes-and-concurrency)
+- [Under load](#under-load)
+- [Memory](#memory)
+- [How to measure](#how-to-measure)
 
-- WordPress（`wordpress:php8.3-apache`）を 2 つ立て、接続先だけを替える（`scripts/bench/docker-compose.yml`）。オブジェクトキャッシュとページキャッシュは使わない。
-  - MySQL: Docker の `mysql:8.0`（8.0.46）、ポート 3307。
-  - HeimDB: ホストで動かす（`-db wpbench -slow-query 200ms`）、ポート 3316。
-  - どちらも WordPress のコンテナから `host.docker.internal` 経由で接続する。MySQL は Docker の中、HeimDB はホストなので条件は完全には同じではない（目安として比べる）。マシンは 1 台（Apple Silicon の Mac）。
-- データ（`scripts/bench/generate.sh`、`data.sql`）: 記事 5,000 件（本文約 1.7 KB）、固定ページ 200 件、カテゴリ 100、タグ 200、記事ごとにカテゴリ 1 つとタグ 3 つ、投稿メタ 15,000 件、コメント 20,000 件（最も新しい記事に 60 件）。MySQL で作り、mysqldump で HeimDB に取り込んだ（同じデータ）。
-- DB の時間とクエリの数は、`SAVEQUERIES` と mu-plugin（`scripts/bench/mu-plugins/bench-db-time.php`）でレスポンスヘッダに出した値。`SAVEQUERIES` は両方で有効（その分だけ PHP の時間が増える）。
+## Summary
 
-## 結果
+- A page's DB time is 1.5 to 2.1 times MySQL's, and the whole page 1.1 to 1.3 times (search is faster than MySQL). Adding a comment and updating an option are faster than MySQL; creating and deleting a post take about the same.
+- Under load, HeimDB's maximum rate is 88% of MySQL's, and its server CPU at the same rate is 1.4 times MySQL's. Past the maximum and with 500 connections there are no errors or disconnects, and a 30-minute run does not grow in time or memory.
+- Resident memory is about 500 MiB and barely depends on table size. Large writes, merges and restores use memory in proportion to the rows they touch, and stop with error 1041 before `-memory-limit`.
 
-### ページの表示（1 つずつ順に 50 回、中央値。`scripts/bench/pages.py`）
+Speed is not a goal in itself: public pages are expected to be served from a page cache.
 
-| ページ | クエリ数 | MySQL 全体 | HeimDB 全体 | 倍率 | MySQL の DB | HeimDB の DB | 倍率 |
-|---|---|---|---|---|---|---|---|
-| トップページ | 24 | 42 ms | 285 ms | 6.7 | 10 ms | 233 ms | 24 |
-| 個別の記事（コメント 60 件） | 33 | 70 ms | 536 ms | 7.7 | 13 ms | 435 ms | 34 |
-| カテゴリの 2 ページ目 | 24 | 43 ms | 342 ms | 8.0 | 11 ms | 287 ms | 25 |
-| 検索（`?s=`、全件の LIKE） | 29 | 69 ms | 521 ms | 7.5 | 36 ms | 452 ms | 13 |
-| REST API（記事 100 件） | 116 | 109 ms | 1,960 ms | 18 | 35 ms | 1,853 ms | 52 |
-| 管理画面のダッシュボード | 41 | 44 ms | 797 ms | 18 | 20 ms | 735 ms | 37 |
-| 投稿一覧（`edit.php`） | 42 | 54 ms | 864 ms | 16 | 22 ms | 787 ms | 35 |
+## Pages, writes and concurrency
 
-p95 は中央値の 1.1 から 1.6 倍で、どちらも大きな揺れはない。HeimDB の遅れはほぼすべて DB の時間（クエリの数は同じ）。
+Measured 2026-11-19 with HeimDB 0.2.42.
 
-### 同時アクセス（10 並列で 30 秒、`ab -c 10 -t 30`）
+### Setup
 
-| ページ | MySQL | HeimDB | 倍率 |
-|---|---|---|---|
-| トップページ | 85.3 件/秒 | 11.7 件/秒 | 7.3 |
-| 個別の記事 | 56.0 件/秒 | 5.3 件/秒 | 10.6 |
+- One GCE n2-standard-4 (4 vCPU, 16 GB, Tokyo, Debian 12, pd-balanced).
+- Two WordPress containers (`wordpress:php8.3-apache`, WordPress 7.1.4) that differ only in the database host (`scripts/bench/docker-compose.yml`). No object cache and no page cache.
+  - MySQL: Docker `mysql:8.0.46` with the default settings (`innodb_buffer_pool_size` 128 MiB), port forwarded with `-p`.
+  - HeimDB: the Linux binary on the host, `-db wpbench`, other flags at their defaults (block cache 128 MiB).
+- Data (`wpbench`): 5,002 posts (bodies about 1.7 KB), 200 pages, 100 categories, 200 tags, 25,006 post meta rows, 20,001 comments (60 on the newest post). It was generated with `scripts/bench/generate.sh` and `data.sql`, and loaded into both servers from the same mysqldump. Each server started with an empty data directory before the load.
+- DB time and query counts come from `SAVEQUERIES` and a mu-plugin (`scripts/bench/mu-plugins/bench-db-time.php`) that puts them in response headers. `SAVEQUERIES` is on for both, which adds some PHP time.
+- Pages: `scripts/bench/pages.py --newest 5003 --cat 1 --runs 30` (one request at a time, median). Concurrency: `ab -c 10 -t 30`. Writes: `scripts/bench/writes.php` 100 times inside one PHP process (`wp eval-file`), DB time per operation.
+- HeimDB was measured twice, reloading the data each time, and the values are the average. MySQL was measured with every run (6 runs).
 
-### 書き込み（wp-cli の `eval-file` で PHP の中で繰り返し、1 回あたり。`scripts/bench/writes.php`）
+### Pages (median)
 
-| 操作 | MySQL（200 回） | HeimDB（2 回） | 倍率 |
-|---|---|---|---|
-| 記事の作成（カテゴリ 1、タグ 2） | 28 ms | 324 秒 | 約 11,000 |
-| コメントの追加 | 2.8 ms | 170 ms | 60 |
-| オプションの更新（`update_option`） | 1.3 ms | 7.7 ms | 6.1 |
-| 記事の削除 | 21 ms | 166 秒 | 約 7,900 |
-
-HeimDB は 200 回だと何時間もかかるので 2 回にした。
-
-### まとめての処理
-
-| 処理 | MySQL | HeimDB |
-|---|---|---|
-| mysqldump の取り込み（15 MB） | 2.0 秒 | 1.6 秒 |
-| WordPress のインストール（`wp core install`） | 2.2 秒 | 2.1 秒（どちらも wp-cli のコンテナの起動が大半） |
-| `wp search-replace`（wp_posts、5,203 行、50 か所の置換） | 2.8 秒 | 83 秒 |
-
-### 単純な文（mysql コマンドで 3 回のうち最短。接続の時間を含む）
-
-| 文 | MySQL | HeimDB |
-|---|---|---|
-| `SELECT COUNT(*) FROM wp_posts` | 20 ms | 30 ms |
-| 全件の走査（`post_content LIKE '%zzzz%'`） | 45 ms | 152 ms |
-| 全件の走査（`post_content REGEXP '^[aiO]:[1-9]'`） | 39 ms | 5,590 ms |
-| 主キーの 1 行 × 200 文 | 42 ms | 30 ms |
-| 主キーの `IN`（100 件） | 19 ms | 10 ms |
-| 2 次インデックス（`post_parent = 0`、5,203 行） | 22 ms | 58 ms |
-| 記事作成のたびの term 数の JOIN（下） | 21 ms | 約 167 秒 |
-
-## 分かったこと（最適化の候補）
-
-1 行の読み出し、`IN`、全件の走査そのものは MySQL と同じか 3 倍程度までで、大きな差は次の 2 つから来ている。
-
-1. **JOIN の方法（最大の原因）。** go-mysql-server が、等号の JOIN を入れ子のループ（`InnerJoin`）にし、内側の表を外側の行ごとに読み直す。
-   - 記事の作成と削除のたびに WordPress が term 数を数え直す `SELECT COUNT(*) FROM wp_term_relationships, wp_posts WHERE wp_posts.ID = wp_term_relationships.object_id AND ... AND term_taxonomy_id = 1` が、記事 5,000 行のそれぞれで term_relationships を読み直し、約 167 秒（MySQL は 21 ms）。カテゴリとタグの数だけ実行されるので、記事の作成が 324 秒。
-   - ページの表示でも、記事の term を読む `SELECT DISTINCT t.term_id, tr.object_id FROM wp_terms AS t INNER JOIN wp_term_taxonomy AS tt ... INNER JOIN wp_term_relationships AS tr ... WHERE tt.taxonomy IN (...) AND tr.object_id IN (...)` が 0.7 秒前後で、term_relationships の各行ごとに term_taxonomy を読み直している。REST API、管理画面、記事の一覧の DB の時間の大半はこの形。
-   - HeimDB は行数などの統計を go-mysql-server に渡していない（段階 20 で、計画が変わるのを避けて `StatisticsTable` を実装しなかった）ので、計画の選び方が悪い可能性がある。主キーやインデックスで引ける側を内側にする（`LookupJoin`）か、内側を一度だけ読む（ハッシュ結合）にできれば、大きく縮むはず。
-2. **`REGEXP`。** 全件の走査が 1 行あたり約 1 ms（MySQL の約 140 倍）。正規表現を行ごとに作り直している可能性がある。`wp search-replace` は、置換の前に列ごとに `REGEXP '^[aiO]:[1-9]'`（直列化された値があるか）を調べるので、列の数（23）× 5.6 秒で 83 秒になった。
-
-その次に効きそうなのは、コメントの追加（170 ms。コメント数の数え直しの `SELECT COUNT(*) ... WHERE comment_post_ID = N AND comment_approved = '1'` など）と、全件の走査（LIKE で 3 倍）。
-
-## 段階 22 の後（JOIN と読み出しの最適化）
-
-同じ条件で測り直した（2026-10-08。HeimDB のデータは同じ mysqldump から取り込み直した。MySQL も同じ時に測り直した）。変えたことは `docs/plan.md` の段階 22。
-
-### ページの表示（中央値）
-
-| ページ | MySQL 全体 | HeimDB 全体（前 → 後） | MySQL の DB | HeimDB の DB（前 → 後） | DB の倍率（後） |
-|---|---|---|---|---|---|
-| トップページ | 43 ms | 285 → 59 ms | 10 ms | 233 → 27 ms | 2.6 |
-| 個別の記事（コメント 60 件） | 69 ms | 536 → 106 ms | 12 ms | 435 → 48 ms | 3.9 |
-| カテゴリの 2 ページ目 | 45 ms | 342 → 88 ms | 13 ms | 287 → 54 ms | 4.1 |
-| 検索（全件の LIKE） | 69 ms | 521 → 247 ms | 36 ms | 452 → 194 ms | 5.5 |
-| REST API（記事 100 件） | 103 ms | 1,960 → 147 ms | 33 ms | 1,853 → 75 ms | 2.2 |
-| 管理画面のダッシュボード | 43 ms | 797 → 193 ms | 20 ms | 735 → 152 ms | 7.7 |
-| 投稿一覧（`edit.php`） | 53 ms | 864 → 149 ms | 22 ms | 787 → 110 ms | 5.0 |
-
-ページの中身（HTML と REST の JSON）は、データを作ったときのポート番号の入った guid を除いて MySQL と同じだった。
-
-### 同時アクセス（10 並列で 30 秒）
-
-| ページ | MySQL | HeimDB（前 → 後） |
-|---|---|---|
-| トップページ | 86.2 件/秒 | 11.7 → 71.6 件/秒 |
-| 個別の記事 | 60.0 件/秒 | 5.3 → 39.3 件/秒 |
-
-### 書き込み（1 回あたり。HeimDB も 200 回）
-
-| 操作 | MySQL | HeimDB（前 → 後） |
-|---|---|---|
-| 記事の作成（カテゴリ 1、タグ 2） | 28 ms | 324 秒 → 280 ms |
-| コメントの追加 | 2.8 ms | 170 → 41 ms |
-| オプションの更新 | 1.3 ms | 7.7 → 7.5 ms |
-| 記事の削除 | 21 ms | 166 秒 → 225 ms |
-
-### まとめての処理と単純な文
-
-| 処理 | MySQL | HeimDB（前 → 後） |
-|---|---|---|
-| mysqldump の取り込み（15 MB） | 2.0 秒 | 1.6 → 1.3 秒 |
-| `SELECT COUNT(*) FROM wp_posts` | 23 ms | 30 → 16 ms |
-| 全件の走査（LIKE） | 45 ms | 152 → 154 ms |
-| 全件の走査（REGEXP） | 45 ms | 5,590 → 5,525 ms |
-| 主キーの 1 行 × 200 文 | 41 ms | 30 → 28 ms |
-| 2 次インデックス（`post_parent = 0`、5,203 行） | 21 ms | 58 → 17 ms |
-| 記事作成のたびの term 数の JOIN | 25 ms | 約 167 秒 → 38 ms |
-
-（単純な文は mysql コマンドの起動と接続の約 15 ms を含む。）
-
-### 効いたもの
-
-- 入れ子のループの JOIN をやめた（term 数の JOIN、記事の term の読み出し、term の読み込み）。記事の作成と削除が 1,000 倍以上、REST API が約 25 倍速くなった。表の行数を見積もりに渡すと、`wp_term_relationships` を記事の ID で絞ってから小さい表を引く、MySQL に近い計画になった。
-- インデックスで見つけた行を 1 行ずつ引くたびに Pebble のイテレータを作っていたのをやめ、層ごとに 1 つ作って位置を移すだけにした。2 次インデックスを使う文が 3 倍ほど速くなった。
-- 行を返すときに引くようにして、`ORDER BY ... LIMIT` の記事の一覧と前後の記事が `LIMIT` の行数だけ読むようになった。
-
-### 残っている差（次の候補）
-
-- 記事の作成の残り（280 ms）の大半は term 数の JOIN（1 回 30 ms 台 × 9 回）。MySQL はインデックスだけで済ませる（カバリングインデックス。`type_status_author` に ID が入っている）が、HeimDB は記事 5,000 行の本体を読む。go-mysql-server に必要な列だけを返す（`sql.ProjectedTable`）か、インデックスだけで数える形を作る必要がある。
-- ダッシュボードと個別の記事の承認済みコメントの数（`COUNT(*) ... WHERE comment_approved = '1' AND comment_type NOT IN ('note')`。1 回 10 ms 台で、ページで何度も出る）。`comment_type` がインデックスにないので、インデックスだけでは数えられない（MySQL も本体を読む。MySQL は約 5 ms）。
-- 最近のコメント（`ORDER BY comment_date_gmt DESC LIMIT 25`）。MySQL は `comment_date_gmt` のインデックスを逆順に読んで 25 行で止まるが、HeimDB は `comment_approved` のインデックスで全件を読んで並べ替える。
-- `REGEXP`、検索の全件の `LIKE`、コメントの追加（段階 22 の対象外）。
-
-## 段階 23 の後（統計によるインデックスと JOIN の選択）
-
-同じ条件で測り直した（2026-10-08。HeimDB のデータは同じ mysqldump から取り込み直した。MySQL も同じ時に測り直した）。変えたことは `docs/plan.md` の段階 23。
-
-### ページの表示（中央値）
-
-| ページ | MySQL 全体 | HeimDB 全体（段階 22 → 23） | MySQL の DB | HeimDB の DB（段階 22 → 23） | DB の倍率 |
-|---|---|---|---|---|---|
-| トップページ | 43 ms | 62 → 62 ms | 10 ms | 28 → 28 ms | 2.7 |
-| 個別の記事（コメント 60 件） | 73 ms | 110 → 102 ms | 14 ms | 49 → 42 ms | 3.0 |
-| カテゴリの 2 ページ目 | 45 ms | 90 → 81 ms | 12 ms | 55 → 48 ms | 3.9 |
-| 検索（全件の LIKE） | 72 ms | 250 → 233 ms | 36 ms | 193 → 182 ms | 5.1 |
-| REST API（記事 100 件） | 110 ms | 149 → 148 ms | 35 ms | 73 → 74 ms | 2.1 |
-| 管理画面のダッシュボード | 44 ms | 197 → 94 ms | 20 ms | 154 → 67 ms | 3.3 |
-| 投稿一覧（`edit.php`） | 56 ms | 153 → 95 ms | 22 ms | 110 → 59 ms | 2.6 |
-
-（段階 22 の値は、レビューの修正の後に測り直したもの。REST API の HeimDB の DB の時間は、測るたびに 55〜85 ms で揺れる。）
-
-### 同時アクセス（10 並列で 30 秒）
-
-| ページ | MySQL | HeimDB（段階 22 → 23） |
-|---|---|---|
-| トップページ | 81.1 件/秒 | 70.8 → 74.1 件/秒 |
-| 個別の記事 | 52.4 件/秒 | 39.0 → 49.0 件/秒 |
-
-### 書き込み（1 回あたり、200 回）
-
-| 操作 | MySQL | HeimDB（段階 22 → 23） |
-|---|---|---|
-| 記事の作成（カテゴリ 1、タグ 2） | 30 ms | 277 → 137 ms |
-| コメントの追加 | 2.9 ms | 42 → 13 ms |
-| オプションの更新 | 1.4 ms | 6.7 → 7.1 ms |
-| 記事の削除 | 27 ms | 224 → 99 ms |
-
-### 文ごと（mysql コマンドで 20 回の平均。接続の約 2 ms を含む）
-
-| 文 | MySQL | HeimDB（段階 22 → 23） |
-|---|---|---|
-| 記事ごとの承認済みコメントの数 | 3 ms | 28 → 3 ms |
-| タグの term 数（記事 75 件） | 3 ms | 28 → 3 ms |
-| 作ったばかりのタグの term 数 | 3 ms | 25 → 2 ms |
-| メニューの項目のメタの JOIN | 4 ms | 31 → 4 ms |
-| 最近のコメント 25 件 | 3 ms | 48 → 5 ms |
-| 承認済みコメントの数（2 万行） | 10 ms | 33 → 19 ms |
-| カテゴリの term 数（記事 5,000 件） | 5 ms | 31 → 25〜29 ms |
-
-### 残っている差
-
-- 記事の作成の残り（137 ms）の約半分は、記事 5,000 件のカテゴリの term 数（1 回 25 ms 前後 × 3 回）。MySQL はインデックスだけで数えるが、HeimDB のインデックスは文字列の列の値を持たないので本体の行を読む。
-- 1 回の書き込み（`INSERT`、`UPDATE`）は 3〜4 ms で、記事の作成の 40 回ほどで残りの大半になる。
-- 検索の全件の `LIKE` と `REGEXP`（対象外）。
-
-
-## 段階 23 のレビューの修正の後（1f08fcd）
-
-同じ条件で測り直した（2026-10-08。HeimDB のデータは同じ mysqldump から取り込み直した。MySQL も同じ時に測り直した）。変えたことは `docs/plan.md` の「段階 23 のレビューで直したこと」（ページ送りと `SQL_CALC_FOUND_ROWS` の読み方、範囲を後ろの列まで狭める、列の型に入らない値の扱い）。速くするための変更ではないので、段階 23 と揺れの範囲で同じなことを確かめた。
-
-### ページの表示（中央値）
-
-| ページ | MySQL 全体 | HeimDB 全体（段階 23 → 今） | MySQL の DB | HeimDB の DB（段階 23 → 今） | DB の倍率 |
-|---|---|---|---|---|---|
-| トップページ | 42 ms | 62 → 61 ms | 10 ms | 28 → 28 ms | 2.9 |
-| 個別の記事（コメント 60 件） | 70 ms | 102 → 99 ms | 12 ms | 42 → 42 ms | 3.5 |
-| カテゴリの 2 ページ目 | 43 ms | 81 → 81 ms | 12 ms | 48 → 49 ms | 4.2 |
-| 検索（全件の LIKE） | 70 ms | 233 → 221 ms | 35 ms | 182 → 174 ms | 4.9 |
-| REST API（記事 100 件） | 105 ms | 148 → 154 ms | 33 ms | 74 → 79 ms | 2.4 |
-| 管理画面のダッシュボード | 42 ms | 94 → 89 ms | 20 ms | 67 → 64 ms | 3.3 |
-| 投稿一覧（`edit.php`） | 53 ms | 95 → 92 ms | 22 ms | 59 → 57 ms | 2.6 |
-
-（REST API の HeimDB の DB の時間は、段階 23 と同じく測るたびに揺れる。）
-
-### 同時アクセス（10 並列で 30 秒）
-
-| ページ | MySQL | HeimDB（段階 23 → 今） |
-|---|---|---|
-| トップページ | 99.5 件/秒 | 74.1 → 80.0 件/秒 |
-| 個別の記事 | 57.2 件/秒 | 49.0 → 54.3 件/秒 |
-
-（MySQL も段階 23 のとき（81.1、52.4 件/秒）より多く、マシンの状態による揺れが大きい。倍率で見ると、トップページは 0.80、個別の記事は 0.95。）
-
-### 書き込み（1 回あたり、200 回）
-
-| 操作 | MySQL | HeimDB（段階 23 → 今） |
-|---|---|---|
-| 記事の作成（カテゴリ 1、タグ 2） | 29 ms | 137 → 144 ms |
-| コメントの追加 | 3.0 ms | 13 → 15 ms |
-| オプションの更新 | 1.3 ms | 7.1 → 7.0 ms |
-| 記事の削除 | 21 ms | 99 → 96 ms |
-
-### 文ごと（mysql コマンドで 20 回の平均。接続の約 2 ms を含む）
-
-| 文 | MySQL | HeimDB（段階 23 → 今） |
-|---|---|---|
-| 記事ごとの承認済みコメントの数 | 4 ms | 3 → 4 ms |
-| タグの term 数（記事 75 件） | 4 ms | 3 → 4 ms |
-| 作ったばかりのタグの term 数 | 5 ms | 2 → 2 ms |
-| メニューの項目のメタの JOIN | 4 ms | 4 → 3 ms |
-| 最近のコメント 25 件 | 3 ms | 5 → 5 ms |
-| 最近のコメントの 2 ページ目（`LIMIT 25, 25`） | 3 ms | （段階 23 は並べ替え）→ 5 ms |
-| 承認済みコメントの数（2 万行） | 8 ms | 19 → 19 ms |
-| カテゴリの term 数（記事 5,000 件） | 5 ms | 25〜29 → 27 ms |
-| 種類と状態と著者で絞る記事（`type_status_author` の 3 列の範囲） | 3 ms | — → 2 ms |
-
-### 残っている差
-
-段階 23 の後と同じ。記事の作成の約半分はカテゴリの term 数（インデックスに列の値がなく本体の行を読む）、残りは 1 回 3〜4 ms の書き込みの積み重ね。検索の全件の `LIKE` と `REGEXP` は対象外。
-
-## 段階 24 の後（コミットの記録）
-
-コミットのたびに、書いた内容をもう一度 `l/<時刻>` に記録として書くようになった（`docs/plan.md` の段階 24）。書き込みへの影響を、同じデータで記録あり（既定）と記録なし（`-replication-log-retention 0`）を交互に測った（2026-10-09、`scripts/bench/writes.php`、200 回）。
-
-| 操作 | 記録あり（1 回目） | 記録なし | 記録あり（2 回目） |
-|---|---|---|---|
-| 記事の作成 | 139 ms | 149 ms | 149 ms |
-| コメントの追加 | 14.5 ms | 15.6 ms | 14.6 ms |
-| オプションの更新 | 7.3 ms | 7.3 ms | 6.7 ms |
-| 記事の削除 | 96 ms | 105 ms | 106 ms |
-
-差は測るたびの揺れの範囲で、記録による遅れは見えない（WordPress の 1 回のコミットは小さく、時間は同期書き込みの待ちと文の処理が占める）。読み出しは変えていないので、ページの表示は測っていない。
-
-## 段階 25 の後（同期のレプリカ）
-
-同期のレプリカでは、コミットのたびに、レプリカがそれを適用してディスクに確定させたという知らせを待つ（`docs/plan.md` の段階 25）。同じマシンに本番とレプリカを置き（ディスクも同じ）、レプリケーションなし、非同期（`-replication-sync-timeout 0`）、同期（既定の 10 秒）を 2 回ずつ測った（2026-10-09、`scripts/bench/writes.php`、200 回。1 回目と 2 回目）。
-
-| 操作 | なし | 非同期 | 同期 |
-|---|---|---|---|
-| 記事の作成 | 165 / 161 ms | 182 / 175 ms | 204 / 204 ms |
-| コメントの追加 | 13.5 / 13.8 ms | 21.7 / 17.5 ms | 24.2 / 23.5 ms |
-| オプションの更新 | 6.5 / 6.1 ms | 10.2 / 8.6 ms | 11.3 / 11.8 ms |
-| 記事の削除 | 108 / 107 ms | 120 / 123 ms | 158 / 160 ms |
-
-- 知らせを待つ時間は、1 回のコミットで平均 4.6〜5.6 ms（`heimdb_status` の `replication_sync_ack_wait_avg`）。レプリカのディスクの確定（macOS の `F_FULLFSYNC`）と往復の時間。コメントやオプションのように 1〜2 回コミットする操作は 1.7〜1.9 倍、記事の作成（文の処理が多い）は 1.25 倍、記事の削除は 1.5 倍になった。
-- 非同期でも遅くなるのは、同じディスクでレプリカが適用（同期書き込み）するため。レプリカを別のマシンに置けば、非同期の遅れは消え、同期の遅れは往復の時間とレプリカのディスクの確定の時間になる。
-- `ALTER TABLE`（3 つの操作。列の追加 2 つとインデックスの追加。小さなテーブル）は 14 ms から 28 ms になった（操作ごとにコミットして知らせを待つ）。
-- ページの表示（`scripts/bench/pages.py`、20 回の中央値）は、同期でもレプリケーションなしと揺れの範囲で同じ（読み取りは知らせを待たない。トップページ 108 / 65 ms、ダッシュボード 101 / 96 ms、投稿一覧 100 / 100 ms。なし / 同期。トップページの差は起動直後のキャッシュ）。
-- 既定の待ち時間は 10 秒のままにする。遅さは待ち時間ではなくコミットごとの知らせで決まるので、同期が要らなければ `-replication-sync-timeout 0` で非同期にする（README に書いた）。
-
-## 段階 26 の後（TLS）
-
-MySQL の接続を TLS にしたときの差（`docs/plan.md` の段階 26）。TLS の側は `-require-tls` で起動し、WordPress に `MYSQL_CLIENT_FLAGS`（`MYSQLI_CLIENT_SSL`）を指定した（暗号化していない接続は拒否されるので、測ったのは確かに TLS の接続）。証明書は ECDSA P-256。暗号化なし、TLS を交互に 2 回ずつ測った（2026-10-09）。
-
-| 測ったもの | 暗号化なし | TLS |
-|---|---|---|
-| 接続して 1 文を実行して閉じる（PHP の mysqli、200 回の中央値） | 0.98 ms | 2.45 ms |
-| トップページ（`scripts/bench/pages.py`、20 回の中央値） | 81 / 62 ms | 79 / 64 ms |
-| 個別の記事 | 120 / 100 ms | 116 / 91 ms |
-| 管理画面のダッシュボード | 94 / 97 ms | 93 / 100 ms |
-| 投稿一覧 | 97 / 99 ms | 97 / 101 ms |
-| 記事の作成（`scripts/bench/writes.php`、200 回） | 155 ms | 151 ms |
-| コメントの追加 | 13.6 ms | 13.9 ms |
-
-- 接続の握手（TLS 1.3）で 1 回の接続が約 1.5 ms 増える。WordPress は要求ごとに 1 回接続するので、ページの表示では揺れ（同じ条件で 20 ms ほど）に埋もれて見えない。書き込みは 1 つの接続で繰り返すので変わらない。
-- 2 回目の TLS の REST API（100 件）だけ 391 ms（p95 972 ms）と遅かった。DB の時間も同じだけ増えていて、ほかの回（137〜148 ms）と比べて接続の差では説明できないので、マシンの揺れとみなした。
-
-## 段階 27 の後（インデックスだけで読む）
-
-インデックスのエントリに列の元の値を持たせ、文が使う列だけで読めるときは本体の行を引かないようにした。あわせて、文が使う列だけを復号し、主キーで 1 行を引く検索は使い回すイテレータで引く（`docs/plan.md` の段階 27）。段階 27 より前に書いたエントリは値を持たないので、変更前（段階 26 の 30ced08）と変更後のそれぞれで、同じダンプ（`wpbench`、記事 5,203 件）を新しいデータディレクトリに入れ直して測った。交互に 2 回ずつ（2026-10-10。1 回目 / 2 回目）。
-
-| 測ったもの | 変更前 | 変更後 | MySQL |
-|---|---|---|---|
-| カテゴリの term 数（記事 5,000 件。mysql のクライアントで 20 回、接続を含む 1 回あたり） | 28.4 / 33.0 ms | 15.8 / 16.5 ms | 5.6〜6.3 ms |
-| 承認済みコメントの数（2 万行） | 18.5 / 20.2 ms | 16.8 / 18.6 ms | 9.5〜10.8 ms |
-| 記事の作成（`scripts/bench/writes.php`、200 回） | 139 / 152 ms | 118 / 113 ms | |
-| コメントの追加 | 14.7 / 14.3 ms | 14.4 / 17.4 ms | |
-| 記事の削除 | 99 / 102 ms | 94 / 86 ms | |
-| トップページ（`scripts/bench/pages.py`、20 回の中央値） | 61 / 64 ms | 62 / 62 ms | 44〜48 ms |
-| 個別の記事（コメント 60 件） | 102 / 100 ms | 103 / 100 ms | 73 ms |
-| カテゴリの 2 ページ目 | 82 / 85 ms | 80 / 84 ms | 44〜45 ms |
-| 検索 | 228 / 235 ms | 216 / 222 ms | 71 ms |
-| REST API（100 件） | 146 / 151 ms | 168 / 138 ms | 108〜111 ms |
-| 管理画面のダッシュボード | 103 / 96 ms | 82 / 86 ms | 44 ms |
-| 投稿一覧 | 96 / 100 ms | 82 / 87 ms | 55 ms |
-
-- カテゴリの term 数は約半分になった。`wp_term_relationships` はインデックスだけで読み、`wp_posts` は主キーで引いた行の `post_status` と `post_type` だけを復号する。残りは 5,000 回の主キーの引きと、go-mysql-server の JOIN と集計の処理。MySQL と同じ順（`wp_posts` のインデックスが先）にしても、プロセスの中の測定で 11 ms 前後と変わらなかったので、コスト計算は変えていない。
-- 記事の作成と削除は、term 数の分だけ速くなった（目安の 100 ms には届かない）。ダッシュボードと投稿一覧は、記事やコメントの数を数える文がインデックスだけで読めるようになった分だけ速くなった。
-- REST API の 1 回目（168 ms）は、2 回目（138 ms）と変更前（146 / 151 ms）から見て揺れとみなした。コメントの追加の 2 回目（17.4 ms）も同じ。
-
-## 段階 28 の後（小さな速さの改善）
-
-行ごとのメモリ確保を減らし、文字列の定数との比較を軽くし、投稿一覧でインデックスだけで読めるインデックスを選び、作る側をインデックスだけで読むハッシュ JOIN を軽く見積もった（`docs/plan.md` の段階 28）。データの形式は変わらないので、段階 27 の後と同じデータディレクトリの写しを 2 つ作り、変更前（段階 27 の f067ad5）と変更後で交互に 2 回ずつ測った（2026-10-10。1 回目 / 2 回目）。
-
-| 測ったもの | 変更前 | 変更後 | MySQL |
-|---|---|---|---|
-| カテゴリの term 数（mysql のクライアントで 20 回、接続を含む 1 回あたり） | 14.3 / 14.7 ms | 9.3 / 10.2 ms | 5.9〜7.0 ms |
-| 承認済みコメントの数（2 万行） | 17.6 / 18.5 ms | 11.4 / 12.5 ms | 9.9〜11.3 ms |
-| 投稿一覧の文（`ORDER BY post_date DESC LIMIT 0, 20`） | 9.3 / 9.6 ms | 4.9 / 5.9 ms | 4.1〜4.9 ms |
-| 記事の作成（`scripts/bench/writes.php`、200 回） | 111 / 118 ms | 110 / 113 ms | |
-| コメントの追加 | 14.3 / 14.6 ms | 14.3 / 13.5 ms | |
-| 記事の削除 | 92 / 92 ms | 101 / 98 ms | |
-| トップページ（`scripts/bench/pages.py`、20 回の中央値） | 65 / 71 ms | 79 / 51 ms | 43〜50 ms |
-| 個別の記事（コメント 60 件） | 104 / 110 ms | 103 / 99 ms | 71〜74 ms |
-| カテゴリの 2 ページ目 | 82 / 84 ms | 91 / 77 ms | 44〜46 ms |
-| 検索 | 226 / 222 ms | 225 / 222 ms | 69〜78 ms |
-| REST API（100 件） | 152 / 160 ms | 177 / 166 ms | 107〜114 ms |
-| 管理画面のダッシュボード | 87 / 85 ms | 68 / 66 ms | 44〜48 ms |
-| 投稿一覧 | 86 / 88 ms | 70 / 67 ms | 54〜55 ms |
-
-- 目安（承認済みコメントの数 13 ms 以下、term 数 11 ms 以下、投稿一覧 75 ms 以下）はどれも満たした。ダッシュボードの DB の時間は 59 ms から 41〜42 ms、投稿一覧は 52 ms から 35〜36 ms。
-- 記事の作成と削除はほとんど変わらない。1 回の書き込みのコミット（自動コミットで約 5 ms）の大半が、macOS の完全な fsync（`F_FULLFSYNC`）の時間で、記事の作成は約 40 回コミットする（段階 27 のレビュー）。
-- トップページ、カテゴリの 2 ページ目、REST API は、1 回目と 2 回目の差が変更前後の差より大きく、揺れとみなした（REST API の DB の時間は 74 / 85 ms と 79 / 89 ms）。
-
-## Linux（GCE）での書き込み（fsync の確認）
-
-段階 28 の後、記事の作成と削除の大半を macOS の fsync（`F_FULLFSYNC`）と見ていたので、Linux で確かめた（2026-10-10、段階 28 の後の 5c01705）。GCE の n2-standard-4（東京、Debian 12）で、起動ディスク（pd-balanced）とローカル SSD（NVMe、ext4）を比べた。データは手元の MySQL の `wpbench` を mysqldump で写し、MySQL 8.0.46（Docker、既定の設定。`innodb_flush_log_at_trx_commit=1`、`sync_binlog=1`）と HeimDB に取り込んだ。WordPress は手元と同じ `scripts/bench/docker-compose.yml`。
-
-Pebble の Sync 付きのコミット 1 回（2 KB の値と索引のキー 1 つ、1,000 回）:
-
-| 環境 | 平均 | p99 |
-|---|---|---|
-| macOS（手元） | 4.4 ms | 8.3 ms |
-| GCE pd-balanced | 1.1 ms | 1.4 ms |
-| GCE ローカル SSD | 0.5 ms（中央値 0.3 ms） | 2.9 ms |
-
-書き込み（`scripts/bench/writes.php`、100 回の 1 回あたり）:
-
-| 操作 | MySQL（pd-balanced） | HeimDB（pd-balanced） | HeimDB（ローカル SSD） |
-|---|---|---|---|
-| 記事の作成 | 64 ms | 105 ms | 106 ms |
-| コメントの追加 | 5.9 ms | 4.3 ms | 4.6 ms |
-| オプションの更新 | 2.8 ms | 1.6 ms | 1.5 ms |
-| 記事の削除 | 45 ms | 55 ms | 55 ms |
-
-- ディスクを速くしても変わらず、Linux では fsync は記事の作成の主な時間ではない。strace で数えた fdatasync は、4 つの操作を 50 回ずつで 1,165 回（1 回の操作あたり平均約 6 回、1 回約 1.1 ms）。コミットの fsync の間隔を延ばす設定は作らない。
-- 書き込みの文だけなら HeimDB の方が速い（記事の作成の中で、`UPDATE wp_term_taxonomy` 6 回が 5.3 ms と 9.0 ms、`INSERT INTO wp_term_relationships` 3 回が 3.0 ms と 6.5 ms）。
-- 記事の作成の差（約 40 ms）は、ほぼ次の 2 つの読み出し（記事 1 件あたり）:
-  - `SELECT COUNT(*) FROM wp_postmeta WHERE meta_key = '_encloseme' AND post_id = N`（`add_metadata` の重複の確認）が 2 回で 23 ms（MySQL 0.7 ms）。HeimDB は `meta_key` のインデックスで同じキーの 5,000 行を読み、MySQL は `post_id` のインデックスを使う。統計を作るときに 2 行に 1 行を等間隔に間引くので、記事ごとに続けて挿入される `_pingme` と `_encloseme` のうち `_pingme` だけが残り、`_encloseme` を 0 行と見積もっていた（`_pingme` では `post_id` を選ぶ）。ベンチマークのデータは cron が動かないので、この 2 つのキーが 5,000 件ずつ溜まっている。
-  - カテゴリの term 数が 6 回で 39 ms（MySQL 23 ms）。
-
-## 段階 29 の後（統計の間引き方）
-
-統計を作るときに間引く行を、主キーの順に等間隔ではなく主キーのハッシュで選ぶようにした（`docs/plan.md` の段階 29）。変更前（段階 28 の後の 5c01705）と変更後を交互に 2 回ずつ測った（2026-10-10。1 回目 / 2 回目）。
-
-GCE（上の「Linux（GCE）での書き込み」と同じインスタンス、pd-balanced。`writes.php` を 100 回）:
-
-| 操作 | 変更前 | 変更後 |
-|---|---|---|
-| 記事の作成 | 116 / 120 ms | 99 / 100 ms |
-| コメントの追加 | 6.2 / 6.3 ms | 6.9 / 6.3 ms |
-| オプションの更新 | 2.3 / 2.3 ms | 2.4 / 2.3 ms |
-| 記事の削除 | 63 / 66 ms | 69 / 67 ms |
-
-手元（macOS。`writes.php` を 200 回）:
-
-| 操作 | 変更前 | 変更後 |
-|---|---|---|
-| 記事の作成 | 150 / 143 ms | 113 / 106 ms |
-| コメントの追加 | 14.1 / 14.1 ms | 13.4 / 14.0 ms |
-| 記事の削除 | 100 / 104 ms | 95 / 101 ms |
-
-- 記事の作成の `SELECT COUNT(*) FROM wp_postmeta WHERE meta_key = '_encloseme' AND post_id = N` は、記事 1 件あたり 2 回で 25 ms から 3 ms 未満になった（GCE。`post_id` のインデックスを使う）。
-- GCE の記事の削除は、文ごとの時間が変更前後で同じ（term 数 3 回で 19.7 ms と 19.1 ms など）なので、揺れとみなした。
-- 手元は、測っている間にほかのアプリが CPU を 1 つ使い切っていて、MySQL のページの表示も段階 28 の後より遅かった（ダッシュボード 79〜89 ms、段階 28 の後は 44〜48 ms）。ページの表示は比べられないので表に載せない。REST API の DB の時間は、交互に 3 回ずつ測り直して変更前 100 / 111 / 114 ms、変更後 113 / 116 / 115 ms で、文ごとの時間（遅い文のログ）では変更後の方が遅い文はなかった。
-- そのアプリを止めてから交互に 2 回ずつ測り直すと、記事の作成は変更前 144 / 139 ms、変更後 124 / 131 ms、記事の削除は 112 / 108 ms と 114 / 112 ms、ページの表示は変更前後で揺れの範囲で同じだった（ダッシュボード 129 / 125 ms と 123 / 125 ms、投稿一覧 149 / 132 ms と 134 / 134 ms）。ただし、このときも手元はマシン全体が段階 28 の後の約 2 倍遅かった（MySQL の `SELECT 1` が 2.7 ms から 4.8 ms、MySQL のダッシュボードが 47 ms から 87 ms）ので、手元の値は前後の比較だけに使う。
-
-## 段階 47（0.2.6 の現状と段階 29 からの変化）
-
-2026-10-14、GCE の n2-standard-4（東京、Debian 12、pd-balanced。段階 28、29 と同じ構成）で、MySQL 8.0.46（Docker、既定の設定）、HeimDB 0.2.6（2875eaf）、段階 29 のバージョン（8bc811a）を測った。データは手元の `wpbench`（記事 5,205 件、コメント 20,001 件、記事のメタ 25,005 件）を mysqldump で写した。HeimDB の 2 つのバージョンは、同じ 3316 番で交互に 2 回ずつ（データのディレクトリは別）測り、MySQL は毎回いっしょに測った（表は平均）。GCE は手元の macOS より PHP が遅く、ページの全体の時間は段階 28 の手元の値より長い。
-
-### ページの表示（1 つずつ順に 30 回、中央値。`pages.py`）
-
-| ページ | クエリ数 | MySQL 全体 | 0.2.6 全体 | 段階 29 全体 | MySQL の DB | 0.2.6 の DB | 段階 29 の DB |
-|---|---|---|---|---|---|---|---|
-| トップページ | 24 | 91 ms | 111 ms | 112 ms | 14 ms | 32 ms | 32 ms |
-| 個別の記事（コメント 60 件） | 33 | 167 ms | 195 ms | 198 ms | 18 ms | 45 ms | 46 ms |
-| カテゴリの 2 ページ目 | 24 | 97 ms | 206 ms | 209 ms | 20 ms | 127 ms | 130 ms |
-| 検索 | 29 | 184 ms | 509 ms | 540 ms | 102 ms | 425 ms | 455 ms |
-| REST API（100 件） | 116 | 239 ms | 311 ms | 316 ms | 52 ms | 119 ms | 121 ms |
-| 管理画面のダッシュボード | 41 | 98 ms | 180 ms | 171 ms | 44 ms | 124 ms | 115 ms |
-| 投稿一覧 | 42 | 127 ms | 179 ms | 176 ms | 49 ms | 100 ms | 96 ms |
-
-### 同時アクセス（10 並列で 30 秒、件/秒）
-
-| ページ | MySQL | 0.2.6 | 段階 29 |
-|---|---|---|---|
-| トップページ | 26.4 | 22.1 | 21.9 |
-| 個別の記事 | 14.1 | 12.1 | 12.0 |
-
-### 書き込み（`writes.php` を 100 回、1 回あたりの DB の時間）
-
-| 操作 | MySQL | 0.2.6 | 段階 29 |
-|---|---|---|---|
-| 記事の作成 | 64.9 ms | 92.8 ms | 91.9 ms |
-| コメントの追加 | 6.4 ms | 5.8 ms | 6.0 ms |
-| オプションの更新 | 3.2 ms | 2.3 ms | 2.3 ms |
-| 記事の削除 | 47.3 ms | 66.0 ms | 65.2 ms |
-
-### 文ごと（同じ接続で 10 回、中央値。GCE）
-
-| 文 | MySQL | 0.2.6 | 内訳（pprof、0.2.6） |
-|---|---|---|---|
-| 検索の `LIKE '%語%'`（記事の全件。MySQL も全件を読む） | 86 ms | 393 ms | 89% が `LikeMatcher`。1 文字ごとに照合順序の重みを map で引く（`Utf8mb4_unicode_520_ci_RuneWeight`） |
-| カテゴリの記事の一覧（`LEFT JOIN wp_term_relationships` と `SQL_CALC_FOUND_ROWS`） | 8.8 ms | 99 ms | `post_date` を持たない `type_status_author` を選んで本体の行を読み、記事ごとに `wp_term_relationships` を引く（引くたびに走査を作る） |
-| 自分のコメントの数（`user_id = 1`。MySQL も全件を読む） | 6.7 ms | 41 ms | 行の復号、比較の型の変換、Pebble の走査に広く散る |
-| カテゴリの term 数（記事の作成で 6 回、削除で 3 回） | 6.3 ms | 19 ms | インデックスの範囲で絞った後の同じ条件の Filter（文字列の照合順序の比較）、HashJoin、割り当て |
-| トップページの記事の一覧（`SQL_CALC_FOUND_ROWS ... LIMIT 10`） | 2.6 ms | 9.1 ms | インデックスだけで読む（本体は読まない）。同時アクセスの中では 1 回 31 ms |
-
-記事の作成と削除の差（27 ms と 19 ms）は、ほぼカテゴリの term 数（作成 45 ms と 24 ms、削除 24 ms と 10 ms）。書き込みの文そのもの（`INSERT`、`UPDATE`）は HeimDB の方が速い。同時アクセスのプロファイルでは、割り当て（`mallocgc`）が約 20%、文字列の照合順序の比較（`StringType.Compare`。重みを map で引く）が約 10%。
-
-### 段階 29 からの変化
-
-ページ、同時アクセス、書き込みは、ダッシュボード（DB 124 ms と 115 ms）と投稿一覧（100 ms と 96 ms）のほかは揺れの範囲で同じ。手元で同じデータの 2 つのバージョンに同じ文を流すと、0.2.6 はインデックスを読む文が 1 割ほど遅く（term 数 5.2 ms から 5.9 ms、承認済みのコメントの数 8.0 ms から 8.9 ms、前後の記事 0.54 ms から 0.74 ms）、コミットを順に建てて測ると、段階 38 の 20864ba（1 列の文字列の主キー）で変わっていた。インデックスのエントリから主キーを取り出す `pkOfEntry` が、エントリごとに `stringPK()`（主キーの列の型を `types.IsInteger` で調べる）を呼ぶようになったため。`stringPK()` を常に false にしたバージョンでは、3 つとも段階 29 と同じ速さに戻った（0.55 ms など）。表ごとに 1 回だけ求めれば直る。
-
-計測のついでに見つけた不具合: `EXPLAIN PLAN SELECT COUNT(*) FROM wp_comments WHERE (comment_approved = '0' OR comment_approved = '1') AND comment_type NOT IN ('note') AND user_id = 1` が `result max1Row iterator returned more than one row` のエラーになる（文そのものは動く）。
-
-## 段階 48 の後（主キーの確かめ、照合順序の重みの表）
-
-2026-10-15、段階 47 と同じ構成の GCE（別のインスタンス。段階 47 のものより速く、MySQL の値も 2 割ほど小さい）で、HeimDB 0.2.6 と段階 48 のバージョン（d1685ac）を交互に 2 回ずつ、MySQL といっしょに測った（表は平均）。同じインスタンスの中の比較だけに使う。
-
-### ページの表示（DB の時間、中央値）
-
-| ページ | MySQL | 0.2.6 | 段階 48 |
-|---|---|---|---|
-| トップページ | 12 ms | 26 ms | 26 ms |
-| 個別の記事（コメント 60 件） | 15 ms | 38 ms | 36 ms |
-| カテゴリの 2 ページ目 | 17 ms | 102 ms | 98 ms |
-| 検索 | 68 ms | 332 ms | 245 ms |
-| REST API（100 件） | 43 ms | 100 ms | 104 ms |
-| 管理画面のダッシュボード | 35 ms | 100 ms | 90 ms |
-| 投稿一覧 | 41 ms | 83 ms | 74 ms |
-
-### 同時アクセス（10 並列で 30 秒、件/秒）と書き込み（1 回あたりの DB の時間）
-
-| | MySQL | 0.2.6 | 段階 48 |
-|---|---|---|---|
-| トップページ | 31.8 | 26.0 | 27.3 |
-| 個別の記事 | 17.0 | 14.4 | 14.8 |
-| 記事の作成 | 55.4 ms | 78.1 ms | 74.5 ms |
-| コメントの追加 | 5.9 ms | 5.2 ms | 4.8 ms |
-| オプションの更新 | 2.6 ms | 2.1 ms | 2.1 ms |
-| 記事の削除 | 41.2 ms | 58.1 ms | 52.1 ms |
-
-### 文ごと（10 回の中央値）
-
-| 文 | MySQL | 0.2.6 | 段階 48 |
-|---|---|---|---|
-| 検索の `LIKE` | 55 ms | 302 ms | 215 ms |
-| カテゴリの記事の一覧 | 7.4 ms | 80 ms | 77 ms |
-| カテゴリの term 数 | 5.6 ms | 14.9 ms | 12.4 ms |
-| 承認済みのコメントの数 | 16.7 ms | 23.9 ms | 20.9 ms |
-| 自分のコメントの数 | 4.6 ms | 32.6 ms | 29.1 ms |
-| トップページの記事の一覧 | 2.0 ms | 7.4 ms | 6.3 ms |
-| 固定ページの一覧 | 1.6 ms | 3.2 ms | 2.5 ms |
-| 前後の記事 | 0.32 ms | 2.57 ms | 1.84 ms |
-| term の読み込み（`t.term_id IN (...)`） | 0.45 ms | 1.58 ms | 1.73 ms |
-
-- 検索は DB の時間が 26% 減った。記事の作成と削除（term 数）、ダッシュボードと投稿一覧（コメントの数、インデックスを読む文）は 1 割ほど減った。
-- REST API は 2 回とも 3〜4 ms（3%）遅く、term の読み込みの小さな文も 0.15 ms ほど遅い。重みの関数を包んだ分の呼び出しが、元から速い照合順序（`utf8mb4_bin` など）で効いている見込み（段階 49 で確かめる）。
-- 検索は、`LikeMatcher` の照合そのもの（後戻り）がまだ残りの大半。
-
-## 段階 50 の後（範囲が表す条件の Filter、JOIN の下のカバリングインデックス）
-
-2026-10-15、段階 47、48 と同じ構成の GCE（また別のインスタンス）で、HeimDB 0.2.6 と段階 50 のバージョン（4a7bfaa。段階 48 の直しを含む）を交互に 2 回ずつ、MySQL といっしょに測った（表は平均）。
-
-### ページの表示（DB の時間、中央値）
-
-| ページ | MySQL | 0.2.6 | 段階 50 |
-|---|---|---|---|
-| トップページ | 13 ms | 31 ms | 26 ms |
-| 個別の記事（コメント 60 件） | 18 ms | 45 ms | 39 ms |
-| カテゴリの 2 ページ目 | 19 ms | 125 ms | 114 ms |
-| 検索 | 101 ms | 424 ms | 287 ms |
-| REST API（100 件） | 50 ms | 116 ms | 106 ms |
-| 管理画面のダッシュボード | 42 ms | 119 ms | 105 ms |
-| 投稿一覧 | 48 ms | 96 ms | 84 ms |
-
-### 同時アクセス（10 並列で 30 秒、件/秒）と書き込み（1 回あたりの DB の時間）
-
-| | MySQL | 0.2.6 | 段階 50 |
-|---|---|---|---|
-| トップページ | 27.3 | 22.7 | 23.7 |
-| 個別の記事 | 14.5 | 12.5 | 12.9 |
-| 記事の作成 | 59.6 ms | 90.6 ms | 73.1 ms |
-| コメントの追加 | 5.5 ms | 5.2 ms | 4.9 ms |
-| オプションの更新 | 2.7 ms | 2.1 ms | 2.0 ms |
-| 記事の削除 | 41.6 ms | 62.8 ms | 52.9 ms |
-
-### 文ごと（10 回の中央値）
-
-| 文 | MySQL | 0.2.6 | 段階 50 |
-|---|---|---|---|
-| 検索の `LIKE` | 85 ms | 394 ms | 258 ms |
-| カテゴリの記事の一覧 | 8.0 ms | 98 ms | 89 ms |
-| カテゴリの term 数 | 5.8 ms | 18.7 ms | 11.7 ms |
-| 承認済みのコメントの数 | 19.8 ms | 28.9 ms | 24.8 ms |
-| 自分のコメントの数 | 6.3 ms | 39.8 ms | 35.5 ms |
-| トップページの記事の一覧 | 2.5 ms | 8.8 ms | 5.8 ms |
-| 前後の記事 | 0.33 ms | 2.80 ms | 2.17 ms |
-
-- 0.2.6 から、DB の時間は検索で 32%、ほかのページで 9〜16% 減った。記事の作成は 19%、削除は 16% 減り、カテゴリの term 数は 37% 減った。
-- REST API の段階 48 の戻り（3%）は、この計測では見えない（2 回とも 0.2.6 より 8〜11 ms 速い）。手元で重みの関数を包む前と後を交互に測っても、包んだ方が遅い文はなかった。
-- カテゴリの記事の一覧は、`type_status_date` をインデックスだけで読むようになったが、9% しか減っていない。残りは、記事ごとに `wp_term_relationships` を主キーで引く 5,000 回の読み出し（MySQL は 1 回 0.5 µs ほど）。
-
-## 段階 51 の後（カテゴリとタグの一覧の LEFT JOIN）
-
-2026-10-15、段階 47 から 50 と同じ構成の GCE（また別のインスタンス。これまでより速く、MySQL の値も小さい）で、HeimDB 0.2.7 と段階 51 のバージョン（8bb707d）を交互に 2 回ずつ、MySQL といっしょに測った（表は平均）。ページは、これまでの記事 5,001 件のカテゴリ（`--cat 1`）に加えて、記事 50 件のカテゴリ（`--cat 5`）でも測った。
-
-### ページの表示（DB の時間、中央値）
-
-| ページ | MySQL | 0.2.7 | 段階 51 |
-|---|---|---|---|
-| トップページ | 9.6 ms | 21.1 ms | 20.1 ms |
-| 個別の記事（コメント 60 件） | 12.8 ms | 30.9 ms | 30.7 ms |
-| カテゴリの 2 ページ目（記事 5,001 件） | 14.7 ms | 89.4 ms | 49.1 ms |
-| カテゴリの 2 ページ目（記事 50 件） | 8.2 ms | 82.2 ms | 18.7 ms |
-| 検索 | 65.1 ms | 236.5 ms | 236.1 ms |
-| REST API（100 件） | 38.3 ms | 87.4 ms | 86.6 ms |
-| 管理画面のダッシュボード | 31.8 ms | 82.0 ms | 81.6 ms |
-| 投稿一覧 | 36.7 ms | 64.5 ms | 64.3 ms |
-
-### 同時アクセス（10 並列で 30 秒、件/秒）と書き込み（1 回あたりの DB の時間）
-
-| | MySQL | 0.2.7 | 段階 51 |
-|---|---|---|---|
-| トップページ | 34.0 | 29.8 | 29.9 |
-| 個別の記事 | 18.2 | 16.1 | 16.1 |
-| 記事の作成 | 45.8 ms | 56.9 ms | 55.6 ms |
-| コメントの追加 | 4.4 ms | 4.0 ms | 4.0 ms |
-| オプションの更新 | 2.2 ms | 1.7 ms | 1.7 ms |
-| 記事の削除 | 33.5 ms | 41.3 ms | 40.7 ms |
-
-### 文ごと（10 回の中央値）
-
-| 文 | MySQL | 0.2.7 | 段階 51 |
-|---|---|---|---|
-| カテゴリの記事の一覧（記事 5,001 件） | 6.5 ms | 70.8 ms | 31.1 ms |
-| カテゴリの記事の一覧（記事 50 件） | 0.37 ms | 62.7 ms | 1.06 ms |
-| 検索の `LIKE` | 54 ms | 214 ms | 212 ms |
-| カテゴリの term 数 | 4.5 ms | 8.6 ms | 8.6 ms |
-| 1 件の記事の term の読み込み（`tr.object_id IN (5003)`） | （MySQL は ORDER BY のエラー） | 1.95 ms | 2.51 ms |
-
-- カテゴリのページの DB の時間は、記事の多いカテゴリで 45%、記事の少ないカテゴリで 77% 減った。カテゴリの記事の一覧の文は、記事の少ないカテゴリで 60 倍速く、MySQL に近づいた。ほかのページ、同時アクセス、書き込みは同じ。
-- 1 件の記事の term の読み込みが遅くなった。測ったバージョンは値が 1 つの IN をどの表でも等号にしていて、`tr.object_id = 5003` から、go-mysql-server が term_taxonomy の全件（300 件）から引く順を選んだため。INNER JOIN にした表の IN だけを等号にするよう直した（手元で、カテゴリの 2 つの文のほかは、直す前と同じ速さ: term の読み込み 0.63 ms と 0.64 ms）。カテゴリの一覧の文は、直しの前後で同じ計画。
-
-## 段階 52 の後（整数の型の確かめ）
-
-2026-10-15、段階 51 と同じ構成の GCE（また別のインスタンス。MySQL の値は段階 51 のものとほぼ同じ）で、HeimDB 0.2.7 と段階 52 のバージョン（0cc405c。段階 51 の直しを含む）を交互に 2 回ずつ、MySQL といっしょに測った（表は平均）。
-
-### ページの表示（DB の時間、中央値）
-
-| ページ | MySQL | 0.2.7 | 段階 52 |
-|---|---|---|---|
-| トップページ | 9.6 ms | 20.3 ms | 19.9 ms |
-| 個別の記事（コメント 60 件） | 12.7 ms | 30.4 ms | 29.9 ms |
-| カテゴリの 2 ページ目（記事 5,001 件） | 14.6 ms | 88.4 ms | 42.7 ms |
-| カテゴリの 2 ページ目（記事 50 件） | 8.1 ms | 81.6 ms | 18.6 ms |
-| 検索 | 65.0 ms | 236.0 ms | 234.9 ms |
-| REST API（100 件） | 37.9 ms | 85.0 ms | 85.2 ms |
-| 管理画面のダッシュボード | 31.5 ms | 81.7 ms | 79.6 ms |
-| 投稿一覧 | 36.5 ms | 63.6 ms | 63.3 ms |
-
-### 同時アクセス（10 並列で 30 秒、件/秒）と書き込み（1 回あたりの DB の時間）
-
-| | MySQL | 0.2.7 | 段階 52 |
-|---|---|---|---|
-| トップページ | 34.2 | 29.7 | 29.9 |
-| 個別の記事 | 18.3 | 16.1 | 16.2 |
-| 記事の作成 | 46.1 ms | 56.9 ms | 55.9 ms |
-| コメントの追加 | 4.6 ms | 4.1 ms | 4.1 ms |
-| オプションの更新 | 2.1 ms | 1.7 ms | 1.7 ms |
-| 記事の削除 | 33.8 ms | 41.9 ms | 40.8 ms |
-
-### 文ごと（10 回の中央値）
-
-| 文 | MySQL | 0.2.7 | 段階 52 |
-|---|---|---|---|
-| カテゴリの記事の一覧（記事 5,001 件） | 6.6 ms | 70.9 ms | 25.0 ms |
-| カテゴリの記事の一覧（記事 50 件） | 0.37 ms | 62.6 ms | 1.14 ms |
-| 自分のコメントの数 | 4.2 ms | 28.1 ms | 25.6 ms |
-| カテゴリの term 数 | 4.5 ms | 8.7 ms | 8.2 ms |
-| 固定ページの一覧 | 1.6 ms | 2.21 ms | 1.99 ms |
-| 1 件の記事の term の読み込み（`tr.object_id IN (5003)`） | （MySQL は ORDER BY のエラー） | 1.92 ms | 1.76 ms |
-
-- 記事の多いカテゴリの記事の一覧は、段階 51 の計測（31.1 ms）から 25.0 ms になり、ページの DB の時間も 49 ms から 43 ms になった（インスタンスは別だが、MySQL の値はほぼ同じ）。
-- 段階 51 の計測で遅くなった 1 件の記事の term の読み込みは、0.2.7 より速い（INNER JOIN にした表の IN だけを等号にする直し）。
-- ほかの文も、主キーやインデックスで引くものは数 % 速い。ページ、同時アクセス、書き込みは揺れの範囲。
-
-## 段階 53（大きな表の ALTER TABLE と CREATE INDEX のメモリ）
-
-2026-10-15、GCE の n2-standard-4（東京、Debian 12、pd-balanced）で、ホスティング側の報告と同じ形の表（`meta_id BIGINT PRIMARY KEY AUTO_INCREMENT, post_id BIGINT, meta_key VARCHAR(255), meta_value LONGTEXT` に `wp_postmeta` と同じ `KEY post_id`、`KEY meta_key(191)`。`meta_value` は `2023/02/image-<N>.png`）に 160 万行と 311 万行を入れ、起動し直した直後に 1 回ずつ流した。最大メモリは、文の直前に `/proc/<pid>/clear_refs` で戻した `VmHWM`（取りこぼしのない最大の RSS）。データの大きさは 180 MB と 315 MB。起動直後の RSS はどれも 150〜165 MiB。
-
-| 文 | バージョン | 160 万行の時間 | 160 万行の最大メモリ | 311 万行の時間 | 311 万行の最大メモリ |
-|---|---|---|---|---|---|
-| `ALTER TABLE m ADD COLUMN probe TINYINT NULL` | 0.2.7 | 16.2 秒 | 4,161 MiB | 31.5 秒 | 7,806 MiB |
-| 同上 | 段階 53 | 11.7 秒 | 707 MiB | 24.9 秒 | 745 MiB |
-| `CREATE INDEX probe_idx ON m (post_id, meta_value(50))` | 0.2.7 と同じ作り方 | 8.6 秒 | 2,459 MiB | 16.8 秒 | 4,525 MiB |
-| 同上 | 段階 53 | 8.3 秒 | 610 MiB | 18.0 秒 | 629 MiB |
-
-- 0.2.7 の 311 万行の `ADD COLUMN` の 7.8 GiB は、ホスティング側の報告（上限 7.7 GB のコンテナで、311 万行で落ちる）と合う。
-- 書き直しを何回に分けてコミットするか（1 回の大きさ）で、時間とメモリが変わった（311 万行の `ADD COLUMN`。起動し直さずに `COUNT(*)` の後で測ったもの）: 1 MB で 50.1 秒と 1,253 MiB、4 MB で 26.3 秒と 1,656 MiB、16 MB で 24.7 秒と 1,475 MiB。コミットのたびに同期書き込みをするので小さいと遅く、Pebble のメモリ上の表（4 MB）を大きく超える書き込みは別扱いで書き出されるので大きいとメモリが増える（手元では 64 MB で 2.7 GiB）。4 MB にした。
-- 起動し直した直後の書き直しは、AUTO_INCREMENT の次の値を求めるために全行をメモリに読んでいた（`maxAutoIncrementValue`）。行を集めずに AUTO_INCREMENT の列だけを読むようにして、行数による違いがなくなった（4 MB で、直す前は 160 万行で 784 MiB と 311 万行で 1,386 MiB、直した後は 726 MiB と 728 MiB）。
-
-## 段階 54（検索の LIKE の照合）
-
-2026-10-16、段階 52 と同じ構成の GCE（また別のインスタンス）で、HeimDB 0.2.7 と段階 54 のバージョン（段階 51〜53 の直しを含む）を交互に 2 回ずつ、MySQL といっしょに測った（表は平均）。
-
-### ページの表示（DB の時間、中央値。記事 5,001 件のカテゴリで測った回）
-
-| ページ | MySQL | 0.2.7 | 段階 54 |
-|---|---|---|---|
-| トップページ | 10.7 ms | 22.0 ms | 21.2 ms |
-| 個別の記事（コメント 60 件） | 13.9 ms | 31.8 ms | 31.8 ms |
-| カテゴリの 2 ページ目（記事 5,001 件） | 15.6 ms | 90.8 ms | 44.7 ms |
-| カテゴリの 2 ページ目（記事 50 件） | 9.2 ms | 83.4 ms | 19.6 ms |
-| 検索 | 66.3 ms | 238.4 ms | 50.0 ms |
-| REST API（100 件） | 40.9 ms | 91.3 ms | 88.2 ms |
-| 管理画面のダッシュボード | 32.8 ms | 83.9 ms | 81.0 ms |
-| 投稿一覧 | 37.9 ms | 67.2 ms | 65.3 ms |
-
-### 同時アクセス（10 並列で 30 秒、件/秒）と書き込み（1 回あたりの DB の時間）
-
-| | MySQL | 0.2.7 | 段階 54 |
-|---|---|---|---|
-| トップページ | 33.6 | 29.2 | 29.1 |
-| 個別の記事 | 18.0 | 15.9 | 15.8 |
-| 記事の作成 | 50.0 ms | 59.6 ms | 59.8 ms |
-| コメントの追加 | 5.1 ms | 4.4 ms | 4.3 ms |
-| オプションの更新 | 2.3 ms | 1.9 ms | 1.8 ms |
-| 記事の削除 | 36.3 ms | 44.2 ms | 43.8 ms |
-
-### 文ごと（10 回の中央値）
-
-| 文 | MySQL | 0.2.7 | 段階 54 |
-|---|---|---|---|
-| 検索の `LIKE` | 54.4 ms | 215.2 ms | 24.1 ms |
-| カテゴリの記事の一覧（記事 5,001 件） | 6.8 ms | 71.3 ms | 25.8 ms |
-| カテゴリの記事の一覧（記事 50 件） | 0.33 ms | 63.3 ms | 1.03 ms |
-| カテゴリの term 数 | 4.5 ms | 8.9 ms | 8.6 ms |
-
-- 検索のページの DB の時間は 79% 減り、MySQL より短くなった。検索の文は 9 倍速く、MySQL の半分以下。ほかのページ、同時アクセス、書き込みは同じ。
-- 手元（Apple M4）の照合だけのベンチマーク（`BenchmarkLikeSearch`、本文 1 件）: 英語の本文で 32 µs から 1.8 µs、日本語の本文（`BenchmarkLikeSearchJapanese`）で 34 µs から 7.5 µs。ベンチマークのデータは英語なので、日本語の本文の GCE での数字はない。
-
-
-## 段階 55（大きな表の読み出しと書き込みのメモリ）
-
-2026-10-16、段階 53 と同じ形の表と同じ測り方（GCE の n2-standard-4、文の直前に `clear_refs` で戻した `VmHWM`）で、160 万行と 310 万行を入れ、文ごとに起動し直して HeimDB 0.2.8 と段階 55 のバージョンを測った。読み出しはどちらも上限なし（cgroup の上限 12 GiB）。書き込みは、0.2.8 を上限なし（12 GiB）、段階 55 を `-memory-limit 4G`（cgroup の上限 5 GiB、スワップなし）で流した。起動して表を読み込んだ後の RSS はどれも 413〜505 MiB。
-
-### 読み出し（時間と最大メモリ）
-
-| 文 | 0.2.8（160 万行） | 段階 55（160 万行） | 0.2.8（310 万行） | 段階 55（310 万行） |
+| Page | HeimDB total | MySQL total | HeimDB DB time | MySQL DB time |
 |---|---|---|---|---|
-| `SELECT COUNT(*) FROM m` | 1.06 秒、610 MiB | 0.87 秒、472 MiB | 2.03 秒、836 MiB | 1.56 秒、512 MiB |
-| `SELECT meta_id FROM m WHERE meta_value LIKE '%zzz%'` | 1.63 秒、715 MiB | 1.38 秒、473 MiB | 3.21 秒、1,168 MiB | 2.60 秒、501 MiB |
-| `SELECT * FROM m WHERE meta_id > 0 LIMIT 10` | 1.58 秒、962 MiB | 0.012 秒、431 MiB | 3.21 秒、1,592 MiB | 0.012 秒、503 MiB |
-| `SELECT meta_id, post_id FROM m WHERE post_id > 0 LIMIT 10` | 0.75 秒、697 MiB | 0.015 秒、425 MiB | 1.53 秒、913 MiB | 0.014 秒、485 MiB |
-| `SELECT meta_id FROM m ORDER BY meta_value DESC LIMIT 10` | 6.72 秒、854 MiB | 6.58 秒、642 MiB | 13.42 秒、1,327 MiB | 12.95 秒、868 MiB |
+| Front page | 114 ms | 97 ms | 30.1 ms | 15.3 ms |
+| Single post (60 comments) | 196 ms | 175 ms | 37.4 ms | 19.1 ms |
+| Category, page 2 (5,001 posts) | 130 ms | 103 ms | 45.6 ms | 21.4 ms |
+| Search | 145 ms | 189 ms | 56.4 ms | 102.8 ms |
+| REST API (100 posts) | 330 ms | 276 ms | 102.2 ms | 58.8 ms |
+| Admin dashboard | 126 ms | 100 ms | 67.9 ms | 43.6 ms |
+| Posts list (admin) | 156 ms | 131 ms | 72.7 ms | 49.9 ms |
 
-### 書き込み（時間と最大メモリ）
+- DB time is 1.5 to 2.1 times MySQL's; search is 0.5 times, because MySQL's search reads every post with `LIKE` more slowly.
+- The whole page is 1.1 to 1.3 times MySQL's, since most of a page's time is PHP.
 
-| 文 | 0.2.8（160 万行） | 段階 55、上限 4G（160 万行） | 0.2.8（310 万行） | 段階 55、上限 4G（310 万行） |
-|---|---|---|---|---|
-| `DELETE FROM m` | 22.1 秒、5,123 MiB | 20.9 秒、4,164 MiB | 43.3 秒、9,643 MiB | 20.5 秒でエラー 1041、3,938 MiB |
-| `UPDATE m SET meta_value = CONCAT(meta_value, 'x')` | 14.1 秒、2,590 MiB | 13.6 秒、2,244 MiB | 27.9 秒、4,995 MiB | 26.3 秒、3,618 MiB |
+### Writes and concurrency
 
-- 読み出しは、行数によらずほぼ起動直後の RSS のまま。`LIMIT` の付いた範囲の検索は、当たる行を集めなくなって 100 倍以上速くなった。`ORDER BY ... LIMIT` だけはまだ増える（エンジンの並べ替え）。
-- 310 万行の `DELETE` は、0.2.8 では 9.4 GiB 使った（ホスティングの上限 7.7 GB のコンテナなら落ちる）。段階 55 は上限で止めてエラー 1041 を返し、行はそのまま残った。上限 4 GiB に対して最大のメモリは 3.9〜4.0 GiB で、cgroup の上限（5 GiB）には届かない。
-- 最初の測定で、止めた直後の文（`SELECT COUNT(*)`）も 1041 で止まった。止めたときの GC はまだトランザクションが生きている間に回るので、100 ms 以内に来た文がその値で止まっていた。取り消した後の最初の確認で GC を回し直すようにし、測り直して通ることを確かめた（310 万行が残り、RSS は 1,954 MiB）。
-- ページの表示、同時アクセス、書き込み（段階 54 と同じ手順。別のインスタンスで、MySQL を含めて全体に段階 54 の回より遅い）は 0.2.8 と同じか少し短い。検索のページは 67.3 ms から 62.0 ms、REST API は 123.2 ms から 117.7 ms、管理画面のダッシュボードは 108.0 ms から 100.5 ms。ほかは 4% 以内。
-
-## 段階 58（常駐と、行数とともに増える経路のメモリ）
-
-2026-10-16〜17、段階 55 と同じ形の表（`wp_postmeta` と同じインデックス、310 万行、`meta_value` は 20 バイトほど）と同じ測り方（GCE の n2-standard-4、文の直前に `clear_refs` で戻した `VmHWM`、文ごとに起動し直す）で、段階 58 のバージョン（cgo なし）を測った。上限なし（cgroup 12 GiB）と、ホスティングの 1 サイトの割り当て 4,096 MiB（cgroup 4 GiB、`-memory-limit 3276M`）で流した。生きているヒープとキャッシュは `heimdb_status()` の値（文の後）。
-
-### 常駐
-
-| 時点 | RSS | 生きているヒープ | ブロックキャッシュ |
-|---|---|---|---|
-| 開いた直後 | 477 MiB | 200 MiB | 127 MiB |
-| 全件を読んだ後（`COUNT(*)`、`LIKE`） | 503 MiB | 195 MiB | 127 MiB |
-
-生きているヒープのうち、行数によらない分は約 70 MiB（照合順序の表 36 MiB など）。手元の 50 万行でも、起動直後は 42 MiB、読んだ後は 178 MiB（キャッシュ 134 MiB）で、常駐は行数にほぼよらない。
-
-### 行数とともに増える経路（最大の RSS）
-
-| 文 | 上限なし | 上限 3,276 MiB（直す前） | 上限 3,276 MiB（直した後） |
-|---|---|---|---|
-| `SELECT meta_id FROM m ORDER BY meta_value DESC LIMIT 10` | 12.9 秒、866 MiB | 871 MiB | |
-| `SELECT meta_value, COUNT(*) FROM m GROUP BY meta_value ORDER BY COUNT(*) DESC LIMIT 3` | 10.0 秒、1,728 MiB | 1,712 MiB | |
-| `ALTER TABLE m ADD COLUMN extra ...` | 31.7 秒、850 MiB | 752 MiB | |
-| `UPDATE m SET meta_value = CONCAT(meta_value, 'x')` | 26.5 秒、4,042 MiB | 3,345 MiB | |
-| `DELETE FROM m` | 42.2 秒、9,344 MiB | 1041（行は残る）、3,222 MiB | |
-| 全行を変えたブランチのマージ | 145 秒、7,871 MiB | 1041、3,702 MiB（止めたときの生きているヒープ 3,508 MiB） | 1041、3,341 MiB（2,464 MiB） |
-| 列を足したブランチのマージ | 881 秒、11,869 MiB | **OOM で落ちた** | 658 秒で 1041、3,266 MiB |
-| 全行を変えた後の `heimdb_restore` | **cgroup 12 GiB で OOM** | **OOM で落ちた** | 50 秒で 1041、3,399 MiB |
-
-- マージと復元は、変わる行をすべてメモリに集めて計画を作り、計画を作る間と、自分のトランザクションに書く間（editor の `tx`）にメモリの上限を確かめていなかった。確かめるようにして、3 つとも落ちずに 1041 を返し、データは変わらず、次の文も動いた。
-- 列を足したブランチのマージは、変わった行がなくても全行を読み比べ（`full compare`）、親のテーブルを書き直すので遅い（上限なしで 881 秒）。行数に比例しない形にすることと合わせて、次の段階の候補。
-
-## 段階 59（大きな書き込み、マージ、復元のメモリ）
-
-2026-10-17、段階 58 と同じ表と測り方（GCE の n2-standard-4、310 万行、上限なしは cgroup 12 GiB、上限ありは cgroup 4 GiB と `-memory-limit 3276M`）で、段階 59 のバージョン（cgo なし）を測った。生きているヒープは `heimdb_status()` の値（直前の GC の時点）。
-
-### 1 つのトランザクションでの取り込み（`mariadb-dump` の既定の形。14,000 行ずつの INSERT を 222 文、最後に `COMMIT`）
-
-| | 0.2.10 | 段階 59 |
+| | HeimDB | MySQL |
 |---|---|---|
-| 上限なし | 78 秒、11,192 MiB（取り込んだ後に cgroup の 12 GiB で落ちた） | 69 秒、5,643 MiB |
-| 上限 3,276 MiB | 約 180 万行で 1041、3,659 MiB | 全行を書いた後の `COMMIT` で 1041（コミットのバッチに 1,942 MiB 要る。生きているヒープ 1,577 MiB）、3,064 MiB |
-| 1,536 MiB を超える取り込み（250 万行、1 行約 700 バイト）、上限なし | | 1197、6,066 MiB |
-| 同じ、上限 3,276 MiB | | バッチが倍に伸びる前に 1041、2,844 MiB |
-
-上限 3,276 MiB で、1 つのトランザクションに何行まで入るかも確かめた（各 2 回、同じ結果）。150 万行は 31 秒で入った（最大 2,712〜2,810 MiB、コミットの前の生きているヒープ 1,745 MiB）。200 万行と 250 万行は、全行を書いた後の `COMMIT` で 1041 になった（200 万行: コミットのバッチに 1,248 MiB 要り、生きているヒープ 1,321 MiB との和が境目の 2,457 MiB を超えた）。境目は 150 万行と 200 万行の間で、1 行あたりに直すと、コミットの前の生きているヒープが約 0.56 KB、コミットのバッチが約 0.62 KB。
-
-手元（cgo なし、20 万行）では、コミットしていない書き込みの生きているヒープが 286 MB から 140 MB に、最大の RSS が 853 MiB から 483 MiB になった。コミットの間の山は、トランザクションのバッチの 5.6 倍から 4.1 倍になった。
-
-### 行数とともに増える経路（最大の RSS）
-
-| 文 | 段階 58、上限なし | 段階 59、上限なし | 段階 59、上限 3,276 MiB |
-|---|---|---|---|
-| `ORDER BY meta_value DESC LIMIT 10` | 866 MiB | 976 MiB | 925 MiB |
-| `GROUP BY meta_value` | 1,728 MiB | 1,755 MiB | 1,845 MiB |
-| `ALTER TABLE m ADD COLUMN extra ...` | 850 MiB | 621 MiB | 602 MiB |
-| `UPDATE m SET meta_value = CONCAT(meta_value, 'x')` | 26.5 秒、4,042 MiB | 24.1 秒、2,625 MiB | 2,626 MiB |
-| `DELETE FROM m` | 42.2 秒、9,344 MiB | 36.7 秒、4,640 MiB | 1041、2,730 MiB |
-| 全行を変えたブランチのマージ | 145 秒、7,871 MiB | 55 秒、4,439 MiB | 53 秒で 1041、3,333 MiB |
-| 列を足したブランチのマージ | 881 秒、11,869 MiB | 81 秒、5,477 MiB | 64 秒で 1041、3,285 MiB |
-| 全行を変えた後の復元 | 12 GiB で落ちた | 154 秒、10,540 MiB（20 秒後に 12 GiB で落ちた） | 73 秒で 1041、3,115 MiB |
-
-- 列を足したマージの 881 秒は、行ごとに既定値を求めるたびに作っていた文脈（`NewEmptyContext`、1 回 38 µs）が大半だった。使い回して 81 秒になった。行を主キーごとに点で読む代わりに、時点ごとの走査を主キーの順に進めるようにした（5 万行以上）。
-- 最初の測定で、上限 3,276 MiB の復元が 1041 にならずに cgroup に落とされた。コミットのバッチを先に一度に確保するようにしたため、上限の確かめより前に確保していた。確保の前に確かめるようにした。
-- 最初の測定で、上限なしの復元が、結果を返した後に 12.5 GiB で落ちた。手元の 100 万行で見ると、コミットの後にも 2 つの山があった。(1) レプリカに送る記録が中身全体で 1 つの値なので、Pebble がファイルに書き出すときに、その値（1 GB）と圧縮した写し（0.6 GB）を持った。記録を 1 MiB ずつに分けて書くようにした（データ形式のバージョン 3）。(2) Pebble は書き出した大きなバッチを、次の書き出しで列の配列が作り直されるまで手放さなかった。大きなコミットの後に書き出しを 2 回促すようにした。手元の 100 万行の復元で、30 秒後の生きているヒープが 2,291 MiB から 301 MiB になった（残りは Pebble が使い回すために置いたバッチの索引で、GC が進めば消える）。
-- 直した後も、上限なしの復元は 20 秒後に落ちた。上限がないと、Go の GC は生きているヒープ（復元の最中に 6.7 GiB）の 2 倍まで使ってから回収するため。上限を付ければ、GC がその手前で回り、文は 1041 で止まる（`docs/operations.md` の「上限を付けて動かす」）。
-- コミットの最中には、Pebble が WAL に書く作業の分（100 万行の復元で 1.2 GB）も一時的に使う。Pebble の中の動きで、設定では変えられない。
-
-## 0.2.11（README の表）
-
-2026-10-17、段階 47 と同じ構成の GCE（n2-standard-4、東京、Debian 12、pd-balanced。また別のインスタンス）で、手元の `wpbench`（記事 5,205 件、コメント 20,001 件）を mysqldump で写し、MySQL 8.0.46（Docker、既定の設定）、HeimDB 0.2.10、0.2.11 を測った。HeimDB の 2 つのバージョンは、同じ 3316 番で交互に 2 回ずつ（データのディレクトリは別）測り、MySQL は毎回いっしょに測った（表は平均）。手順は段階 47 と同じ（`pages.py --newest 5003 --cat 1 --runs 30`、`ab -c 10 -t 30`、`writes.php` を 100 回）。カテゴリは記事 5,001 件のもの。
-
-### ページの表示（中央値。全体と DB の時間）
-
-| ページ | MySQL 全体 | 0.2.10 全体 | 0.2.11 全体 | MySQL の DB | 0.2.10 の DB | 0.2.11 の DB |
-|---|---|---|---|---|---|---|
-| トップページ | 94 ms | 109 ms | 108 ms | 15.0 ms | 29.1 ms | 28.9 ms |
-| 個別の記事（コメント 60 件） | 170 ms | 194 ms | 193 ms | 19.9 ms | 41.5 ms | 41.7 ms |
-| カテゴリの 2 ページ目（記事 5,001 件） | 99 ms | 135 ms | 136 ms | 21.1 ms | 55.8 ms | 56.8 ms |
-| 検索 | 186 ms | 147 ms | 146 ms | 102.9 ms | 62.0 ms | 61.5 ms |
-| REST API（100 件） | 249 ms | 325 ms | 320 ms | 56.7 ms | 123.0 ms | 120.0 ms |
-| 管理画面のダッシュボード | 100 ms | 156 ms | 159 ms | 44.8 ms | 100.0 ms | 102.2 ms |
-| 投稿一覧 | 129 ms | 166 ms | 167 ms | 50.4 ms | 86.2 ms | 87.5 ms |
-
-### 同時アクセス（10 並列で 30 秒、件/秒）と書き込み（1 回あたりの DB の時間）
-
-| | MySQL | 0.2.10 | 0.2.11 |
-|---|---|---|---|
-| トップページ | 26.3 | 22.9 | 23.1 |
-| 個別の記事 | 14.0 | 12.5 | 12.4 |
-| 記事の作成 | 65.8 ms | 79.3 ms | 79.7 ms |
-| コメントの追加 | 7.2 ms | 5.9 ms | 5.7 ms |
-| オプションの更新 | 3.1 ms | 2.3 ms | 2.4 ms |
-| 記事の削除 | 48.4 ms | 58.3 ms | 59.1 ms |
-
-- 0.2.10 と 0.2.11 は、どれも揺れの範囲で同じ（段階 59 でトランザクションの書き込みの持ち方を変えたが、小さな書き込みの速さは変わらない）。
-- このインスタンスは段階 51〜54 のものより遅く（MySQL のトップページの DB の時間が 10.7 ms と 15.0 ms）、段階 47 のものと同じくらい。段階 47 の 0.2.6 と比べると、カテゴリの 2 ページ目の DB の時間が 127 ms から 57 ms、検索が 425 ms から 62 ms、REST API が 119 ms から 120 ms、ダッシュボードが 124 ms から 102 ms。
-
-## 段階 75（0.2.22 の現状と 0.2.11 からの変化）
-
-2026-10-25、段階 47 と同じ構成の GCE（n2-standard-4、東京、Debian 12.15、pd-balanced。また別のインスタンス）で、手元の `wpbench`（記事 5,205 件、コメント 20,001 件）を mysqldump で写し、MySQL 8.0.46（Docker、既定の設定）、HeimDB 0.2.11、0.2.22 を測った。HeimDB の 2 つのバージョンは、同じ 3316 番で交互に 2 回ずつ（データのディレクトリは別）測り、MySQL は毎回いっしょに測った（表は平均。MySQL の個別の記事は、起動直後の 1 回目の 82.8 ms を除いた 3 回の平均）。手順は段階 47 と同じ（`pages.py --newest 5003 --cat 1 --runs 30`、`ab -c 10 -t 30`、`writes.php` を 100 回）。
-
-### ページの表示（中央値。全体と DB の時間）
-
-| ページ | MySQL 全体 | 0.2.11 全体 | 0.2.22 全体 | MySQL の DB | 0.2.11 の DB | 0.2.22 の DB |
-|---|---|---|---|---|---|---|
-| トップページ | 96 ms | 113 ms | 113 ms | 15.9 ms | 29.8 ms | 30.4 ms |
-| 個別の記事（コメント 60 件） | 173 ms | 198 ms | 200 ms | 20.4 ms | 42.6 ms | 43.2 ms |
-| カテゴリの 2 ページ目（記事 5,001 件） | 103 ms | 139 ms | 143 ms | 22.1 ms | 56.9 ms | 60.3 ms |
-| 検索 | 190 ms | 150 ms | 150 ms | 104.0 ms | 62.7 ms | 62.8 ms |
-| REST API（100 件） | 263 ms | 339 ms | 344 ms | 62.5 ms | 127.5 ms | 130.7 ms |
-| 管理画面のダッシュボード | 103 ms | 159 ms | 164 ms | 46.3 ms | 101.3 ms | 105.1 ms |
-| 投稿一覧 | 133 ms | 170 ms | 173 ms | 52.1 ms | 87.3 ms | 90.1 ms |
-
-### 同時アクセス（10 並列で 30 秒、件/秒）と書き込み（1 回あたりの DB の時間）
-
-| | MySQL | 0.2.11 | 0.2.22 |
-|---|---|---|---|
-| トップページ | 25.5 | 22.3 | 22.4 |
-| 個別の記事 | 13.6 | 12.0 | 12.0 |
-| 記事の作成 | 65.8 ms | 80.1 ms | 80.0 ms |
-| コメントの追加 | 6.6 ms | 5.7 ms | 6.1 ms |
-| オプションの更新 | 3.1 ms | 2.4 ms | 2.4 ms |
-| 記事の削除 | 48.5 ms | 59.5 ms | 60.1 ms |
-
-### 0.2.11 からの変化
-
-トップページ、検索、同時アクセス、書き込みは揺れの範囲で同じ。カテゴリの 2 ページ目（+3.4 ms）、ダッシュボード（+3.8 ms）、REST API（+3.2 ms）、投稿一覧（+2.8 ms）は、2 回とも 3〜6% 遅かった。ページが流す文（210 種類）を 2 つのバージョンに交互に 30 回ずつ流して比べると、差は行を多く読む 3 つの文に集まっていた（カテゴリの記事の一覧 30.5 ms から 33.8 ms、承認済みのコメントの数 25.1 ms から 27.2 ms、自分のコメントの数 33.4 ms から 34.8 ms）。210 種類の合計は 263.4 ms から 269.8 ms。
-
-途中のコミットを建てて、0.2.11 のデータの写しで 3 つの文を 0.2.11 と並べて測ると、1 つのコミットで変わったのではなく、段階 70（10db8f2、主キーの型）でカテゴリの記事の一覧が 3〜4%、段階 72（a8d6c4b、主キーのない表）で 3 つの文がさらに 2〜3% と、少しずつ増えていた（1〜2% は測るたびに揺れる）。同じ数の文を流す間の CPU プロファイルを比べると、0.2.22 の CPU 時間は承認済みのコメントの数で 6.5%、カテゴリの記事の一覧で 2.3% 多いが、増えた分は多くの関数に 1% 未満ずつ散っており、目立って重くなった関数はない。行を主キーで引く `RowReader.Peek` と Pebble の `SeekGE` の割合が増えたが、そのコード、Pebble のバージョン、キャッシュの設定は変わっていない。行の読み書きの経路に足した型の分岐と、バイナリの配置の違いの積み重ねとみて、直すところは決めない。
-
-### MySQL との差の内訳（文ごと、0.2.22）
-
-ページが流す 210 種類の文を、MySQL と 0.2.22 に交互に 30 回ずつ流した（`mysql` コマンドで同じ接続、`SET SESSION sql_mode=''` の後。WordPress は `ONLY_FULL_GROUP_BY` を外すので、外さないと MySQL は `DISTINCT` と `ORDER BY` の 2 つの文をエラー 3065 にする）。合計は MySQL 101 ms、HeimDB 269 ms。差の大きいもの:
-
-| 文 | ページ | MySQL | 0.2.22 | MySQL の計画 | HeimDB の計画と内訳（pprof） |
-|---|---|---|---|---|---|
-| 自分のコメントの数（`comment_approved IN ('0','1')`、`user_id = 1`） | ダッシュボード | 6.6 ms | 35.7 ms | 表の全件を読む | `comment_approved_date_gmt` の範囲（ほぼ全件）を読み、1 行ずつ主キーで本体を引く（`Peek` が約 3 割）。`comment_approved` の条件を外した全件の読み出しは 23.9 ms |
-| カテゴリの記事の一覧（`LEFT JOIN wp_term_relationships`、`SQL_CALC_FOUND_ROWS`） | カテゴリ | 7.8 ms | 32.0 ms | `type_status_date` の範囲を読み、記事ごとに主キーで引く | MySQL と同じ形。記事ごとの引きが 56%（引くたびの実行の節の組み立て 12%、主キーの点の読み出し 27%、キーの組み立て 9%）。1 回あたり MySQL 約 1 µs、HeimDB 約 4.5 µs |
-| 記事の term（`DISTINCT t.term_id, tr.object_id ... object_id IN (100 件)`） | REST API、一覧 | 3.3 ms | 10.7 ms | | 記事ごとに `wp_term_relationships` を引く JOIN（上と同じ形） |
-| 承認済みのコメントの数 | ダッシュボード | 20.6 ms | 27.3 ms | | 自分のコメントの数と同じ読み方 |
-| 月の一覧（`DISTINCT YEAR(post_date), MONTH(post_date)`） | 投稿一覧 | 4.0 ms | 10.2 ms | | `type_status_date` の範囲を読んで並べ、関数を行ごとに評価 |
-| 状態ごとの記事の数（`GROUP BY post_status`） | 投稿一覧 | 2.0 ms | 6.5 ms | | |
-| `SQL_CALC_FOUND_ROWS` の記事の一覧（5 種類） | どのページにも | 2.4〜4.8 ms | 5.5〜8.0 ms | | インデックスだけで読むが、全件を数える |
-
-全件を読む文（`SELECT COUNT(*) FROM wp_comments WHERE comment_type NOT IN ('note') AND user_id = 1`）の CPU は、Pebble の走査 25%、行の復号 28%、条件の評価 28%（うち 16% は行ごとに比較の両辺の型を変換する `comparison.castLeftAndRight`）。
-
-### 次の候補
-
-| 候補 | 効く文 | 見込み | 手間 |
-|---|---|---|---|
-| (1) 比較の型の変換を行ごとにしない（定数を列の型にしておき、同じ型なら変換を飛ばす） | フィルタを持つ走査のすべて（コメントの数 2 つ、月の一覧、状態ごとの数） | 条件の評価の 16% のうち大半。コメントの数で 1 文 4〜6 ms | エンジンの式の評価。データ形式は変えない |
-| (2) 主キーで引く JOIN の 1 回あたりを軽くする（外側の行ごとに実行の節を組み立て直さない、点の読み出しのキーと読み手を使い回す） | カテゴリの記事の一覧、記事の term、`ID IN (...)` | 1 回 4.5 µs の半分ほどなら、カテゴリの 2 ページ目で約 12 ms、REST API で数 ms | エンジンの JOIN の実行と HeimDB の読み出し。データ形式は変えない |
-| (3) 範囲がほぼ全件で、インデックスが列を持たないときは、表を全件読む | 自分のコメントの数、承認済みのコメントの数 | 自分のコメントの数で約 12 ms | 統計による計画の選び方（段階 23）。データ形式は変えない |
-| (4) 行の復号を速くする（使う列だけを読み飛ばしなしで取れる形） | 全件を読む文のすべて | 復号の 28% の一部 | データ形式を変える。大きい |
-
-## 段階 77（整数の比較、ほぼ全件の範囲の読み方、主キーで引く JOIN）
-
-2026-10-26、段階 75 と同じ構成の GCE（n2-standard-4、東京、Debian 12、pd-balanced。また別のインスタンス）で、同じ `wpbench` を MySQL 8.0.46、HeimDB 0.2.22、段階 77 のバージョンに入れて、段階 75 と同じ手順で測った。HeimDB の 2 つのバージョンは同じ 3316 番で交互に 2 回ずつ（データのディレクトリは別）、MySQL は毎回いっしょに測った（表は平均）。このインスタンスは段階 75 のものより全体に速く（MySQL のトップページの全体が 96 ms から 72 ms）、段階 75 の表とは比べず、同じインスタンスの中で比べる。
-
-### ページの表示（中央値。全体と DB の時間）
-
-| ページ | MySQL 全体 | 0.2.22 全体 | 段階 77 全体 | MySQL の DB | 0.2.22 の DB | 段階 77 の DB |
-|---|---|---|---|---|---|---|
-| トップページ | 72 ms | 84 ms | 83 ms | 10.6 ms | 21.7 ms | 21.8 ms |
-| 個別の記事（コメント 60 件） | 131 ms | 150 ms | 149 ms | 13.7 ms | 31.1 ms | 31.2 ms |
-| カテゴリの 2 ページ目（記事 5,001 件） | 77 ms | 108 ms | 94 ms | 15.7 ms | 45.9 ms | 32.3 ms |
-| 検索 | 131 ms | 113 ms | 113 ms | 66.2 ms | 47.2 ms | 47.1 ms |
-| REST API（100 件） | 192 ms | 245 ms | 245 ms | 40.0 ms | 89.6 ms | 89.4 ms |
-| 管理画面のダッシュボード | 75 ms | 124 ms | 109 ms | 32.6 ms | 80.3 ms | 65.0 ms |
-| 投稿一覧 | 99 ms | 130 ms | 125 ms | 38.0 ms | 68.6 ms | 62.9 ms |
-
-### 同時アクセス（10 並列で 30 秒、件/秒）と書き込み（1 回あたりの DB の時間）
-
-| | MySQL | 0.2.22 | 段階 77 |
-|---|---|---|---|
-| トップページ | 33.3 | 28.9 | 29.1 |
-| 個別の記事 | 17.7 | 15.6 | 15.7 |
-| 記事の作成 | 49.8 ms | 59.1 ms | 60.0 ms |
-| コメントの追加 | 5.0 ms | 4.1 ms | 4.2 ms |
-| オプションの更新 | 2.3 ms | 1.8 ms | 1.8 ms |
-| 記事の削除 | 36.1 ms | 43.5 ms | 43.8 ms |
-
-カテゴリの 2 ページ目の DB の時間が 13.6 ms（30%）、ダッシュボードが 15.3 ms（19%）、投稿一覧が 5.7 ms（8%）縮んだ（2 回とも同じ向きで、回ごとの揺れは 1 ms 以内）。ほかのページ、同時アクセス、書き込みは揺れの範囲で同じ。
-
-### 文ごと
-
-ページが流す 213 種類の文を、0.2.22 と段階 77 に交互に 30 回ずつ流した（段階 75 と同じ手順）。合計は 215.5 ms から 187.1 ms（MySQL は 76.8 ms）。変わったのは計画が変わった 3 つの文で、ほかは ±0.15 ms 以内。
-
-| 文 | ページ | MySQL | 0.2.22 | 段階 77 | 変えたこと |
-|---|---|---|---|---|---|
-| カテゴリの記事の一覧（`LEFT JOIN wp_term_relationships`、`SQL_CALC_FOUND_ROWS`） | カテゴリ | 6.3 ms | 26.5 ms | 14.1 ms | `term_taxonomy_id` のインデックスのエントリだけで作るハッシュ JOIN（記事ごとに主キーで引かない） |
-| 自分のコメントの数（`comment_approved IN ('0','1')`、`user_id = 1`） | ダッシュボード | 4.2 ms | 26.8 ms | 18.2 ms | 表の全件を読む。`user_id = 1` の比較を行ごとに変換しない |
-| 承認済みのコメントの数 | ダッシュボード | 15.7 ms | 19.7 ms | 15.9 ms | 表の全件を読む |
-
-承認済みのコメントの数は、管理画面のメニューのコメントの数（`wp_count_comments()` から `get_comment_count()`）が管理画面のどのページでも流すので、投稿一覧も縮んだ（残りの約 2 ms は、0.1 ms 前後ずつ縮んだ多くの文の和とみる）。月の一覧（`DISTINCT YEAR(post_date), MONTH(post_date)`、7.8 ms、MySQL 2.9 ms）、記事の term の JOIN（8.8 ms、MySQL 2.5 ms）、`SQL_CALC_FOUND_ROWS` の記事の一覧は変わっていない（段階 75 の候補 (2) の 1 回あたりの引きの軽量化と、(4) の行の復号は残っている）。
-
-## 段階 78（表の定義のキャッシュ、主キーの範囲の条件、インデックスだけで読む行）
-
-2026-10-26、段階 75 と同じ構成の GCE（n2-standard-4、東京、Debian 12、pd-balanced。また別のインスタンス）で、同じ `wpbench` を MySQL 8.0、段階 77 のバージョン、段階 78 のバージョンに入れて、段階 75 と同じ手順で測った（HeimDB の 2 つのバージョンは同じ 3316 番で交互に 2 回ずつ。表は平均）。このインスタンスは段階 77 のものより遅く（MySQL のトップページの全体が 72 ms から 90 ms）、段階 77 の表とは比べず、同じインスタンスの中で比べる。
-
-### ページの表示（中央値。全体と DB の時間）
-
-| ページ | MySQL 全体 | 段階 77 全体 | 段階 78 全体 | MySQL の DB | 段階 77 の DB | 段階 78 の DB |
-|---|---|---|---|---|---|---|
-| トップページ | 90 ms | 106 ms | 102 ms | 13.6 ms | 27.4 ms | 24.5 ms |
-| 個別の記事（コメント 60 件） | 165 ms | 189 ms | 184 ms | 17.4 ms | 38.9 ms | 35.2 ms |
-| カテゴリの 2 ページ目（記事 5,001 件） | 96 ms | 118 ms | 115 ms | 19.3 ms | 41.0 ms | 38.4 ms |
-| 検索 | 182 ms | 141 ms | 139 ms | 101.0 ms | 58.8 ms | 57.1 ms |
-| REST API（100 件） | 234 ms | 297 ms | 278 ms | 49.3 ms | 108.7 ms | 90.5 ms |
-| 管理画面のダッシュボード | 97 ms | 135 ms | 131 ms | 42.7 ms | 79.5 ms | 76.3 ms |
-| 投稿一覧 | 127 ms | 157 ms | 153 ms | 48.5 ms | 77.7 ms | 74.0 ms |
-
-### 同時アクセス（10 並列で 30 秒、件/秒）と書き込み（1 回あたりの DB の時間）
-
-| | MySQL | 段階 77 | 段階 78 |
-|---|---|---|---|
-| トップページ | 27.0 | 23.8 | 24.1 |
-| 個別の記事 | 14.4 | 12.9 | 13.1 |
-| 記事の作成 | 60.2 ms | 72.3 ms | 67.4 ms |
-| コメントの追加 | 5.9 ms | 4.8 ms | 4.4 ms |
-| オプションの更新 | 2.9 ms | 2.1 ms | 2.0 ms |
-| 記事の削除 | 43.2 ms | 53.5 ms | 49.2 ms |
-
-どのページも DB の時間が縮んだ（2 回とも同じ向きで、回ごとの揺れは 1 ms 以内）。REST API が 18.2 ms（17%）、トップページが 2.9 ms（11%）、個別の記事が 3.7 ms（10%）。記事の作成と削除も 7〜8% 縮んだ。表の定義を文ごとに復号しなくなったので、文の多いページほど縮む。REST API は、記事の term の JOIN（主キーの範囲の条件を外した）が大きい。
-
-### 文ごと
-
-ページが流す 213 種類の文を、同じデータの写しの段階 77 と段階 78 に交互に 30 回ずつ流した。合計は 239.2 ms から 215.7 ms（-10%）。
-
-| 文の重さ（段階 77） | 種類 | 段階 77 | 段階 78 |
-|---|---|---|---|
-| 0.5 ms 未満 | 161 | 54.6 ms | 44.2 ms（-19%） |
-| 0.5〜1 ms | 18 | 12.8 ms | 11.3 ms（-11%） |
-| 1〜3 ms | 19 | 32.1 ms | 29.1 ms（-9%） |
-| 3 ms 以上 | 15 | 139.7 ms | 131.0 ms（-6%） |
-
-記事の term の JOIN（`DISTINCT t.term_id, tr.object_id ... object_id IN (100 件)`）は 11.95 ms から 8.12 ms。遅くなった文はない（+0.1 ms 以内）。
-
-Linux の CPU プロファイル（段階 77 のバージョン、主キーで 1 行を読む文）では、表の定義の JSON の復号が 18%、統計のヒストグラムの文字列化が 15.6%、解析が 37%、組み立てが 31% だった。段階 78 のバージョンで 213 種類の文を混ぜて流すと、表の定義の読み出しは 5.2% から 1.9%、ヒストグラムの文字列化は 0。残る大きなものは、解析と組み立て（軽い文の CPU の 7 割）と、インデックスだけで読む文の行の割り当て（`SQL_CALC_FOUND_ROWS` の一覧で CPU の半分）。結果を返す経路の goroutine の起こしは 2%（手元の macOS では 22〜50% に見えたが、macOS で膨らむ）。
-
-## MariaDB との比べ（段階 78 の後）
-
-2026-10-26、段階 75 と同じ構成の GCE（n2-standard-4、東京、Debian 12、pd-balanced。また別のインスタンス）で、MySQL 8.0.46、MariaDB 11.8.9（Docker の `mariadb:11.8`）、HeimDB 段階 78（a309131）を測った。どれも既定の設定。手元の Docker が止まっていたので、データはインスタンスの上で `generate.sh` と同じ手順で MySQL に作り（記事 5,203 件、コメント 20,001 件）、mysqldump で書き出して HeimDB と MariaDB に入れた。MariaDB は MySQL 8.0 のダンプをそのまま読めた（表の照合順序は WordPress が選ぶ `utf8mb4_unicode_520_ci` で、3 つとも同じ）。
-
-MySQL と MariaDB は同じ 3307 番（WordPress も同じもの）で交互に 1 つずつ立て、HeimDB は毎回いっしょに測った（MySQL、MariaDB を 3 回ずつ。HeimDB は 6 回の平均）。手順は段階 75 と同じ（`pages.py --newest 5003 --cat 1 --runs 30`、`ab -c 10 -t 30`、`writes.php` を 100 回）。MySQL の 1 回目は起動直後で、ページの DB の時間が 2 回目以降の最大 4 倍（個別の記事が 84.7 ms、2 回目と 3 回目は 20.6 ms と 20.7 ms）に揺れたので、表の MySQL のページと同時アクセスは 2 回目と 3 回目の平均（書き込みは 3 回の平均。1 回目も同じ値だった）。
-
-### ページの表示（中央値。全体と DB の時間）
-
-| ページ | MySQL 全体 | MariaDB 全体 | HeimDB 全体 | MySQL の DB | MariaDB の DB | HeimDB の DB |
-|---|---|---|---|---|---|---|
-| トップページ | 96 ms | 94 ms | 108 ms | 15.6 ms | 14.7 ms | 27.4 ms |
-| 個別の記事（コメント 60 件） | 174 ms | 170 ms | 194 ms | 20.7 ms | 18.7 ms | 39.9 ms |
-| カテゴリの 2 ページ目（記事 5,001 件） | 102 ms | 99 ms | 123 ms | 22.1 ms | 20.2 ms | 42.7 ms |
-| 検索 | 189 ms | 194 ms | 147 ms | 104.3 ms | 110.6 ms | 61.8 ms |
-| REST API（100 件） | 256 ms | 252 ms | 314 ms | 60.3 ms | 55.1 ms | 108.0 ms |
-| 管理画面のダッシュボード | 103 ms | 81 ms | 139 ms | 46.3 ms | 25.6 ms | 81.9 ms |
-| 投稿一覧 | 132 ms | 109 ms | 162 ms | 52.0 ms | 29.6 ms | 80.3 ms |
-
-### 同時アクセス（10 並列で 30 秒、件/秒）と書き込み（1 回あたりの DB の時間）
-
-| | MySQL | MariaDB | HeimDB | MySQL（バイナリログなし） |
-|---|---|---|---|---|
-| トップページ | 25.8 | 26.3 | 23.0 | |
-| 個別の記事 | 13.9 | 14.0 | 12.4 | |
-| 記事の作成 | 71.5 ms | 35.9 ms | 77.1 ms | 61.1 ms |
-| コメントの追加 | 7.0 ms | 2.3 ms | 5.3 ms | 3.6 ms |
-| オプションの更新 | 3.4 ms | 1.0 ms | 2.4 ms | 1.7 ms |
-| 記事の削除 | 50.3 ms | 25.6 ms | 56.1 ms | 37.8 ms |
-
-### 文ごと
-
-ページが流す 220 種類の文（段階 78 の 213 種類に検索のページの文を足した）を、3 つに 30 回ずつ流した（`sql_mode` は空。1 つは 3 つとも同じエラーになったので除く）。
-
-| 文の重さ（MySQL） | 種類 | MySQL | MariaDB | HeimDB |
-|---|---|---|---|---|
-| 0.5 ms 未満 | 187 | 35.3 ms | 29.0 ms | 75.5 ms |
-| 0.5〜3 ms | 23 | 23.4 ms | 20.4 ms | 49.5 ms |
-| 3 ms 以上 | 9 | 144.2 ms | 128.8 ms | 123.8 ms |
-| 合計 | 219 | 203.0 ms | 178.2 ms | 248.8 ms |
-
-### 分かったこと
-
-- 読み出しでは、MariaDB は MySQL とほぼ同じか少し速い（管理画面の 2 ページを除くと、ページの DB の時間で 1〜5 ms。検索だけ 6 ms 遅い）。同時アクセスの件数も同じ。ページの全体の時間は PHP が大半なので、3 つの差は DB の時間の差の分だけ。
-- 管理画面の 2 ページの差は、承認済みのコメントの数（`SELECT COUNT(*) FROM wp_comments WHERE ( comment_approved = '1' ) AND comment_type NOT IN ('note')`）が MySQL では 20.9 ms、MariaDB では 5.2 ms（HeimDB は 20.0 ms）で、ほぼこの 1 文。
-- HeimDB と MariaDB の差は、軽い文の積み重ね（0.5 ms 未満の 187 種類で 29.0 ms と 75.5 ms。段階 78 の記録の、解析と組み立ての固定の手間）と、コメントの数、`SQL_CALC_FOUND_ROWS` の一覧、月の一覧。検索（`LIKE '%...%'` の表全体の読み）は HeimDB が 3 つで最も速い（MySQL 86.2 ms、MariaDB 94.2 ms、HeimDB 28.5 ms）。
-- 書き込みは MariaDB が MySQL の約半分。MariaDB は既定でバイナリログが無効（MySQL 8.0 は有効で `sync_binlog=1`、コミットごとの fsync が 1 回多い）で、MySQL を `--skip-log-bin` で起動すると 15〜50% 縮むが、まだ MariaDB の 1.5〜1.7 倍（`innodb_flush_method` も MariaDB は `O_DIRECT`、MySQL 8.0 は `fsync`）。
-
-## 段階 79（インデックスの読み始め、リビジョンの一覧）
-
-2026-10-27、段階 75 と同じ構成の GCE（n2-standard-4、東京、Debian 12、pd-balanced。また別のインスタンス）で、「MariaDB との比べ」と同じ手順で作ったデータ（記事 5,203 件、コメント 20,001 件）を、MySQL 8.0.46、MariaDB 11.8.9、段階 78 のバージョン、段階 79 のバージョンで測った。3307 番に MySQL か MariaDB、3316 番に HeimDB のどちらかのバージョンを立て、組み合わせを入れ替えて 8 回測った（最初に捨てる回を 1 回。表は 4 回ずつの平均。段階 79 と MariaDB の 2 回目は、文ごとの計測を誤って重ねて始めたので捨て、測り直した）。
-
-### ページの表示（中央値。DB の時間）
-
-| ページ | MySQL | MariaDB | 段階 78 | 段階 79 |
-|---|---|---|---|---|
-| トップページ | 15.8 ms | 14.7 ms | 27.9 ms | 27.9 ms |
-| 個別の記事（コメント 60 件） | 20.3 ms | 18.7 ms | 40.4 ms | 37.8 ms |
-| カテゴリの 2 ページ目（記事 5,001 件） | 21.6 ms | 19.9 ms | 42.7 ms | 41.7 ms |
-| 検索 | 104.2 ms | 110.5 ms | 61.7 ms | 61.1 ms |
-| REST API（100 件） | 62.4 ms | 53.9 ms | 108.3 ms | 110.1 ms |
-| 管理画面のダッシュボード | 46.8 ms | 25.6 ms | 82.8 ms | 77.6 ms |
-| 投稿一覧 | 53.5 ms | 29.5 ms | 80.6 ms | 79.4 ms |
-
-ダッシュボードは管理画面のコメント 25 件の一覧（`ORDER BY comment_date_gmt DESC LIMIT 0,25`）と最近の記事、個別の記事は前後の記事の文が縮んだ。REST API は回ごとに 101〜120 ms と揺れ、差は揺れの範囲。同時アクセス（トップページ 22.9 件/秒と 23.0 件/秒、個別の記事 12.4 件/秒と 12.6 件/秒）と書き込みは、段階 78 と同じ。
-
-### 文ごと
-
-ページが流す 219 種類の文を、同時に写した同じデータの写し 2 つに段階 78 と 79 を立てて、交互に 30 回ずつ流した（写しを入れ替えて 2 回の平均）。合計は 247.3 ms から 236.2 ms、MySQL で 0.5 ms 未満の軽い文（193 種類）は 84.5 ms から 74.3 ms。遅くなった文はない（+0.12 ms 以内）。
-
-| 文 | 段階 78 | 段階 79 | MySQL | MariaDB |
-|---|---|---|---|---|
-| 最近の記事 5 件（`post_type`、`post_status` で `ORDER BY post_date DESC LIMIT 0, 5`） | 2.55 ms | 0.64 ms | 0.17 ms | 0.12 ms |
-| 管理画面のコメント 25 件 | 2.19 ms | 0.69 ms | 0.20 ms | 0.15 ms |
-| 前後の記事 | 1.65 ms | 0.43 ms | 0.24 ms | 0.23 ms |
-
-インデックスの読み出しが、LIMIT の小さい文でも最初にエントリを 4096 件読んでいた（最初は 32 件にし、倍にしていく）。MySQL と MariaDB の列は、データのディレクトリが別の写しで同じ時に測った値（段階 78 と 79 もそこで測ると、同じバージョンでもディレクトリによって文ごとに 0.1〜0.3 ms ずれた）。
-
-### リビジョンの一覧（リビジョンのあるデータ）
-
-ベンチのデータにはリビジョンがほとんどないので、記事ごとに 10 件のリビジョン（5 万件）を足したデータ（`wprev`）で、REST API が記事ごとに流すリビジョンの一覧（`SQL_CALC_FOUND_ROWS ... post_parent = N AND post_type = 'revision' ... ORDER BY post_date DESC, ID DESC LIMIT 0, 1`）と `FOUND_ROWS()` を、記事 20 件分流した。
-
-| | MySQL | MariaDB | 段階 78 | 段階 79 |
-|---|---|---|---|---|
-| 1 文あたり | 0.28 ms | 0.11 ms | 114 ms | 0.33 ms |
-
-段階 78 は `type_status_date` を逆に読み、サイトのすべてのリビジョンを `post_parent` で絞っていた（REST API で記事 100 件を返すと、この文だけで 11 秒）。段階 79 は MySQL と同じく `post_parent` で引いて並べ替える。
-
-## 段階 80（定数のキーで引く JOIN、起動し直した後の表ごとの最初の文）
-
-2026-10-29、手元（macOS）で、ホスティング側の報告と同じ形のデータ（記事 31,000 件、`wp_postmeta` 310 万行で記事ごとに 100 行、`KEY meta_key(191)`、`KEY post_id`）を作り、段階 79 と段階 80 を同じデータのディレクトリで交互に起動して、スロークエリのログ（`-slow-query 1ms`）の時間を見た。
-
-### サブクエリと meta_query（`bzb_include_rss` は 310 行、`'none'` は 77 行）
-
-| 文 | 段階 79 | 段階 80 |
-|---|---|---|
-| `ID NOT IN (SELECT post_id FROM wp_postmeta WHERE meta_key = 'bzb_include_rss' AND meta_value = 'none')` | 8.2〜8.6 秒 | 50〜61 ms |
-| 同じ条件の `NOT EXISTS` | 9.8 秒 | 31 ms |
-| 同じ条件の `IN` | 2 ms | 2 ms |
-| meta_query の `'compare' => 'NOT EXISTS'`（`LEFT JOIN ... IS NULL`、`SQL_CALC_FOUND_ROWS`、`LIMIT 0, 10`） | 5.8 秒 | 0.84〜0.91 秒 |
-
-段階 79 は、右の条件の定数（`meta_key = 'bzb_include_rss'`）だけで引き、記事 1 行ごとにそのキーの行をすべて読み直していた。そのキーの行が 3.1 万行のデータでは、段階 79 はどの形も 15 秒を超え（`NOT IN` は 2 分超）、MySQL 8.0.46 は `NOT IN` 0.17 秒（サブクエリを 1 回実体化して引く）、`IN` 0.45 秒、meta_query 4.6 秒（クライアントの起動を含む）。段階 80 の `NOT IN` と `NOT EXISTS` はサブクエリを 1 回読むハッシュ JOIN、meta_query は MySQL と同じく `post_id` で引く。ホスティングのデータ（記事 12,450 件、そのキーの行 283 行）では、段階 79 の `NOT IN` が 381 ms（12,450 × 283 行を読む）だった。
-
-### 起動し直した直後の表ごとの最初の文（`wp_postmeta` 310 万行）
-
-| 最初の文 | 段階 79 | 段階 80（起動直後） | 段階 80（3 秒後） |
-|---|---|---|---|
-| `SELECT meta_value ... WHERE post_id = 777 AND meta_key = '_key_7'` | 0.86〜0.95 秒 | 0.39〜0.44 秒 | 1 ms |
-| `INSERT INTO wp_postmeta ...` | 0.57〜0.61 秒 | 5〜6 ms | 10〜11 ms |
-| `UPDATE wp_postmeta SET meta_value = ... WHERE post_id = 1 AND meta_key = '_key_3'` | 1.39〜1.46 秒 | 0.32〜0.35 秒 | 7〜10 ms |
-
-段階 79 は、起動した後にその表を初めて使う文が、統計を作るために表を 2〜3 回読み、初めて書く文が、AUTO_INCREMENT の最大値を求めるために全行を読んでいた（ホスティングの VM では SELECT 4.9 秒、UPDATE 2.7 秒）。段階 80 は、起動直後に main のすべての表の統計を裏で作り（この表を含めて約 0.5 秒）、AUTO_INCREMENT は主キーの最後の 1 行だけを読む。作り終える前に来た文は、作っている統計を待つ（起動直後の列）。
-
-ページが流す 219 種類の文は、ベンチのデータ（`wpbench`）で計画も結果も段階 79 と同じ。リビジョンを足したデータ（`wprev`）では、カテゴリの 2 ページ目の文だけ計画が変わり（結果は同じ）、6.6 ms から 9.0 ms になった（統計の標本の大きさが変わり、ほぼ同点の 2 つの計画の順位が入れ替わった）。
-
-## 段階 83（meta_query の JOIN の向き、条件の見積もり、TopN、走査の使い回し）
-
-2026-10-30、GCE の n2-standard-4（東京、Debian 12、pd-balanced）で、ヘッドレスの API の検証と同じ形のデータ（種類 `news` の記事 2 万件、`wp_postmeta` 32 万行 = 記事あたり 16 行、`KEY meta_key(191)`、`KEY post_id`）を MySQL 8.0.46、0.2.24、段階 83 に入れ、WP_Query の meta_query が作る文の時間を、クライアント（Python の pymysql。結果の 20 行と `FOUND_ROWS()` を受け取るまで）で 10 回測った中央値。1 vCPU は、HeimDB を `taskset -c 0` と `GOMAXPROCS=1`、MySQL を `docker update --cpus 1 --cpuset-cpus 0` にし、測る側を別の CPU に固定した。
-
-| 文 | MySQL | 0.2.24 | 段階 83 |
-|---|---|---|---|
-| list20（記事だけ、日付で並べて 20 件） | 39 ms | 43 ms | 43 ms |
-| category（`meta_key = 'category' AND meta_value = 'cat3'`） | 49 ms | 97 ms | 90 ms |
-| priority（`meta_key = 'priority'` の `meta_value+0` で並べる） | 143 ms | 966 ms | 358 ms |
-| range（`event_date` の範囲の JOIN 3 本） | 371 ms | 1,554 ms | 612 ms |
-| two_filters（`category`、`featured`、`event_date` で並べる JOIN 3 本） | 100 ms | 221 ms | 233 ms |
-
-違う形の文（cat、ページ、月の範囲を変えたもの）を同時に 10 本、30 秒流したときの毎秒の件数と時間:
-
-| | MySQL | 0.2.24 | 段階 83 |
-|---|---|---|---|
-| 4 vCPU | 12.5 件/秒（p95 3.1 秒） | 2.4 件/秒（p95 11.1 秒） | 6.0 件/秒（p95 4.3 秒） |
-| 1 vCPU | 6.6 件/秒（p95 5.2 秒） | 1.4 件/秒（p95 20.8 秒） | 2.5 件/秒（p95 9.0 秒） |
-
-`priority` と `range` は、記事 2 万件から `post_id` で記事ごとにメタを 16 行読んで捨てていた（読む行は 30 万行台）のを、MySQL と同じく `meta_key` の範囲から記事を主キーで引くようにし、`priority` の `meta_value+0` の並べ替えを TopN にした。`category` と `two_filters` は向きが MySQL と同じで、残りの差は 1 行あたりの手間。ベンチのデータ（`wpbench`）のページの DB の時間は、どのページも 0.2.24 と揺れの範囲（トップページ 28.4 ms と 28.4 ms、REST API 113.9 ms と 111.4 ms、投稿一覧 81.2 ms と 82.9 ms。MySQL は 16.2 ms、61.3 ms、52.5 ms）。
-
-
-## 段階 84（post__in、2 列目の文字列の範囲、標本で数える見積もり）
-
-2026-10-30、段階 83 と同じ GCE の n2-standard-4 と記事 API の形のデータで、MySQL 8.0.46、0.2.26、段階 84 を比べた。標準の索引（`api`）に加えて、ヘッドレスの API が `wp_postmeta` に足した索引 `post_key (post_id, meta_key(191))` と `key_value (meta_key(191), meta_value(64))` を付けたもの（`apih`）でも測った。段階 83 の 5 つの文に、ヘッドレスの API の REST の文を 3 つ足した: post_in（`ID IN (39 個)` と種類、状態、日付順）、range_between（`meta_value BETWEEN` の JOIN 1 本）、two_cast（ホスティング側が組み立て直した two_filters）。時間はクライアントで 10 回測った中央値（4 vCPU）。
-
-| 文 | 索引 | MySQL | 0.2.26 | 段階 84 |
-|---|---|---|---|---|
-| post_in | 標準 | 2.2 ms | 53.3 ms | 3.1 ms |
-| post_in | API 用 | 2.0 ms | 55.2 ms | 3.2 ms |
-| range_between | API 用 | 15.1 ms | 151.6 ms | 48.2 ms |
-| two_cast | API 用 | 14.6 ms | 125.4 ms | 84.8 ms |
-| range（JOIN 3 本） | API 用 | 154 ms | 615 ms | 510 ms |
-| category | API 用 | 17.5 ms | 29.7 ms | 30.5 ms |
-| priority | API 用 | 184 ms | 413 ms | 408 ms |
-
-標準の索引では、post_in のほかは 0.2.26 と同じ（計画も同じ）。8 種類の文（値を変えたもの）を同時に 10 本、30 秒流したときの毎秒の件数は、API 用の索引で 4 vCPU が MySQL 41.4、0.2.26 7.4、段階 84 10.3、1 vCPU が MySQL 20.2、0.2.26 3.3（段階 84 の 1 vCPU の値は、出力を取り出す前にインスタンスを消したので残っていない）。標準の索引では 4 vCPU が 16.1、6.6、6.7、1 vCPU が 7.4、3.2、3.2。
-
-two_cast は MySQL と同じく `category = 'cat3'` から読み、記事を主キーで引く形になった。残りの差は 1 行あたりの手間と、行ごとに引くメタの順（MySQL は絞り込む `featured` を、並べ替えに使うだけの `event_date` より先に引く）。ベンチのデータ（`wpbench`）のページの DB の時間は、どのページも 0.2.26 と揺れの範囲（トップページ 29.1 ms と 29.3 ms、REST API 119.1 ms と 115.7 ms、投稿一覧 83.6 ms と 84.7 ms。2 回ずつの平均）。ページの文 237 種類は結果がすべて同じで、計画が変わったのは投稿一覧の 1 種類（`post_status` の OR が範囲 `[draft, publish]` に入った）。
-
-
-## 段階 100（WordPress が流す形の文で比べ直す）
-
-2026-11-04、GCE の n2-standard-4（東京、Debian 12、pd-balanced）で、段階 83 からと同じ記事 API の形のデータ（種類 `news` の記事 2 万件、`wp_postmeta` 32 万行）を MySQL 8.0.46、0.2.34、段階 99 に入れ、`scripts/bench/perfq` で測った。段階 99 までのベンチの文は `SELECT SQL_CALC_FOUND_ROWS wp_posts.* … GROUP BY wp_posts.ID … LIMIT 0, 20` の形だったが、WordPress の WP_Query は LIMIT のある文を分けて流す（`split_the_query`）ので、今回から WordPress と同じ 4 本の組（`wp_posts.ID` だけを返す文、`SELECT FOUND_ROWS()`、記事を `ID IN (…)` で引く文、メタを `post_id IN (…)` で引く文）を同じ接続で流し、組の時間の中央値（30 回、2 回の平均）を比べる。ヘッドレスの API（`fields => 'ids'`）は ID の文と `FOUND_ROWS()` だけを流すので、表の「ID の文」がそれにあたる。どの組も、MySQL と `FOUND_ROWS()`、各文の行数、ID の並びが同じだった。1 vCPU は、HeimDB を `taskset -c 0` と `GOMAXPROCS=1`、MySQL を `docker update --cpus 1`（割り当て）にした。
-
-4 vCPU、API 用の索引（`key_value`、`post_key` あり）。組の時間（括弧は ID の文）、ms:
-
-| 組 | MySQL | 0.2.34 | 段階 99 | 前の形（`wp_posts.*`）の段階 99 と MySQL |
-|---|---|---|---|---|
-| list20 | 8.3（6.4） | 9.0（6.4） | 9.3（6.6） | 7.4 と 43.5 |
-| category | 11.2（9.2） | 21.1（18.3） | 21.8（18.9） | 24.1 と 14.6 |
-| range | 136（133） | 425（422） | 394（391） | 399 と 173 |
-| priority | 145（142） | 127（124） | 129（126） | 262 と 471 |
-| two | 19.4（17.2） | 42.6（39.9） | 38.2（35.4） | 36.2 と 29.5 |
-| two0 | 28.4（26.1） | 72.6（69.7） | 64.4（61.5） | 66.3 と 33.0 |
-| range_t | 7.0（4.9） | 11.5（8.8） | 11.7（8.8） | 11.6 と 7.0 |
-| priority_t | 144（141） | 130（128） | 131（129） | 265 と 443 |
-| two_filters_t | 15.3（13.1） | 60.2（57.4） | 49.6（46.8） | 48.1 と 14.0 |
-
-4 vCPU、標準の索引:
-
-| 組 | MySQL | 0.2.34 | 段階 99 |
-|---|---|---|---|
-| list20 | 8.4 | 8.9 | 9.5 |
-| category | 123 | 50.8 | 51.1 |
-| range | 704 | 520 | 452 |
-| priority | 216 | 85.2 | 82.6 |
-| two | 192 | 101 | 92.9 |
-| two0 | 223 | 150 | 138 |
-| range_t | 86.9 | 44.5 | 43.9 |
-| priority_t | 213 | 88.0 | 86.7 |
-| two_filters_t | 191 | 141 | 131 |
-
-9 つの組を同時に 10 本、30 秒流したときの毎秒の組の数（括弧は前の形の毎秒の件数）:
-
-| | MySQL | 0.2.34 | 段階 99 |
-|---|---|---|---|
-| 4 vCPU、API 用の索引 | 38.5（11.1） | 19.3（13.4） | 21.2（14.2） |
-| 4 vCPU、標準の索引 | 13.6（7.5） | 13.8（10.6） | 14.7（11.3） |
-| 1 vCPU、API 用の索引 | 10.1（3.2） | 9.2（6.2） | 9.9（6.5） |
-| 1 vCPU、標準の索引 | 3.8（1.8） | 7.1（5.3） | 7.6（5.5） |
-
-1 vCPU の組の時間も同じ傾向（API 用の索引で two_filters_t は MySQL 25.9、段階 99 49.0。category 35.8 と 21.5）。
-
-分かったこと:
-- 記事とメタを IN で引く 2 本は、HeimDB で合わせて約 2.4 ms、MySQL で約 1.9 ms。組の時間の差は、ほとんど ID の文から来る。
-- 前の形で MySQL が遅かった priority、priority_t、list20 は、MySQL も ID の形で速くなる（全列を持ったまま並べ替えなくなる）。HeimDB は list20 が同じで、priority と priority_t は約半分になった。
-- MySQL は、標準の索引では ID の形の方が遅い文がある（two と two_filters_t は 100 ms 前後から 190 ms 前後。計画が変わったとみられるが、インスタンスを消したので `EXPLAIN` は取っていない）。
-- API 用の索引、4 vCPU の 10 本同時は、前の形では HeimDB が MySQL を上回っていたが、組の形では MySQL の約半分。差の大きい組は、two_filters_t（3.2 倍）、range（2.9 倍）、two0 と two と category（2 倍前後）、range_t（1.7 倍）。どれも MySQL と同じ向きの計画で、lookup JOIN の 1 回ごとの手間が多い。
-- 段階 99 のプロファイル（API 用の索引、4 vCPU、組の形）: 10 本同時では lookup JOIN の右（`lookupRows`）が 51%、そのうち本体の行の `Peek` が 24%、引くたびのインデックスの走査の作り直し（`newPKRowIter` の `Scan.Reset`、層ごとの `First`）が 12%。two_filters_t だけを流すと、走査の作り直しが 21%、引く区間を作る処理（`indexInterval` と `mergeIntervals`、スライスの伸長）が 9%、`Peek` が 18%。行の復号は category で 9% ほどで、ほかの文では上位にない。
-
-
-## 段階 101（JOIN の出力の行数を、キーの値の種類の数で見積もる）
-
-2026-11-04、段階 100 と同じ条件（GCE の n2-standard-4、同じデータ、`scripts/bench/perfq` の組の形、30 回の中央値の 2 回の平均）で、MySQL 8.0.46、段階 99、段階 101 を測った。どの組も、MySQL と `FOUND_ROWS()`、各文の行数、ID の並びが同じだった。インスタンスは作り直したもので、段階 100 のときより全体に遅い（段階 99 の two_filters_t は 49.6 ms から 64.2 ms、MySQL の range は 136 ms から 420 ms）。比べるのは同じインスタンスの中の値。
-
-4 vCPU、API 用の索引。組の時間、ms:
-
-| 組 | MySQL | 段階 99 | 段階 101 |
-|---|---|---|---|
-| list20 | 11.7 | 11.3 | 11.3 |
-| category | 16.7 | 26.5 | 26.1 |
-| range | 420 | 507 | 183 |
-| priority | 285 | 153 | 152 |
-| two | 29.4 | 48.7 | 48.0 |
-| two0 | 51.5 | 83.8 | 83.0 |
-| range_t | 8.1 | 14.3 | 14.1 |
-| priority_t | 199 | 159 | 158 |
-| two_filters_t | 17.0 | 64.2 | 46.6 |
-
-4 vCPU、標準の索引では、range が 581 から 208（MySQL 779）、two_filters_t が 169 から 119（MySQL 220）。ほかは段階 99 と同じ。
-
-9 つの組を同時に 10 本、30 秒流したときの毎秒の組の数（括弧は前の形の毎秒の件数）:
-
-| | MySQL | 段階 99 | 段階 101 |
-|---|---|---|---|
-| 4 vCPU、API 用の索引 | 33.2（9.2） | 17.6（11.9） | 27.2（15.7） |
-| 4 vCPU、標準の索引 | 11.8（5.9） | 12.3（9.3） | 18.6（12.9） |
-| 1 vCPU、API 用の索引 | 8.7（2.3） | 7.6（5.0） | 11.4（6.5） |
-| 1 vCPU、標準の索引 | 3.0（1.5） | 5.7（4.2） | 8.5（5.7） |
-
-1 vCPU の組の時間も同じ傾向（API 用の索引で range 529 から 182、two_filters_t 64.7 から 46.4）。
-
-分かったこと:
-- range と two_filters_t のほかは段階 99 と同じ。10 本同時は、API 用の索引で 1.5 倍になり、4 vCPU では MySQL の 8 割、1 vCPU では MySQL を上回る。標準の索引ではどちらも MySQL を上回る。
-- MySQL との差が残る組は、API 用の索引の two_filters_t（2.7 倍）、category、two、two0、range_t（1.5〜1.7 倍）。どれも MySQL と同じ順の計画で、lookup の 1 回ごとの手間が多い。
-- 段階 101 のプロファイル（API 用の索引、4 vCPU、組の形）: 10 本同時では lookup JOIN の右（`lookupRows`）が 47%、そのうち本体の行の `Peek` が 23%、引くたびのインデックスの走査の作り直し（`newPKRowIter` の `Scan.Reset`）が 8〜9%。two_filters_t だけでは、`lookupRows` 42%、走査の作り直し 16〜20%、`Peek` 18%。
-
-
-## 段階 102（lookup JOIN の 1 回ごとの手間）
-
-2026-11-05、段階 100、101 と同じ条件（GCE の n2-standard-4、同じデータ、`scripts/bench/perfq` の組の形、30 回の中央値の 2 回の平均）で、MySQL 8.0.46、段階 101、段階 102 を測った。どの組も、MySQL と `FOUND_ROWS()`、各文の行数、ID の並びが同じだった。インスタンスは作り直したもの。
-
-4 vCPU、API 用の索引。組の時間、ms:
-
-| 組 | MySQL | 段階 101 | 段階 102 |
-|---|---|---|---|
-| list20 | 11.5 | 11.2 | 11.3 |
-| category | 12.6 | 26.2 | 25.8 |
-| range | 146 | 188 | 158 |
-| priority | 161 | 153 | 152 |
-| two | 21.2 | 48.7 | 39.1 |
-| two0 | 31.6 | 84.9 | 67.7 |
-| range_t | 7.9 | 14.1 | 13.9 |
-| priority_t | 161 | 158 | 158 |
-| two_filters_t | 16.6 | 46.7 | 37.7 |
-
-標準の索引では、two と two0 と two_filters_t が 3〜4%、range が 3% 速い（`post_id` のインデックスで引くと 1 回に約 16 行を読むので、1 回ごとの手間の割合が小さい）。ほかは段階 101 と同じ。
-
-9 つの組を同時に 10 本、30 秒流したときの毎秒の組の数（括弧は前の形の毎秒の件数）:
-
-| | MySQL | 段階 101 | 段階 102 |
-|---|---|---|---|
-| 4 vCPU、API 用の索引 | 33.7（8.9） | 26.9（15.6） | 29.5（16.5） |
-| 4 vCPU、標準の索引 | 11.7（6.0） | 18.6（12.9） | 18.8（12.9） |
-| 1 vCPU、API 用の索引 | 8.8（2.2） | 11.3（6.5） | 12.5（6.6） |
-| 1 vCPU、標準の索引 | 3.0（1.5） | 8.5（5.8） | 8.6（5.7） |
-
-1 vCPU の組の時間も同じ傾向（API 用の索引で two_filters_t 46.1 から 37.4、two 47.7 から 38.8、two0 83.7 から 67.2）。
-
-分かったこと:
-- API 用の索引で、lookup の多い two、two0、two_filters_t が約 2 割、range が 16% 速くなった（手元の 12〜14% より大きい）。10 本同時は 4 vCPU で MySQL の 9 割、1 vCPU で MySQL の 1.4 倍。
-- MySQL との差が残る組は、API 用の索引の two_filters_t（2.3 倍）、category（2.0 倍）、two と two0（1.8〜2.1 倍）、range_t（1.8 倍）。
-- 段階 102 のプロファイル（API 用の索引、4 vCPU、組の形）: いちばん大きいのは、本体の行を主キーで引く `RowReader.Peek`（10 本同時で 26%、two_filters_t で 25%、category で 37%）。インデックスの走査の作り直し（`Scan.Reset`）は two_filters_t で 16%。`pointLookup` は 6%。
-
-## 段階 103（インデックスの走査のアロケーション）
-
-2026-11-05、段階 100〜102 と同じ条件（GCE の n2-standard-4、同じデータ、`scripts/bench/perfq` の組の形、30 回の中央値の 2 回の平均）で、MySQL 8.0.46、段階 102、段階 103 を測った。どの組も、MySQL と `FOUND_ROWS()`、各文の行数、ID の並びが同じだった。インスタンスは作り直したもの。
-
-4 vCPU、API 用の索引。組の時間、ms:
-
-| 組 | MySQL | 段階 102 | 段階 103 |
-|---|---|---|---|
-| list20 | 11.7 | 11.4 | 8.2 |
-| category | 12.9 | 25.9 | 26.1 |
-| range | 146 | 160 | 160 |
-| priority | 162 | 155 | 151 |
-| two | 21.7 | 39.4 | 40.0 |
-| two0 | 31.9 | 68.3 | 70.1 |
-| range_t | 8.3 | 14.2 | 14.2 |
-| priority_t | 161 | 160 | 157 |
-| two_filters_t | 16.9 | 37.9 | 38.9 |
-
-標準の索引と 1 vCPU でも、list20 が 11 ms 台から 8 ms 台（ID の文が 8.2 から 5.2 ms）になったほかは、どの組も ±4% の揺れの範囲。前の形（`_all`）の list20 は 9.0 から 5.9 ms。
-
-9 つの組を同時に 10 本、30 秒流したときの毎秒の組の数（括弧は前の形の毎秒の件数）:
-
-| | MySQL | 段階 102 | 段階 103 |
-|---|---|---|---|
-| 4 vCPU、API 用の索引 | 32.9（9.1） | 29.3（16.4） | 29.5（16.1） |
-| 4 vCPU、標準の索引 | 11.4（5.6） | 18.5（12.7） | 19.1（12.8） |
-| 1 vCPU、API 用の索引 | 8.4（2.1） | 12.4（6.7） | 12.5（6.6） |
-| 1 vCPU、標準の索引 | 2.9（1.5） | 8.5（5.7） | 8.8（5.8） |
-
-分かったこと:
-- 速くなったのは list20（`SQL_CALC_FOUND_ROWS` で数える 2 万件のエントリを写さなくなった）だけで、10 本同時は揺れの範囲（+1〜3%）。
-- 10 本同時のプロファイル（API 用の索引、4 vCPU）で、`mallocgc` は 13.4% から 12.8%、GC の印付け（`gcBgMarkWorker`）は 3.1% から 3.0% で、4 vCPU の Linux では GC の割合がもともと小さい。いちばん大きいのは今も本体の行を主キーで引く `RowReader.Peek`（26%）。
-
-## 段階 106（起動し直した直後、統計がそろうまで）
-
-2026-11-06、手元（macOS）で、記事 API の形のデータ（`perfq load` で記事 20 万件、`wp_postmeta` 320 万行、`wp_options` 801 行。データ 406 MB）を入れ、起動し直して、起動から接続できるまで、統計がそろうまで（ログの `statistics: built`）を測り、接続できたらすぐに文を 1 回ずつ流した（起動直後）。そろった後に同じ文を 2 回流した。3 回の範囲。
-
-| | 時間 |
-|---|---|
-| 起動から接続できるまで | 0.24〜0.41 秒（新しく建てた実行ファイルの最初の起動だけ 1.05 秒。macOS の検査） |
-| 統計を作る時間（18 表） | 0.63〜0.72 秒 |
-| 起動から統計がそろうまで | 0.88〜1.11 秒（同じ起動で 1.76 秒） |
-
-| 文 | 起動直後 | そろった後の 1 回目 | 2 回目 |
-|---|---|---|---|
-| `wp_options` の autoload の行（約 530 行） | 0.6〜2.2 ms | 0.9〜4.2 ms | 0.6〜0.7 ms |
-| 記事の一覧（`post_type = 'news'`、日付順に 20 件、`SQL_CALC_FOUND_ROWS`） | 343〜405 ms | 60〜63 ms | 22〜23 ms |
-| メタを `post_id IN (4 件)` で引く | 278〜320 ms | 0.5〜0.9 ms | 0.3〜0.4 ms |
-| メタを `post_id` と `meta_key` で引く | 0.2〜0.6 ms | 0.3〜0.6 ms | 0.2 ms |
-| meta_query の `category`（JOIN） | 391〜453 ms | 390〜444 ms | 388〜400 ms |
-| メタの `UPDATE`（`post_id` と `meta_key`） | 0.3〜5.2 ms | 0.3 ms | 0.3 ms |
-
-- 起動直後に遅いのは、裏で作っている表の統計を待つ文（メタの `IN`）と、まだ作っていない表の統計をその文が作る間（記事の一覧の `wp_posts`。裏の作成は名前の順で `wp_postmeta` を作っていた）。どちらも 0.4 秒ほどで、そろった後は消える。`category` は起動に関係なくこの時間（段階 83 の残りの差）。
-- そろった後の 1 回目に残る差（記事の一覧の 60 ms と 23 ms）は、ブロックキャッシュに入っていないインデックスの分。
-- 統計をディスクに残す案と、小さい表から作る案はやめた。遅れるのは起動から 1 秒ほどで、文は失敗しない。表ごとのロックなので、作る順を変えても、ある表の統計を待つ時間は変わらない。
-
-## 段階 108（長時間の負荷試験）
-
-2026-11-06〜08、GCE の n2-standard-4 を 2 台（東京、Debian 12、pd-balanced 50 GB）使った。DB の VM で HeimDB の本番とレプリカ（同期の複製）を動かし、web の VM で WordPress（`wordpress:php8.3-apache`）と負荷を動かした。データは手元の `wpbench`（記事 5,205 件、コメント 20,001 件）。台本は `scripts/soak/`。
-
-- 読み: `load.py` が 8 要求/秒を決まった間隔で出す（前の応答を待たない）。割合はトップ 25、個別の記事 30、カテゴリの 2 ページ目 15、検索 5、REST 10、管理画面（ダッシュボード、投稿一覧、コメント一覧）各 5。
-- 書き込み: `writer.sh` が毎分、記事を 1 件足して 1 件直し、コメントを 6 件足し、2 時間より古い試験の記事とコメントを消す。トランジェントを 30 件置き、15 分ごとに期限切れを消す。WP-Cron も毎分流す。
-- ブランチ: `cycle.sh` が 30 分ごとにブランチを作り、記事とコメントを書き、差分、マージ、削除をして、数え直しの検査（`check.sql`。コメントの数、タームの数、親のない行）を試験の前と比べる。
-- HeimDB: `-retention 2h -gc-interval 15m -replication-log-retention 2h -memory-limit 2G -cache-size 256MiB`。毎時バックアップを取り、新しい 2 つを残す。途中でレプリカを 5 分止めて戻す。
-- 終わりに（`final.sh`）、本番とレプリカの mysqldump、ブランチの一覧、ユーザー、30 分前の AS OF の読みを比べ、検査を流し、起動し直し、いちばん新しいバックアップを開いて検査を流す。表は `report.py` で作った。
-
-### 24 時間（0.2.37）
-
-691,200 要求がすべて 200、1 秒を超えたものは 0。ブランチの一巡は 48 回すべて検査が通り、マージと削除の失敗は 0。GC は 96 回で、保持期間を越えてからは 1 回あたり約 8,400 バージョンを 0.1 秒で消し、境界は約 2 時間 7 分で止まった。panic と思わぬエラーは 0。終わりの確かめはすべて一致した（ダンプ 69,806 行の違いは 0、検査は試験の前と同じ、起動し直して 2.0 秒でつながり 2.05 秒で統計がそろう、バックアップの検査も同じ）。
-
-| 値（中央値） | 6〜12 時間 | 18〜24 時間 |
-|---|---|---|
-| 全体 p50 / p99 | 110 / 227 ms | 108 / 238 ms |
-| DB p50 / p99 | 40.8 / 168 ms | 41.2 / 182 ms |
-| 本番の RSS / live heap | 351 / 119 MB | 444 / 161 MB |
-| 本番のディスク | 32.8 MB | 32.8 MB |
-| レプリカの RSS / live heap | 204 / 52 MB | 200 / 52 MB |
-
-本番の live heap が 1 時間に約 3.6 MB 増え続けた（ディスク、goroutine、fds は横ばい、レプリカも横ばい）。ヒープのプロファイルで、増えた分はハッシュ結合の右側の GROUP BY の途中結果のキャッシュだった。ハッシュの索引を作る iterator が子を閉じず、キャッシュがエンジンで共有の `MemoryManager` に残っていた（`docs/engine.md` の段階 108。上流でも 0b37f3696 で直っていた）。増やしたのは試験の `check.sql` の `LEFT JOIN (SELECT … GROUP BY …)` で、ページの文ではない。手元で同じ形の文を 200 回流すと、ヒープが 50 MB から 215 MB に増え、直すと 49 MB のままだった。
-
-### 12 時間（直したバージョン）
-
-同じ設定で 12 時間（レプリカを止めるのは 6 時間目）。345,600 要求がすべて 200、1 秒を超えたものは 0。ブランチの一巡は 24 回すべて通り、終わりの確かめもすべて一致した（ダンプ 69,826 行の違いは 0）。
-
-| 値（中央値） | 3〜6 時間 | 9〜12 時間 |
-|---|---|---|
-| 全体 p50 / p99 | 109 / 217 ms | 110 / 218 ms |
-| DB p50 / p99 | 41.1 / 157 ms | 41.9 / 158 ms |
-| 本番の RSS / live heap | 303 / 86 MB | 306 / 86 MB |
-| 本番のディスク | 33.0 MB | 32.8 MB |
-
-本番の live heap は 86 MB で止まり（傾きは 1 時間に -0.3 MB）、最後のプロファイルに GROUP BY のキャッシュは残っていなかった。p99 も 24 時間のときのように伸びなかった。
-
-### 記録だけ
-
-- レプリカを止めている間、同期の複製の待ち（10 秒）で書き込みが 1 つ 10 秒止まり、非同期に切り替わる。戻すと追いつき、同期に戻る。ページの読みは遅れない。
-- レプリカは、止めて戻した後、メモリの表をファイルに書き出すまで WAL を約 5 MB 余分に持つ（19 MB から 24 MB で横ばい）。本番も WAL を約 20 MB 持ち、起動し直すとデータは 33 MB から 9〜11 MB になる。
-- 期限のあるトランジェントは `wp_options` に約 1,500 行（autoload は off）あり、期限切れの削除で増えない。alloptions の文の計画は終わりまでインデックスを使う。
-- 書き込みが少ないとき、GC の境界が「開いたトランザクションに止められている」と出ることがある（最後のコミットで止まっているだけ）。
-- mysqldump（MariaDB のバージョン）が `optimizer_switch` を読む文で 2 回エラーになる（ダンプには響かない）。手元の mysql 9.x のクライアントはつなぐたびに `select $$` を流し、HeimDB は 1105 にする（構文のエラーは 1064 でなく 1105。段階 105）。
-- 相関サブクエリで数え直すと 45 秒かかった（WordPress はこの形を出さない）ので、`check.sql` は JOIN と GROUP BY で書いた（0.08 秒）。
-
-## 0.2.35（README の表）
-
-2026-11-05、段階 47 と同じ構成の GCE（n2-standard-4、東京、Debian 12、pd-balanced。また別のインスタンス）で、`wpbench` の写し（段階 95 でページの文を取ったデータ。記事 5,002 件、固定ページ 200 件、コメント 20,001 件、記事のメタ 25,006 件）を HeimDB から mysqldump で書き出して MySQL 8.0.46（Docker、既定の設定）と HeimDB（0.2.35 にする 5852964）に入れ、2 回ずつ測った（表は平均）。手順は段階 47 と同じ（`pages.py --newest 5003 --cat 1 --runs 30`、`ab -c 10 -t 30`、`writes.php` を 100 回）。HeimDB は起動してからデータを入れたので、統計は入れた後の最初の文で作られる。
-
-### ページの表示（中央値。全体と DB の時間）
-
-| ページ | MySQL 全体 | HeimDB 全体 | MySQL の DB | HeimDB の DB |
-|---|---|---|---|---|
-| トップページ | 74 ms | 88 ms | 10.9 ms | 23.7 ms |
-| 個別の記事（コメント 60 件） | 133 ms | 150 ms | 14.2 ms | 29.0 ms |
-| カテゴリの 2 ページ目（記事 5,001 件） | 78 ms | 101 ms | 16.3 ms | 37.3 ms |
-| 検索 | 132 ms | 114 ms | 66.3 ms | 46.2 ms |
-| REST API（100 件） | 187 ms | 243 ms | 35.3 ms | 79.9 ms |
-| 管理画面のダッシュボード | 75 ms | 108 ms | 31.5 ms | 61.6 ms |
-| 投稿一覧 | 99 ms | 129 ms | 37.2 ms | 64.9 ms |
-
-### 同時アクセス（10 並列で 30 秒、件/秒）と書き込み（1 回あたりの DB の時間）
-
-| | MySQL | HeimDB |
-|---|---|---|
-| トップページ | 33.5 | 28.5 |
-| 個別の記事 | 17.7 | 15.7 |
-| 記事の作成 | 49.5 ms | 51.2 ms |
-| コメントの追加 | 5.0 ms | 2.4 ms |
-| オプションの更新 | 2.3 ms | 1.1 ms |
-| 記事の削除 | 35.2 ms | 35.7 ms |
-
-- このインスタンスは 0.2.23 を測ったもの（README の前の表）より速い（MySQL のトップページの全体が 95 ms と 74 ms）。MySQL との比は、ページの DB の時間が 1.7〜2.7 倍から 1.7〜2.3 倍（検索は 0.7 倍）、ページ全体が 1.1〜1.6 倍から 1.1〜1.4 倍になった。
-- 同時アクセスは MySQL の 85〜89%（0.2.23 は 89〜91%）、書き込みは記事の作成と削除が MySQL と同じくらいで、コメントとオプションは MySQL の約半分。
-
-## 段階 121（0.2.41 の後。README の表は替えない）
-
-2026-11-18、段階 47 と同じ構成の GCE（n2-standard-4、東京、Debian 12、pd-balanced。また別のインスタンス）で、0.2.35 と同じ `wpbench` の写し（記事 5,002 件、固定ページ 200 件、コメント 20,001 件、記事のメタ 25,006 件）を、段階 121 のバージョンで開いて mysqldump で書き出し、MySQL 8.0.46（Docker、既定の設定）と HeimDB に入れた。HeimDB は 0.2.35（8ac3b0d）と段階 121 のバージョン（72aa902）を、同じ 3316 番で交互に 2 回ずつ（毎回データのディレクトリを空にして起動し、入れ直した）測り、MySQL は毎回いっしょに測った（表は平均。MySQL は 4 回の平均）。手順は段階 47 と同じ（`pages.py --newest 5003 --cat 1 --runs 30`、`ab -c 10 -t 30`、`writes.php` を 100 回）。WordPress は 7.1.4。
-
-### ページの表示（中央値。全体と DB の時間）
-
-| ページ | MySQL 全体 | 0.2.35 全体 | 72aa902 全体 | MySQL の DB | 0.2.35 の DB | 72aa902 の DB |
-|---|---|---|---|---|---|---|
-| トップページ | 110 ms | 130 ms | 132 ms | 18.3 ms | 37.0 ms | 39.5 ms |
-| 個別の記事（コメント 60 件） | 196 ms | 218 ms | 224 ms | 23.0 ms | 46.6 ms | 49.3 ms |
-| カテゴリの 2 ページ目（記事 5,001 件） | 112 ms | 146 ms | 150 ms | 24.1 ms | 55.8 ms | 58.2 ms |
-| 検索 | 201 ms | 163 ms | 165 ms | 107.5 ms | 66.7 ms | 68.4 ms |
-| REST API（100 件） | 349 ms | 412 ms | 430 ms | 82.3 ms | 143.3 ms | 148.7 ms |
-| 管理画面のダッシュボード | 112 ms | 151 ms | 162 ms | 49.0 ms | 86.0 ms | 96.4 ms |
-| 投稿一覧 | 144 ms | 185 ms | 188 ms | 55.1 ms | 92.8 ms | 97.2 ms |
-
-### 同時アクセス（10 並列で 30 秒、件/秒）と書き込み（1 回あたりの DB の時間）
-
-| | MySQL | 0.2.35 | 72aa902 |
-|---|---|---|---|
-| トップページ | 23.6 | 20.2 | 20.3 |
-| 個別の記事 | 12.6 | 11.1 | 11.2 |
-| 記事の作成 | 75.8 ms | 78.8 ms | 82.9 ms |
-| コメントの追加 | 8.0 ms | 4.1 ms | 4.2 ms |
-| オプションの更新 | 3.8 ms | 1.7 ms | 1.9 ms |
-| 記事の削除 | 56.7 ms | 54.0 ms | 56.8 ms |
-
-- このインスタンスは 0.2.35 を測ったもの（README の表）より遅い（MySQL のトップページの全体が 74 ms と 110 ms）。前の表とは比で比べる。
-- このインスタンスの 0.2.35 の MySQL との比は、ページの DB の時間が 1.7〜2.3 倍（検索は 0.6 倍）、全体が 1.1〜1.4 倍で、前の表と同じ。
-- 72aa902 のページの DB の時間は、0.2.35 より 3〜12% 長い。2 回とも長く、MySQL は 4 回で揺れていない。
-- いちばん大きいのはダッシュボード（86.0 ms から 96.4 ms、12%）。トップページは 7%、個別の記事は 6%、投稿一覧は 5%。
-- MySQL との比は、ページの DB の時間が 1.8〜2.4 倍（検索は 0.6 倍）、全体が 1.1〜1.5 倍になった。
-- 同時アクセスは 0.2.35 と同じ（MySQL の 86〜89%）。
-- 書き込みは、記事の作成が 5%、削除が 5% 長い（2 回とも）。文ごとに 50 回ずつ測ると、作成も削除も文の時間の和に差はなかった。揺れとの区別はついていない。
-- コメントとオプションは、前の表と同じく MySQL の約半分。
-
-### 長くなった文
-
-ページの文を、1 回ずつのリクエストの `$wpdb->queries` で取って比べた（GCE、データを 2 回入れ直して 30 回ずつ、中央値）。文の数と形は 2 つのバージョンで同じ。
-
-| 文 | 出るページ | 0.2.35 | 72aa902 |
-|---|---|---|---|
-| 自分のコメントの数（`comment_approved` の OR、`comment_type NOT IN ('note')`、`user_id = 1`） | ダッシュボード | 21.8 ms | 26.8 ms |
-| 承認済みのコメントの数（`comment_approved = '1' AND comment_type NOT IN ('note')`） | トップページ、ダッシュボード、投稿一覧 | 18.4〜18.8 ms | 21.9〜22.2 ms |
-| 記事の年と月（`SELECT DISTINCT YEAR( post_date ), MONTH( post_date ) ...`） | 投稿一覧 | 10.2 ms | 12.0 ms |
-| トップページの記事の一覧（`SQL_CALC_FOUND_ROWS ... LIMIT 10`） | トップページ | 7.9 ms | 8.7 ms |
-
-- どれも本体の行を全部読み、行ごとに条件を比べる文。条件のない `SELECT COUNT(*) FROM wp_comments` は変わらない。
-- 手元（macOS）でも、WordPress と同じ `SET NAMES 'utf8mb4' COLLATE 'utf8mb4_unicode_520_ci'` の接続なら再現する（自分のコメントの数が 6.0 ms から 7.4 ms）。
-- バージョンごとに測ると、0.2.38 から 0.2.39 で 6.0 ms から 6.8 ms、0.2.41 で 7.4 ms に増えている。
-- 0.2.38 から 0.2.39 の増えた分は 3493064（段階 116。ENUM と SET を、定数でない文字列と値の文字列で比べる）で入った。前のコミットとの交互の比べで 6.2 ms と 6.9 ms。
-- このコミットで、`comparison.Compare` が比べるたびに両辺の型を調べ、ENUM か SET かを確かめるようになった。WordPress のこれらの文には ENUM も SET もない。
-- 0.2.39 から 0.2.41 の残りの増え（約 0.5 ms）は、手元では揺れが大きく、コミットを決められなかった。
-- 次の段階の候補: 比べ方を行ごとではなく式を作るときに一度だけ決める。そのあと測り直して README の表を替える。
-
-### 段階 122 の直しの手元での測り
-
-段階 122（ac9319e）で、比べが ENUM と SET を値の文字列で比べるかを式ごとに一度だけ決め（3493064 の分）、真偽にするときの TEXT の列の確かめを警告を出すときだけにした（0.2.39 から 0.2.41 の残りの増え。b766f06 と 6ae1072 の `IsTextColumnRef` が行ごとに呼ばれていた。CPU のプロファイルで見つけた）。手元（macOS、`127.0.0.1:3360`、同じ `wpbench` の写し、WordPress の `SET NAMES`）で 0.2.35、72aa902、ac9319e を 12 回ずつ交互に測った中央値（文ごとに 200 回の中央値。機械が混んでいて揺れは大きい）:
-
-| 文 | 0.2.35 | 72aa902 | ac9319e |
-|---|---|---|---|
-| 自分のコメントの数 | 6.15 ms | 7.58 ms | 6.44 ms |
-| 承認済みのコメントの数 | 5.21 ms | 5.76 ms | 5.29 ms |
-| 記事の年と月 | 3.07 ms | 3.27 ms | 3.10 ms |
-| トップページの記事の一覧 | 2.26 ms | 2.23 ms | 2.17 ms |
-
-- 0.2.35 との差は、自分のコメントの数の約 0.3 ms（5%）を除いて揺れの中。残りは決められなかった（`docs/stages/121-130.md` の段階 122）。
-- GCE での測り直しと README の表の入れ替えはまだ。
-
-## 段階 122（README の表は替えない）
-
-2026-11-18、段階 121 と同じ構成の GCE（n2-standard-4、東京、Debian 12、pd-balanced。また別のインスタンス）で、段階 121 と同じ `wpbench` の写しのダンプ（記事 5,002 件、固定ページ 200 件、コメント 20,001 件、記事のメタ 25,006 件）を MySQL 8.0.46（Docker、既定の設定）と HeimDB に入れた。HeimDB は 0.2.35（8ac3b0d）と段階 122 のバージョン（c4c83a6）を、同じ 3316 番で交互に 2 回ずつ（毎回データのディレクトリを空にして起動し、入れ直した）測り、MySQL は毎回いっしょに測った（表は平均。MySQL は 4 回の平均）。手順は段階 47 と同じ（`pages.py --newest 5003 --cat 1 --runs 30`、`ab -c 10 -t 30`、`writes.php` を 100 回）。
-
-### ページの表示（中央値。全体と DB の時間）
-
-| ページ | MySQL 全体 | 0.2.35 全体 | c4c83a6 全体 | MySQL の DB | 0.2.35 の DB | c4c83a6 の DB |
-|---|---|---|---|---|---|---|
-| トップページ | 97 ms | 116 ms | 119 ms | 15.2 ms | 31.9 ms | 33.4 ms |
-| 個別の記事（コメント 60 件） | 176 ms | 196 ms | 202 ms | 19.4 ms | 39.2 ms | 41.1 ms |
-| カテゴリの 2 ページ目（記事 5,001 件） | 102 ms | 132 ms | 137 ms | 21.4 ms | 48.7 ms | 51.6 ms |
-| 検索 | 189 ms | 148 ms | 149 ms | 102.7 ms | 58.6 ms | 60.7 ms |
-| REST API（100 件） | 264 ms | 334 ms | 341 ms | 56.9 ms | 113.6 ms | 115.0 ms |
-| 管理画面のダッシュボード | 99 ms | 137 ms | 141 ms | 43.4 ms | 76.9 ms | 81.7 ms |
-| 投稿一覧 | 129 ms | 163 ms | 171 ms | 49.2 ms | 80.2 ms | 86.6 ms |
-
-### 同時アクセス（10 並列で 30 秒、件/秒）と書き込み（1 回あたりの DB の時間）
-
-| | MySQL | 0.2.35 | c4c83a6 |
-|---|---|---|---|
-| トップページ | 25.9 | 22.1 | 21.7 |
-| 個別の記事 | 13.7 | 12.0 | 12.0 |
-| 記事の作成 | 63.9 ms | 67.5 ms | 69.8 ms |
-| コメントの追加 | 6.5 ms | 3.2 ms | 3.3 ms |
-| オプションの更新 | 3.2 ms | 1.4 ms | 1.4 ms |
-| 記事の削除 | 45.8 ms | 46.4 ms | 46.5 ms |
-
-- このインスタンスは、段階 121 のもの（MySQL のトップページの全体が 110 ms）と 0.2.35 の README の表のもの（74 ms）の間（97 ms）。前の表とは比で比べる。
-- c4c83a6 のページの DB の時間は、0.2.35 より 1〜8% 長い（平均）。2 回目は MySQL も遅く（トップページの DB が 15.9 ms と、ほかの 3 回の 14.5〜15.1 ms）揺れが大きいが、1 回目だけでも投稿一覧が 5%（80.2 ms から 84.3 ms）、ダッシュボードとカテゴリの 2 ページ目が 3% 長い。
-- 段階 121 の 72aa902 は 0.2.35 より 3〜12% 長かった（ダッシュボード 12%、トップページ 7%）。ダッシュボードは 6%、トップページは 5% に縮んだが、0.2.35 の水準には戻っていない。投稿一覧は 72aa902 の 5% から縮んでいない（8%）。
-- MySQL との比は、ページの DB の時間が 1.8〜2.4 倍（0.2.35 は 1.6〜2.3 倍。検索はどちらも 0.6 倍）、全体が 1.2〜1.4 倍（0.2.35 は 1.1〜1.4 倍。検索は 0.8 倍）。
-- 同時アクセスは 0.2.35 と同じくらい（MySQL の 84〜88%。0.2.35 は 85〜88%）。
-- 書き込みは、記事の作成が 3% 長い（2 回とも。段階 121 は 5%）。削除は同じ。コメントとオプションは前の表と同じく MySQL の約半分。
-- 0.2.35 の水準に戻っていないので、README の表は替えない。
-
-### 段階 121 で長くなった文
-
-段階 121 と同じく、1 回ずつのリクエストの `$wpdb->queries` で取って比べた（データを 2 回入れ直して 30 回ずつ、中央値。範囲は 2 回の中央値、ページごと）。文の数と形は 2 つのバージョンで同じ。72aa902 は段階 121 の値（別のインスタンス）。
-
-| 文 | 0.2.35 | c4c83a6 | 段階 121 の 0.2.35 | 段階 121 の 72aa902 |
-|---|---|---|---|---|
-| 自分のコメントの数（ダッシュボード） | 20.8〜21.4 ms | 21.8〜22.6 ms | 21.8 ms | 26.8 ms |
-| 承認済みのコメントの数（トップページ、ダッシュボード、投稿一覧） | 17.7〜18.2 ms | 19.2〜19.9 ms | 18.4〜18.8 ms | 21.9〜22.2 ms |
-| 記事の年と月（投稿一覧） | 9.8〜9.9 ms | 10.5〜10.7 ms | 10.2 ms | 12.0 ms |
-| トップページの記事の一覧（`SQL_CALC_FOUND_ROWS ... LIMIT 10`） | 7.2〜7.6 ms | 7.8〜8.2 ms | 7.9 ms | 8.7 ms |
-
-- 増えた分は段階 122 で縮んだ（自分のコメントの数は 23% 増えていたのが 5%、承認済みのコメントの数は 18〜19% が 7〜12%、記事の年と月は 18% が 7%）が、4 つとも 2 回とも 0.2.35 より長い。
-- 残りでいちばん大きいのは承認済みのコメントの数（`WHERE ( comment_approved = '1' ) AND comment_type NOT IN ('note')`、約 1.3〜2.2 ms）。ページごとに 1 回ずつ出るので、トップページ、ダッシュボード、投稿一覧の差の大部分。手元（macOS）の段階 122 の測りでは、この文の差は揺れの中（5.21 ms と 5.29 ms）だった。
-- 記事の作成では、`wp_term_relationships` への INSERT と `t.slug IN (...)` の JOIN が 0.7〜0.8 ms ずつ長い（作成の文の時間の和が 76.8 ms から 80.2 ms）。段階 121 では和に差がなかったので、揺れかどうかは決められない。
-- 次の段階の候補: 承認済みのコメントの数の残りを、Linux でのプロファイル（0.2.35 と c4c83a6）で調べる。直したあとで測り直して README の表を替える。
-
-## 段階 123（残りの遅れのプロファイルと、文ごとの決まった手間の内訳）
-
-2026-11-18、段階 122 と同じ構成の GCE（n2-standard-4、東京、Debian 12、pd-balanced。また別のインスタンス）で、段階 122 の表で長かった 4 つの文を、WordPress と同じ接続（`SET NAMES 'utf8mb4' COLLATE 'utf8mb4_unicode_520_ci'` と sql_mode）で 1 つずつ繰り返し流し（Go の小さな道具。承認済みのコメントの数は 3,000 回、ほかは 1,500 回）、文の時間の中央値と CPU のプロファイルを取った。HeimDB は 127.0.0.1:3316 で、pprof の口は作業用の写しにだけ足した（コミットしていない）。データは段階 121 と同じ `wpbench` のダンプ。
-
-### 残りの遅れ
-
-| 文 | 0.2.35 | 3ebc3fb（段階 122 のバージョン） |
-|---|---|---|
-| 承認済みのコメントの数 | 19.42 ms | 19.93 ms |
-| 自分のコメントの数 | 20.25 ms | 21.61 ms |
-| 記事の年と月 | 9.63 ms | 9.75 ms |
-| トップページの記事の一覧 | 7.42 ms | 7.23 ms |
-
-- 4 回の平均（入れ直したデータで 2 回、0.2.35 で入れたデータの写しで 2 回。バージョンごとに別の写し）。回ごとの揺れは 0.2 ms 以内。
-- 差は、承認済みのコメントの数が 2.6%、自分のコメントの数が 6.7%。記事の年と月は 1%、トップページの記事の一覧は 3% 短い。
-- 同じデータの写しでも差は同じなので、入れたときの LSM の形の違いではない。
-- 承認済みのコメントの数の差は、Pebble の読み（`rowblk.(*Iter).Next` が 3,000 回で 1.3 秒から 3.5 秒）に出た。Pebble のバージョンもデータも同じで、式の評価はむしろ短い（12.8 秒から 10.3 秒）。
-- 自分のコメントの数の差は、式の評価（`EvaluateCondition` の下で 1,500 回に 1.3 秒）。
-- その中身は、段階 120 で項目が増えてインライン化されなくなった `NumberTypeImpl_.Equals`（`user_id = 1` の `TypesEqual`）、段階 116 の `=` の行の値の確かめ（`IsTuple`）、段階 122 の `useEnumSetText` などで、行ごとに両辺の型を見ていた。
-
-### バージョンごと
-
-0.2.35 で入れたデータをバージョンごとに写して開き、承認済みのコメントの数を 2,000 回、自分のコメントの数を 1,000 回流した中央値（バージョンを順に並べた回と逆に並べた回の平均）。
-
-| バージョン | 承認済みのコメントの数 | 自分のコメントの数 |
-|---|---|---|
-| 0.2.35 | 19.32 ms | 20.20 ms |
-| 0.2.36 | 19.31 ms | 20.21 ms |
-| 0.2.37 | 19.26 ms | 22.40 ms |
-| 0.2.38 | 19.27 ms | 22.41 ms |
-| 0.2.39 | 19.17 ms | 23.38 ms |
-| 0.2.40 | 20.46 ms | 25.63 ms |
-| 0.2.41 | 21.14 ms | 25.49 ms |
-| 3ebc3fb | 20.07 ms | 21.63 ms |
-
-- 0.2.39（段階 116）と 0.2.40（段階 118 と 119）の増えは、段階 121 と 122 で見つけたもの。段階 122 で大部分が戻った。
-- 自分のコメントの数は 0.2.37 で 2.2 ms 増えた。0.2.37 の変更（DESCRIBE の書き換えと、ENUM の索引の範囲）は、この文の経路を通らない。
-
-### コードの配置による揺れ
-
-3ebc3fb のエンジンの `sql` パッケージに、呼ばれない関数（数十バイト）を足しただけのバージョンを 4 通り作って測った（同じデータの写し、2 回の平均）。後ろの関数の番地が 32 バイト単位でずれる。
-
-| バージョン | 承認済みのコメントの数 | 自分のコメントの数 |
-|---|---|---|
-| 0.2.35 | 19.36 ms | 20.20 ms |
-| 3ebc3fb | 19.86 ms | 21.55 ms |
-| 3ebc3fb ＋ 関数 1 | 19.72 ms | 21.91 ms |
-| 3ebc3fb ＋ 関数 2 | 19.33 ms | 21.58 ms |
-| 3ebc3fb ＋ 関数 3 | 19.45 ms | 21.42 ms |
-| 3ebc3fb ＋ 関数 4 | 19.28 ms | 21.83 ms |
-
-- 承認済みのコメントの数は、関数を足すだけで 19.3 ms から 19.9 ms まで変わる。0.2.35 との 0.5 ms の差は、この揺れの中。
-- 自分のコメントの数は、どの配置でも 21.4〜21.9 ms で、0.2.35 より 1.2 ms 以上長い。こちらはコードの差。
-- 0.2.37 の自分のコメントの数の 2.2 ms も、経路のコードが変わっていないので、配置による揺れと考えられる。
-- Linux で 1 文の数 % の差を見るときは、配置を変えたバージョンでも測る。
-
-### 段階 123 の直し
-
-比べが、両辺の型が同じかと `=` の両辺が行の値かも、段階 122 の ENUM と SET の答えと一緒に式ごとに一度だけ決めるようにし、WHERE の条件の値が真偽なら `convertToBool` を呼ばないようにした（`docs/stages/121-130.md` の段階 123、b6c0cb5）。同じデータの写しで、バージョンごとに 2 回の平均:
-
-| 文 | 0.2.35 | 3ebc3fb | 直したバージョン | 直したバージョン ＋ 関数 2 | 直したバージョン ＋ 関数 4 |
-|---|---|---|---|---|---|
-| 承認済みのコメントの数 | 19.38 ms | 19.95 ms | 18.79 ms | 18.72 ms | 18.48 ms |
-| 自分のコメントの数 | 20.31 ms | 21.52 ms | 19.94 ms | 20.31 ms | 20.52 ms |
-| 記事の年と月 | 9.70 ms | 9.75 ms | 9.73 ms | 9.66 ms | 9.58 ms |
-| トップページの記事の一覧 | 7.49 ms | 7.24 ms | 7.21 ms | 7.20 ms | 7.20 ms |
-
-- 承認済みのコメントの数は、どの配置でも 0.2.35 より 3〜5% 短い（pprof の口を足したビルドどうし。口のないビルドでは違う。「最後の測り」の「同じコードのビルドの違い」）。
-- 自分のコメントの数は 19.9〜20.5 ms で、0.2.35 と同じくらい（配置の揺れの中）。
-- 記事の年と月とトップページの記事の一覧は変わらない（比べの少ない文）。
-
-### 文ごとの決まった手間の内訳
-
-7 つのページ（README の表のページ）を 1 回ずつ開いたときの文（321 文。MySQL の WordPress で `$wpdb->queries` を取った）を、同じ順に 1 つの接続で 100 回流し、3ebc3fb の CPU のプロファイルを取った（データは入れ直した直後。WordPress の `SET NAMES` と sql_mode）。1 回（7 ページ分）は文の中央値の和で 376.6 ms、サーバの CPU で 428.6 ms。321 文のうち 1 ms 未満の軽い文が 244（中央値 0.55 ms）、重い文が 77（和 241.6 ms。コメントの数、記事の検索、年と月など）。
-
-| 部分 | CPU の割合 | 7 ページあたり |
-|---|---|---|
-| SQL の構文解析（vitess の `sqlparser.Parse`） | 3.5% | 15 ms |
-| 計画の組み立て（planbuilder。表の定義を読む 1.3 秒を含む） | 6.3% | 26 ms |
-| 計画の書き換え（analyzer） | 16.2% | 67 ms |
-| 　うち `optimizeJoins`（索引の選び、行数の見積もり） | 8.1% | 34 ms |
-| 　うち `filterSelectivity` の `sql.NewEmptyContext` | 2.7% | 11 ms |
-| そのほかのエンジンの準備（トランザクション、実行の木） | 2.4% | 10 ms |
-| 実行（式の評価、集計、並べ替え） | 25.0% | 103 ms |
-| 　ストレージ（Pebble 10.8%、行の復号 10.5%、MVCC 3.5%） | 24.8% | 102 ms |
-| 接続と結果の送り（`pollForClosedConnection` の 3.5% を含む） | 12.2% | 50 ms |
-| Go のスケジューラ | 4.5% | 19 ms |
-| GC（裏の印付け） | 4.9% | 20 ms |
-
-- 構文解析、計画の組み立て、書き換え、準備を足すと 28.5%（7 ページで 117 ms、1 文あたり平均 0.37 ms の CPU）。
-- 単純な形（表が 1 つで、JOIN、副問い合わせ、UNION のない SELECT）の 261 文だけを流すと、1 文あたり 0.27 ms（組み立てと書き換えは 0.21 ms）。
-- 単純でない 60 文は 1 文あたり 0.75 ms（組み立てと書き換えは 0.64 ms）。その 28% が書き換えで、`optimizeJoins` が 20%。
-- 書き換えの規則は、`optimizeJoins` が半分（3.35 秒）。次は `assignExecIndexes` 0.42 秒、`pruneTables` 0.28 秒、`pushFilters` 0.23 秒で、ほかの 60 あまりの規則はどれも 0.5% 未満。
-- WordPress が使わない機能（トリガー、手続き、ALTER と CREATE の検査、ベクトルの索引、全文検索など）の規則は、合わせても 1% 未満。
-- 規則の名前を作る `RuleId.String`（ログのため）が 0.3%。
-- 表の定義を文ごとに読む `Database.GetTableInsensitive`（catalog の走査と `newTable`）が 3.5%。
-- 361 文の `stmts.json`（段階 112 の計画の比較の文）でも形は同じ: 組み立てと書き換えと準備が 24.8%、実行が 56%（重い文が多い）。
-
-### 文の形の繰り返し
-
-同じ 7 ページの文の文字列と数を `?` にし、空白をそろえ、`IN (?, ?, ...)` を 1 つにまとめた形で数えた（1 回目の読み込み）。
-
-| ページ | 文 | 違う文字列 | 違う形 | ページの中で前と同じ形 | 単純な形 | 2 回目の読み込みで、前に見た形 |
-|---|---|---|---|---|---|---|
-| トップページ | 26 | 26 | 16 | 10 | 17 | 26 |
-| 個別の記事 | 35 | 35 | 23 | 12 | 25 | 35 |
-| カテゴリの 2 ページ目 | 26 | 26 | 15 | 11 | 14 | 26 |
-| 検索 | 31 | 30 | 17 | 14 | 21 | 31 |
-| REST API（100 件） | 116 | 116 | 12 | 104 | 114 | 116 |
-| ダッシュボード | 43 | 43 | 20 | 23 | 38 | 43 |
-| 投稿一覧 | 44 | 43 | 24 | 20 | 32 | 44 |
-
-- 7 ページの 321 文は、文字列で 214、形で 44（`IN` の値の数を区別すると 71）。
-- ページの中で前と同じ形の文が 194（60%）。REST API は 116 文が 12 の形（リビジョンの `SQL_CALC_FOUND_ROWS ... post_parent = ?` が 100 文）。
-- ページを順に 1 回ずつ開くと、321 文のうち 277（86%）が前に見た形（単純な形では 261 のうち 229）。
-- 2 回目の読み込みは、どのページも全部の文が前に見た形で、文字列も全部同じ（同じページを開き直すとき）。
-- 多い形は `SELECT option_value FROM wp_options WHERE option_name = ? LIMIT ?`（43 文）、`wp_posts.* ... WHERE ID IN (...)`（18）、term と taxonomy の JOIN（17）、メタの `post_id IN (...)`（15）。
-
-### 段階 124 からの候補（見積もり）
-
-CPU の時間は 7 ページを 1 回ずつ開いた分（428.6 ms）での値。ページの DB の時間（段階 122 の GCE で 7 ページの和が約 470 ms）にそのまま効くとは限らない（接続ごとに並行するゴルーチンの分がある）。
-
-- 単純な形の計画のキャッシュ: 261 文の組み立てと書き換え（0.21 ms ずつ）を省けば、7 ページで約 54 ms（CPU の 13%）。
-- ページごとには、トップページ 3.5 ms、個別の記事 5.2 ms、カテゴリ 2.9 ms、検索 4.4 ms、REST API 23.7 ms、ダッシュボード 7.9 ms、投稿一覧 6.7 ms（値を当て直す手間を除いた上限）。
-- 形をすべてキャッシュすれば、単純でない 60 文の 0.64 ms ずつも加わり、7 ページで約 93 ms（22%）。JOIN の計画は値で索引の選びが変わるので、単純な形から始める。
-- キャッシュの鍵は、構文解析の前の文字列で作れば構文解析（3.5%）も省ける。値を当て直すので、計画の中の定数の場所を覚える必要がある。
-- `pollForClosedConnection`（接続が切れたかの見張り）は、文ごとに fd を複製して inode を調べる（1 文 44 µs、CPU の 3.5%）。最初の見張りの時刻まで調べるのを遅らせれば、ほとんどの文で省ける（REST API で約 5 ms）。
-- `filterSelectivity` が呼ぶたびに `sql.NewEmptyContext` でセッションを作る（状態の変数の表を作る）。JOIN の文の 7.7%、全体の 2.7%（7 ページで約 11 ms）。呼び出しの文脈を渡すか、作ったものを使い回す。
-- 表の定義を文ごとに catalog から読み直す（3.5%、約 14 ms）。バージョンごとに覚えれば省ける。
-- WordPress が使わない機能の規則を飛ばすのは、合わせて 1% 未満で、効きが小さい。規則を回す仕組み（`transform.Node` の木の走査が 4.8%）を減らす方が効く。
-
-### 最後の測り（README の表は替えない）
-
-同じインスタンスで、段階 122 と同じ手順（MySQL 8.0.46 と、HeimDB の 0.2.35（8ac3b0d）と段階 123 のバージョン（b6c0cb5。pprof の口のないビルド）を同じ 3316 番で交互に 2 回ずつ、毎回データのディレクトリを空にして入れ直した。`pages.py --newest 5003 --cat 1 --runs 30`、`ab -c 10 -t 30`、`writes.php` を 100 回）で測った（表は平均。MySQL は 4 回の平均）。
-
-#### ページの表示（中央値。全体と DB の時間）
-
-| ページ | MySQL 全体 | 0.2.35 全体 | 段階 123 全体 | MySQL の DB | 0.2.35 の DB | 段階 123 の DB |
-|---|---|---|---|---|---|---|
-| トップページ | 98 ms | 121 ms | 117 ms | 15.6 ms | 33.9 ms | 32.9 ms |
-| 個別の記事（コメント 60 件） | 176 ms | 207 ms | 204 ms | 19.3 ms | 43.1 ms | 42.7 ms |
-| カテゴリの 2 ページ目（記事 5,001 件） | 104 ms | 140 ms | 136 ms | 21.8 ms | 52.3 ms | 51.7 ms |
-| 検索 | 191 ms | 153 ms | 152 ms | 103.7 ms | 62.2 ms | 62.2 ms |
-| REST API（100 件） | 293 ms | 363 ms | 367 ms | 66.4 ms | 124.8 ms | 124.6 ms |
-| 管理画面のダッシュボード | 103 ms | 137 ms | 138 ms | 45.1 ms | 78.5 ms | 78.4 ms |
-| 投稿一覧 | 132 ms | 167 ms | 171 ms | 50.4 ms | 82.3 ms | 86.3 ms |
-
-#### 同時アクセス（10 並列で 30 秒、件/秒）と書き込み（1 回あたりの DB の時間）
-
-| | MySQL | 0.2.35 | 段階 123 |
-|---|---|---|---|
-| トップページ | 25.0 | 21.2 | 20.3 |
-| 個別の記事 | 13.1 | 11.9 | 11.4 |
-| 記事の作成 | 74.0 ms | 70.4 ms | 76.6 ms |
-| コメントの追加 | 7.8 ms | 3.5 ms | 3.7 ms |
-| オプションの更新 | 3.6 ms | 1.6 ms | 1.7 ms |
-| 記事の削除 | 54.0 ms | 49.0 ms | 53.6 ms |
-
-- ページの DB の時間は、7 つのうち 6 つが 0.2.35 と同じか短い（トップページは 3% 短い）。投稿一覧は 2 回とも 5% 長い（82.2 ms と 82.4 ms が、84.7 ms と 87.8 ms）。
-- 段階 122 の c4c83a6 は 1〜8% 長かった（投稿一覧 8%、ダッシュボード 6%、トップページ 5%）。
-- 同時アクセスは、トップページが 4%、個別の記事が 4% 少ない。同じ回の MySQL も 1〜2% 少ないので、MySQL との比では 2〜3%（トップページは MySQL の 81〜82% と、0.2.35 の 84〜85%）。
-- 書き込みは、段階 123 の回は MySQL も遅く（記事の作成が 68.7 ms と 69.4 ms の回に対して 82.1 ms と 75.8 ms）、同じ回の MySQL との比は 0.2.35 と同じくらい（記事の作成は 1.02 倍と 0.97 倍）。
-- MySQL との比は、ページの DB の時間が 1.8〜2.2 倍（検索は 0.6 倍）、全体が 1.2〜1.4 倍（検索は 0.8 倍）。
-
-#### 文ごと（`$wpdb->queries`、データを 2 回入れ直して 30 回ずつの中央値）
-
-| 文 | 0.2.35 | 段階 123 |
-|---|---|---|
-| 自分のコメントの数（ダッシュボード） | 22.3〜22.4 ms | 20.1 ms |
-| 承認済みのコメントの数（トップページ、ダッシュボード、投稿一覧） | 17.8〜19.5 ms | 18.6〜19.4 ms |
-| 記事の年と月（投稿一覧） | 10.0〜10.3 ms | 10.9〜11.5 ms |
-| トップページの記事の一覧 | 8.5〜9.0 ms | 7.9〜8.5 ms |
-
-- 自分のコメントの数は 10% 短くなった（段階 122 の c4c83a6 は 0.2.35 より 5% 長かった）。
-- 承認済みのコメントの数は 0.2.35 と同じくらい（ページで ±0.6 ms）。
-- 投稿一覧の差の大部分は記事の年と月（約 1.1 ms）と、承認済みのコメントの数（約 0.6 ms）。
-- 記事の年と月は、pprof の口を足したビルドで同じデータの写しを測ると 0.2.35 と同じだった（9.70 ms と 9.73 ms。配置を変えた 2 通りも 9.58〜9.66 ms）。
-
-#### 同じコードのビルドの違い
-
-最後の測りの 2 つのビルド（pprof の口のないもの）と、同じコードに pprof の口を足したビルドを、同じデータの写しで 1 つの接続から測った（バージョンを順に並べた回と逆に並べた回の平均）。
-
-| 文 | 0.2.35（口なし） | 0.2.35（口あり） | 段階 123（口なし） | 段階 123（口あり） |
-|---|---|---|---|---|
-| 承認済みのコメントの数 | 17.83 ms | 19.38 ms | 18.40 ms | 18.79〜18.86 ms |
-| 自分のコメントの数 | 21.21 ms | 20.31 ms | 20.13 ms | 19.94〜19.97 ms |
-| 記事の年と月 | 9.99 ms | 9.70 ms | 10.16 ms | 9.73〜9.79 ms |
-| トップページの記事の一覧 | 7.39 ms | 7.49 ms | 7.82 ms | 7.21〜7.28 ms |
-
-- 口ありの値は「段階 123 の直し」の表（E と F の回）と、この回（G と H）のもの。
-- 同じコードでも、ビルドが違うだけで 1 文が 4〜8% 変わる（0.2.35 の承認済みのコメントの数は 17.8 ms と 19.4 ms）。main のパッケージに pprof を足すと、後ろの関数の番地がずれる。
-- 口なしどうしでは、段階 123 は 0.2.35 より、承認済みのコメントの数が 3%、記事の年と月が 2%、トップページの記事の一覧が 6% 長く、自分のコメントの数が 5% 短い。口ありどうしでは、どれも同じか短い。
-- 投稿一覧の 5% と同時アクセスの 2〜3% は、この配置の揺れの大きさと同じくらいで、コードの差とは分けられない。
-- 0.2.35 の水準にはそろわなかったので、README の表は替えない。次に README の表を替えるときは、配置の揺れより大きな改善（計画のキャッシュなど）の後にする。
-
-## 段階 124（結果を送る経路の手間。README の表は替えない）
-
-結果の行を文のゴルーチンで読んで送り、切れた接続の見張りを 5 秒の後にだけ始めた（`docs/stages/121-130.md` の段階 124、b2bdaf2）。
-
-### 手元（M4）
-
-127.0.0.1:3360 で、段階 123 のバージョン（2fd68fa）と段階 124 のバージョン（同じコード）のビルドを、同じデータ（`wpbench`）の写しで交互に 8 回測った（中央値。軽い文は 300 回、重い文は 150 回、7 ページの文は 30 回の中央値の和）。裏で Docker の VM などが動いていて回ごとの揺れが大きい（7 ページの文が 99〜130 ms）。
-
-| 文 | 段階 123 | 段階 124 | 差 |
-|---|---|---|---|
-| `wp_options` の 1 行 | 0.109 ms | 0.088 ms | -19% |
-| `wp_options` の `IN` | 0.127 ms | 0.099 ms | -22% |
-| `wp_posts` の主キーの `IN` | 0.140 ms | 0.144 ms | +3% |
-| `SELECT 1` | 0.076 ms | 0.070 ms | -8% |
-| 記事のメタの `IN` | 0.173 ms | 0.145 ms | -16% |
-| 承認済みのコメントの数 | 5.45 ms | 5.29 ms | -3% |
-| 自分のコメントの数 | 6.35 ms | 6.25 ms | -2% |
-| 記事の年と月 | 3.36 ms | 3.07 ms | -8% |
-| トップページの記事の一覧 | 2.33 ms | 2.34 ms | 0% |
-| 7 ページの 321 文（和） | 114.1 ms | 105.0 ms | -8% |
-
-- いちばん短い回どうしでは、7 ページの文が 99.2 ms と 92.8 ms（-6%）。
-- 空のバッチのイテレータを DB のイテレータにする候補を足したバージョンも測った（3 回）が、足さないバージョンと同じだった（92.8〜105.0 ms と 93.1〜96.3 ms）。
-
-### GCE
-
-2026-11-19、段階 123 と同じ構成の GCE（n2-standard-4、東京、Debian 12、pd-balanced。また別のインスタンス）で、段階 121 と同じ `wpbench` のダンプを使った。このインスタンスは前のものより速い（MySQL のトップページの全体が 75 ms。段階 123 は 98 ms）。表どうしは比で比べる。
-
-#### 同じデータの写しで（1 つの接続、バージョンごとに順と逆順の 2 回の平均）
-
-0.2.35 で入れたデータをバージョンごとに写して開き、軽い文を 2,000 回、重い文を 300 回、7 ページの 321 文を 60 回流した（WordPress の `SET NAMES` と sql_mode）。括弧はサーバの CPU。
-
-| 文 | 0.2.35 | 段階 123（62a4a87） | 段階 124（b2bdaf2） | 段階 123 との差 |
-|---|---|---|---|---|
-| `wp_options` の 1 行 | 0.371 ms（0.46） | 0.387 ms（0.49） | 0.262 ms（0.27） | -32% |
-| `wp_options` の `IN` | 0.424 ms（0.53） | 0.412 ms（0.50） | 0.298 ms（0.30） | -28% |
-| `wp_posts` の主キーの `IN` | 0.461 ms（0.58） | 0.449 ms（0.55） | 0.324 ms（0.33） | -28% |
-| `SELECT 1` | 0.202 ms（0.25） | 0.208 ms（0.26） | 0.132 ms（0.13） | -37% |
-| 記事のメタの `IN` | 0.665 ms（0.78） | 0.679 ms（0.80） | 0.504 ms（0.54） | -26% |
-| 承認済みのコメントの数 | 14.83 ms | 14.83 ms | 15.00 ms | +1.1% |
-| 自分のコメントの数 | 17.25 ms | 16.56 ms | 16.62 ms | +0.4% |
-| 記事の年と月 | 7.98 ms | 7.85 ms | 7.43 ms | -5% |
-| トップページの記事の一覧 | 5.89 ms | 5.83 ms | 5.63 ms | -3% |
-| 7 ページの 321 文（和） | 316.6 ms（361） | 317.0 ms（361） | 272.0 ms（287） | -14%（CPU -21%） |
-
-- 軽い文は 1 文あたり 0.11〜0.18 ms 短くなり、サーバの CPU は 33〜51% 減った。
-- コメントの数 2 つ（1 行を返す全件の読み）は変わらない。+1% は段階 123 で見たコードの配置の揺れ（3〜5%）の中。
-- 7 ページの文は 1 回 45 ms 短い（321 文で 1 文あたり 0.14 ms）。
-
-#### ページの表示（段階 122 と同じ手順。交互に 2 回ずつ、毎回入れ直した平均。MySQL は 6 回の平均）
-
-`pages.py --newest 5003 --cat 1 --runs 30`、`ab -c 10 -t 30`、`writes.php` を 100 回。HeimDB は pprof の口のないビルド。
-
-| ページ | MySQL 全体 | 0.2.35 全体 | 段階 123 全体 | 段階 124 全体 | MySQL の DB | 0.2.35 の DB | 段階 123 の DB | 段階 124 の DB |
-|---|---|---|---|---|---|---|---|---|
-| トップページ | 75 ms | 91 ms | 91 ms | 86 ms | 11.5 ms | 24.7 ms | 25.5 ms | 21.8 ms |
-| 個別の記事（コメント 60 件） | 136 ms | 155 ms | 156 ms | 151 ms | 14.8 ms | 31.6 ms | 32.4 ms | 27.7 ms |
-| カテゴリの 2 ページ目（記事 5,001 件） | 80 ms | 105 ms | 105 ms | 101 ms | 16.8 ms | 39.4 ms | 39.3 ms | 36.2 ms |
-| 検索 | 134 ms | 118 ms | 118 ms | 113 ms | 67.0 ms | 48.0 ms | 48.5 ms | 45.3 ms |
-| REST API（100 件） | 197 ms | 266 ms | 255 ms | 233 ms | 39.9 ms | 90.1 ms | 83.9 ms | 72.3 ms |
-| 管理画面のダッシュボード | 77 ms | 110 ms | 109 ms | 106 ms | 32.9 ms | 63.1 ms | 62.0 ms | 59.1 ms |
-| 投稿一覧 | 101 ms | 132 ms | 132 ms | 125 ms | 38.2 ms | 66.2 ms | 66.4 ms | 61.4 ms |
-
-| | MySQL | 0.2.35 | 段階 123 | 段階 124 |
-|---|---|---|---|---|
-| 同時アクセス: トップページ（件/秒） | 32.6 | 27.3 | 27.7 | 28.2 |
-| 同時アクセス: 個別の記事（件/秒） | 17.3 | 15.2 | 15.3 | 15.4 |
-| 記事の作成（DB） | 50.0 ms | 53.1 ms | 52.8 ms | 51.7 ms |
-| コメントの追加（DB） | 5.2 ms | 2.5 ms | 2.6 ms | 2.5 ms |
-| オプションの更新（DB） | 2.3 ms | 1.1 ms | 1.1 ms | 1.1 ms |
-| 記事の削除（DB） | 36.1 ms | 36.5 ms | 36.4 ms | 36.1 ms |
-
-- ページの DB の時間は、7 つすべてで段階 123 より短い（5〜15%。トップページと個別の記事 15%、REST API 14%、カテゴリと投稿一覧 8%、検索 7%、ダッシュボード 5%）。0.2.35 より 5〜20% 短い。文の多いページほど縮む（REST API は 116 文）。
-- MySQL との比は、ページの DB の時間が 1.6〜2.2 倍（検索は 0.7 倍。同じ回の段階 123 は 1.7〜2.3 倍）、全体が 1.1〜1.4 倍（検索は 0.8 倍）。
-- 同時アクセスは段階 123 より 1〜2% 多い（MySQL の 86〜89%）。失敗の要求は 6 回とも 0。
-- 書き込みは同じくらい。
-- 文ごと（`$wpdb->queries`）の和は、0.2.35 と比べて、ダッシュボードが 64.4 ms から 60.9 ms、投稿一覧が 66.8 ms から 63.9 ms、トップページが 48.1 ms から 45.5 ms、記事の作成が 66.5 ms から 63.4 ms、削除が 33.9 ms から 31.5 ms。長くなった文は承認済みのコメントの数（0.6〜0.8 ms。上の表のとおり配置の揺れの中）だけ。
-
-#### CPU の内訳（7 ページの 321 文を 100 回）
-
-段階 123 と同じ分け方で、pprof の口を足した 2 つのビルド（作業用の写し。コミットしていない）を同じインスタンスで測った（データは入れ直した直後）。7 ページあたりの値は、プロファイルの標本の和を 100 で割ったもの（1 回の CPU は、段階 123 のバージョン 350 ms、段階 124 のバージョン 284 ms）。
-
-| 部分 | 段階 123 のバージョン | 段階 124 のバージョン |
-|---|---|---|
-| SQL の構文解析 | 2.8%（9 ms） | 3.9%（11 ms） |
-| 計画の組み立て | 6.5%（22 ms） | 7.6%（21 ms） |
-| 計画の書き換え（analyzer） | 16.4%（55 ms） | 21.1%（59 ms） |
-| 　うち `optimizeJoins` | 7.3%（24 ms） | 10.2%（29 ms） |
-| 　うち `filterSelectivity` の `sql.NewEmptyContext` | 1.9%（6 ms） | 2.3%（6 ms） |
-| そのほかのエンジンの準備 | 2.4%（8 ms） | 2.5%（7 ms） |
-| 実行（式の評価、集計、並べ替え） | 25.3%（85 ms） | 27.4%（77 ms） |
-| 　ストレージ（Pebble、行の復号、MVCC） | 24.3%（82 ms） | 24.9%（70 ms） |
-| 接続と結果の送り | 12.9%（43 ms） | 6.2%（17 ms） |
-| 　うち `pollForClosedConnection` | 3.6%（12 ms） | 0 |
-| Go のスケジューラほか | 4.0%（14 ms） | 1.1%（3 ms） |
-| GC（裏の印付け） | 5.4%（18 ms） | 5.3%（15 ms） |
-| 合計 | 336 ms | 279 ms |
-
-- 分けた中の関数で見ると、スタックの伸び（`runtime.newstack`、`copystack`）が 4.4% から 0.3%、スケジューラ（`schedule`、`findRunnable`、`park_m`）が 3.5% から 0.9%、futex が 2.7% から 0.5%、epoll が 1.2% から 0.3%、`GetConnInode` が 3.4% から 0。
-- 結果の送りの手間が減った分、計画の組み立てと書き換え（構文解析と準備を含めて 35%。7 ページで 98 ms）の割合が大きくなった。段階 123 の見積もりの計画のキャッシュ（単純な形で約 54 ms）が、次に大きい候補。
-- ストレージと実行も 12 ms と 8 ms 減った（同じ文、同じデータ）。ゴルーチンをまたいで行を渡さなくなった分のキャッシュの効きと考えられるが、分けて確かめてはいない。
-
-## 段階 125（全件を読む文の行ごとの手間。README の表をこの値に替えた）
-
-全件の走査とエントリだけで作る行で復号した行を使い回し（6dd6f28）、同じバイト列の文字列の比べで照合順序の重みを引かないようにした（8e41104。`docs/stages/121-130.md` の段階 125）。
-
-### 手元（M4）
-
-127.0.0.1:3360 で、段階 124 のバージョン（5107f48）と段階 125 のバージョン（8e41104）のビルドを、同じデータ（`wpbench`）の写しで交互に 8 回測った（中央値。軽い文は 300 回、重い文は 150 回、7 ページの文は 30 回の中央値の和）。
-
-| 文 | 段階 124 | 段階 125 | 差 |
-|---|---|---|---|
-| `wp_options` の 1 行 | 0.075 ms | 0.075 ms | 0% |
-| `wp_options` の `IN` | 0.085 ms | 0.082 ms | -4% |
-| `wp_posts` の主キーの `IN` | 0.098 ms | 0.097 ms | -1% |
-| `SELECT 1` | 0.051 ms | 0.051 ms | 0% |
-| 記事のメタの `IN` | 0.130 ms | 0.134 ms | +3% |
-| 承認済みのコメントの数 | 5.14 ms | 4.17 ms | -19% |
-| 自分のコメントの数 | 5.94 ms | 5.16 ms | -13% |
-| 記事の年と月 | 3.05 ms | 2.74 ms | -10% |
-| トップページの記事の一覧 | 2.14 ms | 1.65 ms | -23% |
-| 7 ページの 321 文（和） | 96.2 ms | 90.7 ms | -6% |
-
-- 8 回とも段階 125 の方が短い（7 ページの文は 94.9〜101.2 ms と 89.6〜93.7 ms）。
-- 途中で、使い回しだけのバージョンと、使い回しと文字列の比べのバージョンを分けて 4 回ずつ測った（交互）。承認済みのコメントの数は 5.06 ms から 4.26 ms（使い回し）、4.20 ms（文字列の比べを足す）、トップページの記事の一覧は 2.31 ms から 1.84 ms、1.63 ms。大部分は使い回しの分。
-- カーソルの写しをやめる候補（エントリと値をイテレータのものを指して返す）を足したバージョンも同じ回で測った。承認済みのコメントの数 4.20 ms から 4.08 ms、自分のコメントの数 5.09 ms から 5.03 ms、7 ページの文は 89.8 ms と 89.9 ms で同じ。2 万行（値 400 バイト）の走査だけを Go のベンチマークで比べると、1 回 1.31 ms から 1.24 ms（1 行 3.5 ns）。
-
-### GCE
-
-2026-11-19、段階 124 と同じ構成の GCE（n2-standard-4、東京、Debian 12、pd-balanced。また別のインスタンス）で、同じ `wpbench` のダンプを使った。このインスタンスは段階 124 のものより遅い（MySQL のトップページの全体が 97 ms。段階 124 は 75 ms）。表どうしは比で比べる。
-
-#### 同じデータの写しで（1 つの接続、バージョンごとに順と逆順の 2 回の平均）
-
-0.2.35 で入れたデータをバージョンごとに写して開き、段階 124 と同じく軽い文を 2,000 回、重い文を 300 回、7 ページの 321 文を 60 回流した。括弧はサーバの CPU。「カーソル」は、段階 125 にカーソルの写しをやめる候補を足したバージョン（残さなかった）。
-
-| 文 | 0.2.35 | 段階 124（5107f48） | 段階 125（8e41104） | カーソル | 段階 124 との差 |
-|---|---|---|---|---|---|
-| `wp_options` の 1 行 | 0.479 ms（0.61） | 0.343 ms（0.34） | 0.330 ms（0.32） | 0.369 ms | -4% |
-| `wp_options` の `IN` | 0.532 ms（0.68） | 0.407 ms（0.42） | 0.415 ms（0.43） | 0.408 ms | +2% |
-| `wp_posts` の主キーの `IN` | 0.562 ms（0.72） | 0.428 ms（0.44） | 0.434 ms（0.45） | 0.421 ms | +1% |
-| `SELECT 1` | 0.271 ms（0.33） | 0.171 ms（0.17） | 0.170 ms（0.17） | 0.175 ms | 0% |
-| 記事のメタの `IN` | 0.821 ms（0.99） | 0.620 ms（0.67） | 0.655 ms（0.69） | 0.675 ms | +6% |
-| 承認済みのコメントの数 | 17.50 ms（18.9） | 17.58 ms（19.1） | 15.90 ms（16.3） | 15.83 ms | -10% |
-| 自分のコメントの数 | 20.55 ms（22.0） | 19.94 ms（21.4） | 18.23 ms（18.7） | 17.95 ms | -9% |
-| 記事の年と月 | 9.57 ms（11.0） | 9.51 ms（10.4） | 9.08 ms（9.5） | 9.04 ms | -5% |
-| トップページの記事の一覧 | 7.20 ms（8.3） | 7.25 ms（8.0） | 5.82 ms（6.2） | 5.78 ms | -20% |
-| 7 ページの 321 文（和） | 386.3 ms（445） | 345.6 ms（362） | 330.6 ms（339） | 331.8 ms（342） | -4%（CPU -6%） |
-
-- 全件を読む 4 つの文は 5〜20% 短い（サーバの CPU は 8〜23% 減）。0.2.35 と比べても、4 つとも 5〜19% 短い（段階 123 と 124 では、承認済みのコメントの数は 0.2.35 と同じくらいだった）。
-- 軽い文は変わらない（-4〜+6%。この段階の変更は通らない。段階 123 で見たコードの配置の揺れの中）。
-- 7 ページの文は 1 回 15 ms 短い。0.2.35 と比べると 386 ms から 331 ms（14%）。
-- カーソルの候補は、全件を読む 4 つの文で 0.4〜1.5% 短く、7 ページの文は 0.4% 長い。配置の揺れより小さく、残さなかった。
-
-#### ページの表示（段階 122 と同じ手順。交互に 2 回ずつ、毎回入れ直した平均。MySQL は 6 回の平均）
-
-`pages.py --newest 5003 --cat 1 --runs 30`、`ab -c 10 -t 30`、`writes.php` を 100 回。HeimDB は pprof の口のないビルド。
-
-| ページ | MySQL 全体 | 0.2.35 全体 | 段階 124 全体 | 段階 125 全体 | MySQL の DB | 0.2.35 の DB | 段階 124 の DB | 段階 125 の DB |
-|---|---|---|---|---|---|---|---|---|
-| トップページ | 97 ms | 116 ms | 115 ms | 114 ms | 15.3 ms | 31.4 ms | 30.2 ms | 30.1 ms |
-| 個別の記事（コメント 60 件） | 175 ms | 201 ms | 198 ms | 196 ms | 19.1 ms | 39.9 ms | 37.3 ms | 37.4 ms |
-| カテゴリの 2 ページ目（記事 5,001 件） | 103 ms | 134 ms | 131 ms | 130 ms | 21.4 ms | 49.5 ms | 46.8 ms | 45.6 ms |
-| 検索 | 189 ms | 149 ms | 149 ms | 145 ms | 102.8 ms | 60.2 ms | 58.6 ms | 56.4 ms |
-| REST API（100 件） | 276 ms | 348 ms | 329 ms | 330 ms | 58.8 ms | 115.4 ms | 102.1 ms | 102.2 ms |
-| 管理画面のダッシュボード | 100 ms | 136 ms | 134 ms | 126 ms | 43.6 ms | 76.7 ms | 74.2 ms | 67.9 ms |
-| 投稿一覧 | 131 ms | 165 ms | 160 ms | 156 ms | 49.9 ms | 80.4 ms | 76.3 ms | 72.7 ms |
-
-| | MySQL | 0.2.35 | 段階 124 | 段階 125 |
-|---|---|---|---|---|
-| 同時アクセス: トップページ（件/秒） | 26.0 | 22.0 | 22.4 | 22.4 |
-| 同時アクセス: 個別の記事（件/秒） | 13.7 | 12.1 | 12.3 | 12.3 |
-| 記事の作成（DB） | 63.2 ms | 66.7 ms | 64.9 ms | 63.6 ms |
-| コメントの追加（DB） | 6.5 ms | 3.3 ms | 3.3 ms | 3.3 ms |
-| オプションの更新（DB） | 3.1 ms | 1.4 ms | 1.4 ms | 1.3 ms |
-| 記事の削除（DB） | 46.1 ms | 46.4 ms | 43.9 ms | 43.1 ms |
-
-- 段階 124 と比べたページの DB の時間は、ダッシュボードが 8%（コメントの数の文が 2 つ）、投稿一覧が 5%、検索が 4%、カテゴリが 3% 短く、トップページ、個別の記事、REST API は同じ（±0.3%）。ダッシュボードと投稿一覧は 2 回とも短く（74.0 ms と 74.4 ms が 67.2 ms と 68.7 ms、76.5 ms と 76.2 ms が 72.9 ms と 72.6 ms）、検索とカテゴリは 1 回目が同じくらいで 2 回目が短い。
-- 0.2.35 と比べると（段階 124 と 125 を合わせた分）、7 つとも短く、4〜11%（トップページ 4%、検索と個別の記事 6%、カテゴリ 8%、投稿一覧 10%、REST API とダッシュボード 11%）。段階 124 のインスタンスでは段階 124 だけで 5〜20% だったが、このインスタンスでは段階 124 の 0.2.35 との差も 3〜12% と小さい。
-- 同時アクセスは段階 124 と同じ（MySQL の 86〜90%）。失敗の要求は 6 回とも 0。書き込みは同じくらい。
-- 文ごと（`$wpdb->queries`、データを 2 回入れ直して 30 回ずつの中央値）は、承認済みのコメントの数が 17.6〜18.8 ms から 16.0〜16.5 ms（0.2.35 は 17.5〜18.3 ms）、自分のコメントの数が 20.2 ms から 18.6 ms（21.1 ms）、記事の年と月が 9.70 ms から 9.26 ms（9.70 ms）、トップページの記事の一覧が 7.6 ms から 5.9 ms（7.3 ms）。和は、ダッシュボードが 72.6 ms から 67.3 ms（0.2.35 は 75.5 ms）、投稿一覧が 76.3 ms から 71.2 ms（79.2 ms）、トップページが 54.2 ms から 50.0 ms（58.0 ms）、記事の作成が 74.0 ms から 71.8 ms（78.3 ms）。長くなった文はない（いちばん長くなったもので +0.1 ms）。
-- README の表を、このインスタンスの段階 125 と MySQL の値に替えた（ユーザーの判断、2026-11-19）。0.2.35 との差は 4〜11% で、7 つのうち 4 つのページはコードの配置の揺れ（1 文で 4〜8%）と同じくらいにとどまるが、段階 124 と 125 の別々のインスタンスで 7 つとも 0.2.35 より短く、向きがそろっている。MySQL との比は、ページの DB の時間が 1.7〜2.3 倍から 1.5〜2.1 倍（検索は 0.5 倍）、ページ全体が 1.1〜1.4 倍から 1.1〜1.3 倍になった。README には、4 つのページの差が揺れと同じくらいであることを書き添えた。
-
-#### CPU の内訳（7 ページの 321 文を 100 回）
-
-段階 123 と同じ分け方で、pprof の口を足した 2 つのビルド（作業用の写し。コミットしていない）を同じインスタンスで測った（データは入れ直した直後）。7 ページあたりの値は、プロファイルの標本の和を 100 で割ったもの（1 回の CPU は、段階 124 のバージョン 369 ms、段階 125 のバージョン 342 ms）。このインスタンスの段階 124 のバージョンの値は、段階 124 で測った値（279 ms）と違う。
-
-| 部分 | 段階 124 のバージョン | 段階 125 のバージョン |
-|---|---|---|
-| SQL の構文解析 | 3.9%（14 ms） | 4.5%（15 ms） |
-| 計画の組み立て | 8.0%（29 ms） | 8.2%（27 ms） |
-| 計画の書き換え（analyzer） | 21.1%（76 ms） | 23.6%（78 ms） |
-| 　うち `optimizeJoins` | 10.3%（37 ms） | 11.8%（39 ms） |
-| 　うち `filterSelectivity` の `sql.NewEmptyContext` | 3.0%（11 ms） | 3.4%（11 ms） |
-| そのほかのエンジンの準備 | 2.5%（9 ms） | 2.3%（8 ms） |
-| 実行（式の評価、集計、並べ替え） | 24.5%（88 ms） | 24.6%（82 ms） |
-| 　ストレージ（Pebble、行の復号、MVCC） | 25.8%（93 ms） | 23.9%（79 ms） |
-| 　　うち行の復号（rowenc ほか） | 12.2%（44 ms） | 10.1%（34 ms） |
-| 接続と結果の送り | 8.0%（29 ms） | 8.0%（27 ms） |
-| Go のスケジューラほか | 1.1%（4 ms） | 1.1%（4 ms） |
-| GC（裏の印付け） | 5.0%（18 ms） | 3.9%（13 ms） |
-| 合計 | 360 ms | 332 ms |
-
-- 減った 28 ms は、ストレージ（行の復号 10 ms、Pebble 3 ms）、実行 6 ms、GC 5 ms。`mallocgc` は 71 ms から 57 ms、`projectIter.Next` の下は 91 ms から 77 ms、`StringType.Compare` は 7 ms から 4 ms。
-- 計画の組み立てと書き換え（構文解析と準備を含めて 39%。7 ページで 128 ms）がいちばん大きい。段階 123 の見積もりの計画のキャッシュが、次の候補のまま。
-
-## 段階 126（負荷への強さ。MySQL 8.0 と HeimDB 0.2.42。README の表は替えず、負荷への強さの段落を足した）
-
-多くのページの要求が同時に来たときの、速さの上限、サーバーの CPU、時間、限界を超えたときの振る舞いを、MySQL 8.0 と HeimDB 0.2.42 で比べた（`docs/stages/121-130.md` の段階 126）。エンジンのコードと結果は変えていない。
-
-### 道具（`cmd/loadgen` と `scripts/bench/load/`）
-
-- 1 つのページは、1 本の接続で順に流す決まった文の並び。接続ごとに最初に WordPress の `SET NAMES 'utf8mb4' COLLATE 'utf8mb4_unicode_520_ci'` と sql_mode を流す。
-  - 読みのページ（`scripts/bench/load/pages-read.json`）: 段階 123 で MySQL の WordPress から取った README の 7 つのページの 321 文（トップページ 26、個別の記事 35、カテゴリの 2 ページ目 26、検索 31、REST API 116、ダッシュボード 43、投稿一覧 44。すべて SELECT）。接続ごとに始めをずらして順に回す。
-  - 書き込みのページ（`pages-write.json`）: `writes.php` の 4 つ（記事の作成 47 文、コメントの追加 4、オプションの更新 2、記事の削除 41）を、MySQL の上の WordPress で `SAVEQUERIES` を付けて取った文（`capture-writes.php` で 6 回流し、4 回目を型にして 5 回目も同じ型になることを `mkwrites.py` で確かめた）。日時、題名の番号、記事とコメントとメタの ID、数え直しの値（直前の `SELECT COUNT(*)` の答え）を変数にし、何度でも流せる。同じ接続の中で作成、コメント、更新、削除の順に回し、削除はその接続が作った記事を消す。タグ（bench-a と bench-b）とオプションは、測りの前に決まった ID で作る。WordPress のオブジェクトキャッシュが効いた 1 つの PHP の処理の中の文で、ページを開く要求の分（オプションの読み込みなど）は含まない。
-- `-rate` を付けないと閉じた形（各接続が応答を待ってすぐ次を流す）。`-rate` を付けると、k 番目のページの予定の時刻を始めから k/rate 秒に決め、空いた接続がその時刻に始める。時間は予定の時刻から数える（サーバーが遅れて負荷が減って見えることを避ける）。遅れ（`lateness_ms`）、始めてから終えるまで（`service_ms`）、10 ms 以上遅れたページ、予定が窓の中で終えなかったページ（`not_started_pages`）も書く。
-- 結果は JSON: ページ毎秒、文毎秒、全体と読み書きとページごとの p50、p90、p95、p99、p99.9、最大、MySQL の誤りの番号ごとの数、接続の誤り、作れなかった接続、区切りごとの値、窓の時刻、負荷の側の CPU。接続は database/sql の溜めを通さず go-sql-driver の接続をそのまま使い、全部を温めの前に開き、切れたら作り直す。
-
-```sh
-go build -o loadgen ./cmd/loadgen
-./loadgen -dsn 'root:rootpw@tcp(10.146.0.40:3316)/wpbench' -pages scripts/bench/load/pages-read.json -conns 32 -duration 60s -warmup 10s
-./loadgen -dsn ... -pages scripts/bench/load/pages-read.json,scripts/bench/load/pages-write.json -write 0.05 -conns 32
-./loadgen -dsn ... -pages scripts/bench/load/pages-read.json -conns 128 -rate 33 -duration 60s   # 毎秒 33 ページの予定
-```
-
-- GCE の手順: `scripts/bench/load/gce.sh create`、`gce.sh push <linux の heimdb> <wpbench のダンプ>`（DB に Docker と MySQL 8.0.46 を入れ、負荷の側から ssh できるようにする）、`gce.sh run A` など（負荷の側で `run.sh`）、`gce.sh fetch <置き場>`、`agg.py <置き場>`、`gce.sh delete`。DB の側の `dbctl.sh` がサーバーを入れ替えてダンプを入れ、`sample.py` がサーバーのプロセスの CPU と RSS を 1 秒ごとに書く。
-
-### 条件
-
-- 2026-11-19、GCE（東京、asia-northeast1-b）に 2 つのインスタンス: DB（n2-standard-4、4 vCPU、16 GB、Debian 12、pd-balanced 50 GB）と負荷（同じ形）。同じゾーンの内部の網で、負荷の側から DB の内部の番地に接続した。
-- MySQL: Docker の `mysql:8.0.46`、素の設定（`innodb_buffer_pool_size` 128 MiB、`max_connections` 151）。Docker の網を通さないよう `--network host` で 3307 に置いた（README の測りは `-p` の転送）。
-- HeimDB: tag v0.2.42 を `Dockerfile` と同じ形（`CGO_ENABLED=0`、`-trimpath -ldflags "-s -w"`）で建てた linux/amd64 の実行ファイルを、ホストで動かした（`-db wpbench`、ほかは既定。ブロックキャッシュ 128 MiB）。
-- 測らない方は止めた（MySQL はコンテナを消し、HeimDB はプロセスを止める）。サーバーを立てるたびに空のデータに `wpbench` のダンプ（段階 121〜125 と同じもの。記事 5,002 件、コメント 20,001 件）を入れ、ページキャッシュを捨て、8 接続で 30 秒の読みで温めた。書き込みを流す C、D、E は、測りのたびに立て直した。loadgen も測りの前に 10 秒流して捨てた（`-warmup 10s`）。
-- サーバーの CPU と RSS は、DB の側で `/proc/<PID>/stat` と `status` を 1 秒ごとに読んだ（mysqld と heimdb のプロセスだけ）。表の CPU は測りの窓（温めの後の 60 秒）の平均で、CPU 1 つを 100% とした値（4 vCPU で 400% が上限）。「1,000 文あたりの CPU」は、サーバーの CPU の時間を流した文の数で割ったもの。
-- 負荷の側の CPU は、どの測りでもホスト全体の 4〜14%（loadgen のプロセスは CPU 1 つの 10〜35%）で、負荷の側は詰まっていない。
-- 生の結果は作業用の場所（`res/`）に残した。表は `agg.py` の出力。
-
-### A. 同時の接続の数（読みだけ、閉じた形、60 秒。交互に 2 回ずつの平均）
-
-| 接続 | MySQL ページ毎秒 | HeimDB ページ毎秒 | 比 | MySQL CPU | HeimDB CPU | MySQL 1,000 文あたり | HeimDB 1,000 文あたり | MySQL p50 / p99 | HeimDB p50 / p99 |
+| Create a post (DB time) | 63.6 ms | 63.2 ms |
+| Add a comment (DB time) | 3.3 ms | 6.5 ms |
+| Update an option (DB time) | 1.3 ms | 3.1 ms |
+| Delete a post (DB time) | 43.1 ms | 46.1 ms |
+| Front page, 10 in parallel | 22.4 /s | 26.0 /s |
+| Single post, 10 in parallel | 12.3 /s | 13.7 /s |
+
+Under `ab -c 10` the pages per second are 86 to 90% of MySQL's, with no failed requests.
+
+## Under load
+
+Measured 2026-11-19 with HeimDB 0.2.42; the two-connection case was measured again with 0.2.45, which fixed it (see [Two connections](#two-connections)).
+
+### Setup
+
+- Two GCE n2-standard-4 instances in the same zone (Tokyo): one for the database and one for the load generator, connected over the internal network. The load side used 4 to 14% of its CPU in every run, so it was not the bottleneck.
+- MySQL: Docker `mysql:8.0.46` with the default settings (`innodb_buffer_pool_size` 128 MiB, `max_connections` 151) and `--network host`.
+- HeimDB: the release build (`CGO_ENABLED=0`, `-trimpath`) on the host, `-db wpbench`, other flags at their defaults.
+- Only the measured server ran. Before each server start the `wpbench` dump was loaded into an empty data directory, the OS page cache was dropped, and the server was warmed with 30 seconds of reads from 8 connections. Runs with writes started from a fresh server each time.
+- Load: `cmd/loadgen`. A "page" is the fixed sequence of statements that one WordPress page sends, run in order on one connection.
+  - Read pages (`scripts/bench/load/pages-read.json`): the 321 statements of the 7 pages in the table above, captured from WordPress on MySQL (all `SELECT`).
+  - Write pages (`pages-write.json`): the 4 operations of `writes.php` (create a post 47 statements, add a comment 4, update an option 2, delete a post 41), captured with `SAVEQUERIES` and parameterized so they can run any number of times.
+  - Without `-rate`, each connection sends the next page as soon as the previous one finishes (closed loop). With `-rate`, page k is scheduled at k/rate seconds and its time is counted from that scheduled time, so a slow server does not hide its delay by lowering the load.
+- Server CPU and RSS were read from `/proc` every second. CPU is the average over the 60-second window, where 100% is one vCPU (400% is all 4). "CPU per 1,000 statements" is server CPU time divided by statements run.
+- Each value is the average of 2 alternating runs of 60 seconds after a 10-second warm-up, unless noted.
+
+### Concurrent connections (reads only, closed loop)
+
+| Connections | MySQL pages/s | HeimDB pages/s | Ratio | MySQL CPU | HeimDB CPU | MySQL CPU per 1,000 statements | HeimDB CPU per 1,000 statements | MySQL p50 / p99 | HeimDB p50 / p99 |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | 23.4 | 18.1 | 0.77 | 80% | 89% | 746 ms | 1,065 ms | 44 / 105 ms | 54 / 95 ms |
 | 2 | 44.2 | 28.4 | 0.64 | 164% | 136% | 810 ms | 1,041 ms | 46 / 111 ms | 67 / 146 ms |
@@ -1909,123 +89,152 @@ go build -o loadgen ./cmd/loadgen
 | 64 | 62.4 | 53.9 | 0.86 | 399% | 395% | 1,388 ms | 1,603 ms | 679 / 3,125 ms | 917 / 3,070 ms |
 | 128 | 59.9 | 51.8 | 0.86 | 400% | 395% | 1,453 ms | 1,704 ms | 1,371 / 6,190 ms | 1,924 / 6,247 ms |
 
-（文毎秒はページ毎秒の約 46 倍。MySQL の最大は 8 接続の 3,006 文毎秒、HeimDB は 8 接続の 2,635 文毎秒。グラフの値はこの表と `res/A-*.json`。）
+- The maximum is 65.5 pages a second for MySQL and 57.5 for HeimDB (88%). Both use all 4 vCPUs from 8 connections on; with 128 connections MySQL falls to 92% of its maximum and HeimDB to 90%. A page is about 46 statements, so the maxima are about 3,000 and 2,600 statements a second.
+- At the maximum, HeimDB's median time is longer (125 ms and 91 ms at 8 connections) and its p99 shorter (300 ms and 411 ms): MySQL's search page is slow, HeimDB's other pages are.
+- RSS: MySQL 455 to 624 MB (128 MiB buffer pool plus a thread per connection), HeimDB 244 to 310 MB.
+- MySQL with `innodb_buffer_pool_size=2G` gave the same rates (within 2%); `wpbench` fits in 128 MiB.
 
-- 速さの上限は、MySQL が毎秒 65.5 ページ、HeimDB が 57.5 ページ（MySQL の 88%）。どちらも 8 接続で CPU を使い切り（4 vCPU）、その先は増えない。128 接続では、MySQL が上限の 92%、HeimDB が 90% に落ちる。
-- 2 回の差は、MySQL の 1 接続と 2 接続が 6% と 12%（24.1 と 22.7、47.0 と 41.5）、ほかは 3% 前後。
-- 1,000 文あたりの CPU は、1 接続では HeimDB が MySQL の 1.43 倍、CPU を使い切った 8 接続では 1.13 倍。どちらも同時の数が増えると 1 文の CPU が増える（4 vCPU は 2 つのコアのハイパースレッドで、混むと 1 つのスレッドが遅くなる）が、MySQL の方が増え方が大きい（1 接続から 8 接続で 78% と 41%）。
-- 上限での時間の中央値は HeimDB の方が長く（8 接続で 125 ms と 91 ms）、p99 は HeimDB の方が短い（300 ms と 411 ms）。MySQL は検索のページ（全件の LIKE、1 回 118 ms）が長く、HeimDB はほかのページが長い（B の表）。
-- HeimDB は 2 接続で伸びない: 1 接続の 1.57 倍（MySQL は 1.89 倍）で、CPU は 136% しか使わない（4 接続では 2.8 倍、321%）。1 ページの CPU は 1 接続と同じ（49 ms）で、2 本の接続が CPU を待たずに止まっている。手元（M4）でも同じで（トップページだけを流すと、1 接続 168、2 接続 254、3 接続 492 ページ毎秒。別のプロセスから 1 接続ずつ流しても 2 本で 242）、3 本以上では起きない。段階 128 以降の候補にした（後の「段階 128 以降の候補」）。
-- RSS は、MySQL が 455〜624 MB（バッファプールの 128 MiB と接続ごとのスレッド）、HeimDB が 244〜310 MB。
+### Fixed rates (reads only, 128 connections)
 
-### B. 決まった速さ（MySQL の最大の 25、50、75%。読みだけ、128 接続、60 秒。交互に 2 回ずつの平均）
+Rates at 25, 50 and 75% of MySQL's maximum. Both servers kept to the schedule (p99 lateness 1.1 ms).
 
-予定の時刻から数えた時間。どちらも予定どおりに流せた（遅れの p99 は 1.1 ms、10 ms 以上遅れたページは 0）。
-
-| 速さ（ページ毎秒） | MySQL CPU | HeimDB CPU | MySQL 1,000 文あたり | HeimDB 1,000 文あたり | 比 | MySQL p50 / p95 / p99 | HeimDB p50 / p95 / p99 |
+| Pages/s | MySQL CPU | HeimDB CPU | MySQL CPU per 1,000 statements | HeimDB CPU per 1,000 statements | Ratio | MySQL p50 / p95 / p99 | HeimDB p50 / p95 / p99 |
 |---|---|---|---|---|---|---|---|
-| 16.4（25%） | 59% | 83% | 788 ms | 1,110 ms | 1.41 | 46 / 109 / 117 ms | 58 / 109 / 125 ms |
-| 32.7（50%） | 131% | 178% | 871 ms | 1,185 ms | 1.36 | 47 / 122 / 136 ms | 71 / 126 / 140 ms |
-| 49.1（75%） | 232% | 321% | 1,031 ms | 1,427 ms | 1.38 | 52 / 151 / 181 ms | 86 / 142 / 167 ms |
+| 16.4 (25%) | 59% | 83% | 788 ms | 1,110 ms | 1.41 | 46 / 109 / 117 ms | 58 / 109 / 125 ms |
+| 32.7 (50%) | 131% | 178% | 871 ms | 1,185 ms | 1.36 | 47 / 122 / 136 ms | 71 / 126 / 140 ms |
+| 49.1 (75%) | 232% | 321% | 1,031 ms | 1,427 ms | 1.38 | 52 / 151 / 181 ms | 86 / 142 / 167 ms |
 
-- 同じ速さでは、HeimDB のサーバーの CPU は MySQL の 1.36〜1.41 倍。75%（HeimDB の最大の 85%）で HeimDB は CPU の 80% を使い、MySQL は 58%。
-- 時間の中央値は HeimDB の方が 12〜34 ms 長く、p95 と p99 は同じくらい（75% では HeimDB の方が短い）。
-- 50% の速さの、ページごとの中央値（MySQL と HeimDB）: トップページ 16.1 ms と 33.5 ms、個別の記事 20.4 と 42.1、カテゴリの 2 ページ目 25.7 と 57.0、検索 117.6 と 70.1、REST API 52.1 と 121.0、ダッシュボード 50.9 と 88.8、投稿一覧 56.1 と 94.5。README の表の DB の時間の比（1.5〜2.1 倍、検索 0.5 倍）と同じ形。
+- At the same rate HeimDB uses 1.36 to 1.41 times MySQL's server CPU. The median is 12 to 34 ms longer; p95 and p99 are about the same.
+- Median per page at 50% (MySQL and HeimDB): front page 16.1 and 33.5 ms, single post 20.4 and 42.1, category 25.7 and 57.0, search 117.6 and 70.1, REST API 52.1 and 121.0, dashboard 50.9 and 88.8, posts list 56.1 and 94.5. The same shape as the DB times in the page table.
 
-### C. 書き込みを混ぜる（32 接続、閉じた形、60 秒。交互に 2 回ずつの平均）
+### Mixed reads and writes (32 connections, closed loop)
 
-書き込みは、作成、コメント、更新、削除を同じ接続の中で順に回す（数は 4 つで同じ）。
-
-| 読み:書き込み | MySQL ページ毎秒 | HeimDB ページ毎秒 | 比 | MySQL 文毎秒 | HeimDB 文毎秒 | MySQL 読みの p99 | HeimDB 読みの p99 |
+| Reads:writes | MySQL pages/s | HeimDB pages/s | Ratio | MySQL statements/s | HeimDB statements/s | MySQL read p99 | HeimDB read p99 |
 |---|---|---|---|---|---|---|---|
 | 95:5 | 65.9 | 56.2 | 0.85 | 2,946 | 2,503 | 1,684 ms | 1,546 ms |
 | 80:20 | 72.0 | 60.4 | 0.84 | 2,988 | 2,494 | 1,954 ms | 1,550 ms |
 
-| 書き込み（80:20、p50 / p99） | MySQL | HeimDB |
+| Write at 80:20 (p50 / p99) | MySQL | HeimDB |
 |---|---|---|
-| 記事の作成 | 374〜409 / 576〜636 ms | 599〜601 / 827〜865 ms |
-| コメントの追加 | 16〜17 / 57〜58 ms | 49〜50 / 119〜129 ms |
-| オプションの更新 | 7〜8 / 31〜36 ms | 22 / 73〜75 ms |
-| 記事の削除 | 238〜246 / 377〜404 ms | 509〜514 / 689〜740 ms |
+| Create a post | 374–409 / 576–636 ms | 599–601 / 827–865 ms |
+| Add a comment | 16–17 / 57–58 ms | 49–50 / 119–129 ms |
+| Update an option | 7–8 / 31–36 ms | 22 / 73–75 ms |
+| Delete a post | 238–246 / 377–404 ms | 509–514 / 689–740 ms |
 
-- 1205（ロックの待ちの時間切れ）、1213（デッドロック）、ほかの誤りと切断は、どちらも 0。
-- ロックの待ち: MySQL は `Innodb_row_lock_waits` が 95:5 で 11〜21 回（合わせて 31〜92 ms）、80:20 で 132〜159 回（593〜893 ms）。HeimDB は `heimdb_lock_wait_seconds_total` が 95:5 で 0.28〜0.44 秒、80:20 で 5.8〜7.0 秒（温めの 10 秒を含む）。HeimDB はブランチの書き込みを 1 つずつ通す（書き込みのロック）ので、同時の書き込みは MySQL の行のロックより長く待つ。1 回の待ちは時間切れ（既定 50 秒）にはほど遠い。
-- 書き込みのページの時間は、CPU を使い切った中なので、読みの文の重さに引きずられる（記事の作成の 47 文のうち 6 つはカテゴリの記事の数を数える文）。HeimDB の書き込みは MySQL の 1.5〜3 倍。一つずつ流したときは、コメントの追加とオプションの更新は HeimDB の方が短い（段階 125 の `writes.php` の DB の時間: 3.3 ms と 6.5 ms、1.3 ms と 3.1 ms）ので、混んだときの差は CPU の取り合いと書き込みのロックの待ち。
-- 文毎秒は読みだけのときと同じ（書き込みのページは文が少なく、コメントと更新が軽いので、ページ毎秒は増える）。
+- No lock wait timeouts (1205), deadlocks (1213), other errors or disconnects on either server.
+- HeimDB runs a branch's writes one at a time, so concurrent writes wait longer than with MySQL's row locks: at 80:20, `heimdb_lock_wait_seconds_total` grew 5.8 to 7.0 seconds over the run (MySQL's row lock waits totalled 0.6 to 0.9 seconds). Each wait is far below the 50-second timeout.
+- With the CPU saturated, writes take 1.5 to 3 times MySQL's time. Run one at a time, adding a comment and updating an option are faster on HeimDB (see the writes table above), so the difference under load is CPU contention and the write lock.
 
-### D. 限界の先
+### Past the limit
 
-| 測り | 予定 | ページ毎秒 | p50 | p99 | 誤り | RSS の最大 | 1,000 文あたりの CPU |
+| Run | Scheduled pages/s | Pages/s | p50 | p99 | Errors | Max RSS | CPU per 1,000 statements |
 |---|---|---|---|---|---|---|---|
-| MySQL、最大の 150%（128 接続） | 98.2 | 54.4 | 16.7 s | 27.8 s | 0 | 588 MB | 1,620 ms |
-| HeimDB、最大の 150%（128 接続） | 86.3 | 46.9 | 17.8 s | 27.6 s | 0 | 304 MB | 1,867 ms |
-| MySQL、500 接続（素の設定） | — | 58.6 | 1.7 s | 7.3 s | 接続の 1040 が 24,656 回 | 610 MB | 1,470 ms |
-| MySQL、500 接続（`max_connections=1000`） | — | 52.0 | 5.6 s | 23.4 s | 0 | 1,000 MB | 1,630 ms |
-| HeimDB、500 接続 | — | 40.4 | 7.7 s | 25.0 s | 0 | 499 MB | 2,163 ms |
+| MySQL, 150% of its maximum (128 connections) | 98.2 | 54.4 | 16.7 s | 27.8 s | 0 | 588 MB | 1,620 ms |
+| HeimDB, 150% of MySQL's maximum (128 connections) | 86.3 | 46.9 | 17.8 s | 27.6 s | 0 | 304 MB | 1,867 ms |
+| MySQL, 500 connections (default settings) | — | 58.6 | 1.7 s | 7.3 s | 24,656 connection errors 1040 | 610 MB | 1,470 ms |
+| MySQL, 500 connections (`max_connections=1000`) | — | 52.0 | 5.6 s | 23.4 s | 0 | 1,000 MB | 1,630 ms |
+| HeimDB, 500 connections | — | 40.4 | 7.7 s | 25.0 s | 0 | 499 MB | 2,163 ms |
 
-- 150% では、どちらも予定の約 55% しか流せず、予定から遅れたまま延びていく（60 秒の窓で、始められなかったページが MySQL 2,626、HeimDB 2,363。始めてから終えるまでの中央値は 1.4 秒と 1.9 秒で、残りは待ちの列）。誤り、切断、時間切れはなく、どちらも落ちない。
-- 500 接続: MySQL は素の設定では 151 本（`Max_used_connections` 152）までで、残りの接続は 1040（Too many connections）で拒否され、loadgen は 1 秒ごとに作り直しを続けた（流せた分の時間は短い）。`max_connections=1000` にすると 500 本とも通り、ページ毎秒は上限の 79%、RSS は 1 GB、スレッドは 537。
-- HeimDB は 500 本とも通り、誤りも切断もないが、ページ毎秒は上限の 70% に落ちる（MySQL は 79%）。1,000 文あたりの CPU が 8 接続の 1.44 倍（MySQL は 1.23 倍）になり、同時の文が多いときの手間が MySQL より増える。RSS は 420〜503 MB（スレッドは 11、ゴルーチンは接続ごと）で、測りの終わりに 308 MB に戻った。段階 128 以降の候補にした。
+- Over the limit, both servers run about 55% of the schedule and fall further behind; the rest waits in the queue. No errors, disconnects or timeouts, and neither server crashes.
+- With 500 connections, MySQL's default settings refuse everything after 151 connections with 1040 (Too many connections). HeimDB accepts all 500 with no errors, at 70% of its maximum rate (MySQL with `max_connections=1000`: 79%), because its CPU per statement grows more with many concurrent statements. Its RSS was 420 to 503 MB and returned to 308 MB after the run.
 
-### E. 長い時間（MySQL の最大の 50%、毎秒 32.7 ページ、64 接続、30 分）
+### 30 minutes at 50% (32.7 pages/s, 64 connections)
 
 | | MySQL | HeimDB |
 |---|---|---|
-| ページ毎秒 | 32.7 | 32.7 |
-| p50 / p95 / p99 / 最大 | 46.5 / 123 / 144 / 204 ms | 68.7 / 119 / 133 / 170 ms |
-| CPU（30 分の平均） | 131% | 175% |
-| 1,000 文あたりの CPU | 871 ms | 1,163 ms |
-| RSS | 542 MB から 578 MB | 260〜265 MB |
-| 誤り、切断、遅れたページ | 0 | 0 |
+| Pages/s | 32.7 | 32.7 |
+| p50 / p95 / p99 / max | 46.5 / 123 / 144 / 204 ms | 68.7 / 119 / 133 / 170 ms |
+| CPU (30-minute average) | 131% | 175% |
+| CPU per 1,000 statements | 871 ms | 1,163 ms |
+| RSS | 542 MB rising to 578 MB | 260 to 265 MB |
+| Errors, disconnects, late pages | 0 | 0 |
 
-1 分ごと（`agg.py --series`。グラフの値）:
-
-| 分 | MySQL p50 | MySQL p99 | MySQL CPU | MySQL RSS | HeimDB p50 | HeimDB p99 | HeimDB CPU | HeimDB RSS |
+| Minute | MySQL p50 | MySQL p99 | MySQL CPU | MySQL RSS | HeimDB p50 | HeimDB p99 | HeimDB CPU | HeimDB RSS |
 |---|---|---|---|---|---|---|---|---|
-| 1 | 46.3 | 136.3 | 129% | 542 MB | 68.6 | 134.4 | 171% | 260 MB |
-| 5 | 46.3 | 139.9 | 130% | 554 MB | 67.9 | 128.7 | 173% | 262 MB |
-| 10 | 47.6 | 138.7 | 131% | 573 MB | 67.4 | 136.4 | 171% | 260 MB |
-| 15 | 46.3 | 141.5 | 130% | 574 MB | 68.3 | 132.3 | 174% | 261 MB |
-| 20 | 46.7 | 143.5 | 131% | 574 MB | 69.3 | 134.5 | 175% | 262 MB |
-| 25 | 47.8 | 149.2 | 133% | 575 MB | 69.2 | 136.3 | 176% | 264 MB |
-| 30 | 45.3 | 149.4 | 130% | 578 MB | 68.3 | 130.9 | 176% | 261 MB |
+| 1 | 46.3 ms | 136.3 ms | 129% | 542 MB | 68.6 ms | 134.4 ms | 171% | 260 MB |
+| 5 | 46.3 ms | 139.9 ms | 130% | 554 MB | 67.9 ms | 128.7 ms | 173% | 262 MB |
+| 10 | 47.6 ms | 138.7 ms | 131% | 573 MB | 67.4 ms | 136.4 ms | 171% | 260 MB |
+| 15 | 46.3 ms | 141.5 ms | 130% | 574 MB | 68.3 ms | 132.3 ms | 174% | 261 MB |
+| 20 | 46.7 ms | 143.5 ms | 131% | 574 MB | 69.3 ms | 134.5 ms | 175% | 262 MB |
+| 25 | 47.8 ms | 149.2 ms | 133% | 575 MB | 69.2 ms | 136.3 ms | 176% | 264 MB |
+| 30 | 45.3 ms | 149.4 ms | 130% | 578 MB | 68.3 ms | 130.9 ms | 176% | 261 MB |
 
-- どちらも 30 分のあいだ時間とメモリが増えていかない。HeimDB の RSS は 259〜265 MB で一定、`heimdb_memory_live_bytes` は 92〜95 MB、ゴルーチンは 84（64 接続と 20）のまま。
-- HeimDB の GC（`GODEBUG=gctrace=1`）は毎秒 4.4 回、印付けの後の生きているヒープは 82〜94 MB（平均 89 MB、目標 171〜178 MB）で、30 分で増えない。1 回の止める時間は 0.1〜0.2 ms。
-- HeimDB の CPU は始めの 10 分の平均 173% から終わりの 10 分 177% に 2% 増えた。MySQL も 130% から 132%。時間は増えていない。
-- 50% の速さの時間は、B の 50% と同じ（MySQL 47 ms、HeimDB 71 ms と同じくらい）。
+Neither server grows in time or memory over 30 minutes. HeimDB's live heap after GC stays at 82 to 94 MB (`heimdb_memory_live_bytes` 92 to 95 MB), goroutines stay at 84, and each GC pause is 0.1 to 0.2 ms.
 
-### 参考: MySQL の `innodb_buffer_pool_size=2G`（A を 1 回）
+### Two connections
 
-| 接続 | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 |
-|---|---|---|---|---|---|---|---|---|
-| ページ毎秒 | 22.4 | 45.1 | 59.6 | 65.3 | 64.9 | 63.4 | 62.6 | 58.8 |
-| 1,000 文あたりの CPU | 763 ms | 771 ms | 1,275 ms | 1,329 ms | 1,343 ms | 1,379 ms | 1,384 ms | 1,476 ms |
+0.2.42 did not scale from 1 to 2 connections (1.57 times, using only 136% CPU), because the Go runtime ran both connections' goroutines on one thread. 0.2.45 wakes an idle thread when a statement starts while another connection is open. Same setup, 0.2.42-equivalent build ("before") and 0.2.45 ("after"):
 
-- 素の設定（128 MiB）と同じ（差は 2% 以内）。`wpbench` は小さく、128 MiB に収まる（A の 8 接続の測りの間、`Innodb_buffer_pool_reads` は増えない）。RSS は 630〜785 MB に増える。
-
-### 段階 128 以降の候補
-
-- **HeimDB は 2 本の接続で伸びない**（A の 2 接続: 1 接続の 1.57 倍、CPU 136%。3 本以上では伸びる）。1 ページの CPU は変わらないので、2 本が同時に動くときだけ何かを待っている。再現: 手元の 127.0.0.1:3360 の HeimDB に `loadgen -pages pages-read.json -conns 1` と `-conns 2`（または `pages-read.json` からトップページだけを取り出したもの）を 20 秒ずつ流し、ページ毎秒とサーバーの CPU を比べる。次は、pprof の口を足したビルドで block と mutex のプロファイルと、`GODEBUG=schedtrace` を取る。小さなサイトで同時の要求が 2 つほどのときに当たる。
-- **多くの接続で 1 文の CPU が増える**（1,000 文あたり、8 接続 1,498 ms、128 接続 1,704 ms、500 接続 2,163 ms。MySQL は 1,325、1,453、1,630 ms）。500 接続でページ毎秒が上限の 70%（MySQL 79%）。同じく CPU のプロファイルで、接続の数による違い（スケジューラ、GC の印付け、接続ごとの状態）を見る。
-- 同じ速さでのサーバーの CPU は MySQL の 1.36〜1.41 倍で、段階 123 の内訳（計画の組み立てと書き換えが 39%）のとおり、計画のキャッシュが次の大きな候補のまま。
-- 書き込みの混ざった負荷では、HeimDB の書き込みのロックの待ちが MySQL の行のロックの待ちの約 8 倍（80:20 で 60 秒に 6 秒）。誤りにはならず、WordPress の書き込みの多さ（コメントや注文）で詰まる心配は小さいが、WooCommerce の注文が多い店では測る価値がある。
-- 落ちる、接続が切れる、panic、メモリが増え続ける、のどれも起きなかった（HeimDB のログの誤りは 0）。
-
-## 段階 128（2 本の接続で伸びない待ち。README の表は替えない）
-
-段階 126 の A で HeimDB だけ 2 本の接続で伸びなかった件の原因と直し（`docs/stages/121-130.md` の段階 128）。Go のランタイムは、止まらない netpoll で見つけた接続のゴルーチンを走らせるときにほかのスレッドを起こさないので、2 本の接続が 1 つのスレッドで交互に走った。文を始めるときに、文の途中の接続がほかになく、ほかに開いた接続があれば、眠ったスレッドを起こして網を見させる。
-
-条件は段階 126 と同じ（GCE の DB と負荷の 2 つの n2-standard-4、`wpbench`、MySQL 8.0 の素の設定、`scripts/bench/load/`）。60 秒、交互に 2 回ずつの平均。
-
-| 接続 | MySQL ページ毎秒 | main | 直したバージョン | MySQL 1,000 文あたり | main | 直したバージョン |
+| Connections | MySQL pages/s | Before | After | MySQL CPU per 1,000 statements | Before | After |
 |---|---|---|---|---|---|---|
 | 1 | 22.8 | 17.4 | 17.6 | 757 ms | 1,104 ms | 1,095 ms |
 | 2 | 45.0 | 27.5 | 31.5 | 783 ms | 1,045 ms | 1,220 ms |
 | 4 | 59.6 | 50.6 | 50.8 | 1,284 ms | 1,372 ms | 1,376 ms |
 | 8 | 64.6 | 56.7 | 57.0 | 1,343 ms | 1,516 ms | 1,511 ms |
 
-- 2 接続は 1 接続の 1.58 倍から 1.79 倍（MySQL 1.97 倍）。p99 は 146 ms から 104 ms。トップページだけでは 1.63 倍から 1.98 倍。2 接続では 1,000 文あたりの CPU が 17% 増える（スレッドの切り替えの分）。4 接続と 8 接続は変わらない。
-- 128 接続、毎秒 32.3 ページ（MySQL の最大の 50%）の決まった速さ: p50 / p95 / p99 は main 70.0 / 124.5 / 139.2 ms、直したバージョン 64.6 / 111.3 / 124.3 ms。1,000 文あたりの CPU は 1,209 ms と 1,208 ms。
-- 文のたびに起こす初めのバージョンは、4 接続と決まった速さで 1,000 文あたりの CPU が 9〜10% 増えたので、条件を絞った（直したバージョンの 4 接続と 8 接続と決まった速さの値は、初めのバージョンと交互に流した回のもの）。
-- 調べの途中で、1 文の応答の書き込みが約 2.1 回（大きな結果は vitess の 16 KiB のバッファごと。MySQL は約 1.05 回）と分かった。2 本で伸びない理由ではなく、後の候補にした。
+- 2 connections now give 1.79 times 1 connection (MySQL 1.97 times), and the p99 fell from 146 ms to 104 ms. CPU per statement rises 17% at 2 connections (thread switches); 4 and 8 connections are unchanged.
+- At a fixed 32.3 pages/s with 128 connections, p50 / p95 / p99 went from 70.0 / 124.5 / 139.2 ms to 64.6 / 111.3 / 124.3 ms at the same CPU.
+
+## Memory
+
+Measured 2026-10-16 and 17 on a GCE n2-standard-4, with HeimDB 0.2.11's code for these paths (not changed since). The table is shaped like `wp_postmeta` (same indexes) with 3.1 million rows and `meta_value` of about 20 bytes. Peak RSS is `VmHWM`, reset with `clear_refs` just before each statement, with a fresh server per statement. "No limit" ran in a 12 GiB cgroup; "limit" ran in a 4 GiB container with `-memory-limit 3276M`.
+
+### Resident memory
+
+| When | RSS | Live heap | Block cache |
+|---|---|---|---|
+| Just after opening | 477 MiB | 200 MiB | 127 MiB |
+| After reading every row (`COUNT(*)`, `LIKE`) | 503 MiB | 195 MiB | 127 MiB |
+
+About 70 MiB of the live heap does not depend on the number of rows (36 MiB of it is the collation weight tables). With 500,000 rows the live heap is 42 MiB after starting and 178 MiB after reading (cache 134 MiB): resident memory barely depends on table size.
+
+### Operations that grow with the rows they touch (peak RSS)
+
+| Operation | No limit | Limit 3,276 MiB |
+|---|---|---|
+| `SELECT meta_id FROM m ORDER BY meta_value DESC LIMIT 10` | 976 MiB | 925 MiB |
+| `SELECT meta_value, COUNT(*) FROM m GROUP BY meta_value ORDER BY COUNT(*) DESC LIMIT 3` | 1,755 MiB | 1,845 MiB |
+| `ALTER TABLE m ADD COLUMN extra ...` | 621 MiB | 602 MiB |
+| `UPDATE m SET meta_value = CONCAT(meta_value, 'x')` | 24.1 s, 2,625 MiB | 2,626 MiB |
+| `DELETE FROM m` | 36.7 s, 4,640 MiB | 1041, 2,730 MiB |
+| Merging a branch that changed every row | 55 s, 4,439 MiB | 1041 after 53 s, 3,333 MiB |
+| Merging a branch that added a column | 81 s, 5,477 MiB | 1041 after 64 s, 3,285 MiB |
+| Restore after changing every row | 154 s, 10,540 MiB (killed by the 12 GiB cgroup 20 s later) | 1041 after 73 s, 3,115 MiB |
+
+- With a limit, statements that would pass it stop with error 1041 and their transaction is rolled back; the data is unchanged and the next statement runs normally. Without a limit, Go's GC lets the heap grow to twice the live heap before collecting, so a large restore can be killed by the container. Run HeimDB with a memory limit (it defaults to 80% of the container's limit; see [`operations.md`](operations.md)).
+- During a commit, Pebble also needs memory for writing the WAL (1.2 GB for a 1-million-row restore). This cannot be changed by settings.
+
+### Loading a dump in one transaction
+
+`mariadb-dump`'s default output (222 `INSERT`s of 14,000 rows each, then one `COMMIT`), 3.1 million rows:
+
+| | Result |
+|---|---|
+| No limit | 69 s, peak 5,643 MiB |
+| Limit 3,276 MiB | 1041 at `COMMIT` after all rows were written (the commit batch needs 1,942 MiB), peak 3,064 MiB |
+
+With the 3,276 MiB limit, 1.5 million rows commit in 31 seconds (peak 2,712 to 2,810 MiB), and 2 million rows stop at `COMMIT` with 1041. Per row, an uncommitted write holds about 0.56 KB of live heap and the commit batch needs about 0.62 KB more. mysqldump's default output runs each `INSERT` in its own autocommit transaction, so it does not hit this.
+
+## How to measure
+
+Pages, writes and concurrency (`scripts/bench/`):
+
+```sh
+docker compose -f scripts/bench/docker-compose.yml up -d     # WordPress for MySQL (:18181) and HeimDB (:18182)
+scripts/bench/pages.py --newest 5003 --cat 1 --runs 30       # page times (median, p95, DB time, query count)
+ab -c 10 -t 30 http://localhost:18182/                       # concurrency
+docker compose -f scripts/bench/docker-compose.yml run --rm -T cli-heimdb wp eval-file - < scripts/bench/writes.php
+```
+
+Load (`cmd/loadgen`, `scripts/bench/load/`):
+
+```sh
+go build -o loadgen ./cmd/loadgen
+./loadgen -dsn 'root:pw@tcp(10.0.0.2:3316)/wpbench' -pages scripts/bench/load/pages-read.json -conns 32 -duration 60s -warmup 10s
+./loadgen -dsn ... -pages scripts/bench/load/pages-read.json,scripts/bench/load/pages-write.json -write 0.05 -conns 32
+./loadgen -dsn ... -pages scripts/bench/load/pages-read.json -conns 128 -rate 33 -duration 60s   # 33 pages a second
+```
+
+On GCE, `scripts/bench/load/gce.sh` creates the two instances, installs the servers and the dump, runs the measurements and fetches the results (`GCE_PROJECT` is required; `create`, `push`, `run`, `fetch`, `delete`). `agg.py` turns the results into the tables above.
+
+Measure on Linux: values measured on macOS differ.
