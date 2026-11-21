@@ -29,7 +29,7 @@ x-db-host: &db-host
 
 services:
   db:
-    image: tsukinowa/heimdb:${HEIMDB_VERSION:-0.3.0}
+    image: tsukinowa/heimdb:${HEIMDB_VERSION:-0.3.1}
     environment:
       HEIMDB_ROOT_PASSWORD: ${HEIMDB_ROOT_PASSWORD:?set HEIMDB_ROOT_PASSWORD}  # 初回の起動で root@'%' を作る
       HEIMDB_SITE_PASSWORD: ${HEIMDB_SITE_PASSWORD:?set HEIMDB_SITE_PASSWORD}  # いなければ wordpress@'%' を作る

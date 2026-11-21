@@ -32,7 +32,7 @@ HeimDB is built only for WordPress. Views, triggers, stored procedures, full-tex
 
 ## Tags
 
-- `0.3.0`, `latest`: linux/amd64, linux/arm64. The first release with public source code ([github.com/tsukinowasha/heimdb](https://github.com/tsukinowasha/heimdb)). The code is the same as 0.2.45, with the same data format (version 8) and replication records, so upgrading from 0.2.41 or newer needs nothing special. From 0.3.0, the minor version goes up when the data format changes so that older versions cannot open upgraded data (0.3.x to 0.4.0), and other releases raise the patch version.
+- `0.3.1`, `latest`: linux/amd64, linux/arm64. Reads no longer wait while a backup holds the write lock, and `-backup-dir` can be inside `/data` (`-backup-dir /data/backups`), where a backup hard-links the files in milliseconds; a separate backup volume copies every file while writes wait. Same data format (version 8) and replication records as 0.3.0. From 0.3.0, the minor version goes up when the data format changes so that older versions cannot open upgraded data (0.3.x to 0.4.0), and other releases raise the patch version.
 
 Older tags can still be pulled. Versions that need care when upgrading (see Usage and Configuration for features):
 
@@ -51,13 +51,13 @@ Older tags can still be pulled. Versions that need care when upgrading (see Usag
 - `0.1.6`: **Data format version 2**: 0.1.5 and older cannot open the data after the upgrade. Upgrade the primary first, then rebuild the replica from a new backup.
 - `0.1.0`: do not use. SQL could read and write files on the server. Fixed in 0.1.1.
 
-Pin a version (`0.3.0`), not `latest`. Before upgrading, take a backup (`CALL heimdb_backup(...)` or mysqldump). With a replica, upgrade the replica first, then the primary (also from 0.1.6 or newer to 0.2.11, 0.2.19, 0.2.20, 0.2.33, 0.2.39 and 0.2.41: their data formats are versions 3, 4, 5, 6, 7 and 8, but the records sent to replicas are unchanged). Only when the record format changes (0.1.5 or older to 0.1.6 or newer), upgrade the primary first, then the replica, or the upgraded replica cannot follow the old primary or go back. A primary and a replica check that they use the same record format version, and the replica stops instead of applying anything if they do not.
+Pin a version (`0.3.1`), not `latest`. Before upgrading, take a backup (`CALL heimdb_backup(...)` or mysqldump). With a replica, upgrade the replica first, then the primary (also from 0.1.6 or newer to 0.2.11, 0.2.19, 0.2.20, 0.2.33, 0.2.39 and 0.2.41: their data formats are versions 3, 4, 5, 6, 7 and 8, but the records sent to replicas are unchanged). Only when the record format changes (0.1.5 or older to 0.1.6 or newer), upgrade the primary first, then the replica, or the upgraded replica cannot follow the old primary or go back. A primary and a replica check that they use the same record format version, and the replica stops instead of applying anything if they do not.
 
 ## Quick start
 
 ```sh
 docker run -d --name heimdb -p 3306:3306 -v heimdb-data:/data \
-  -e HEIMDB_ROOT_PASSWORD='secret' -e HEIMDB_SITE_PASSWORD='site-secret' tsukinowa/heimdb:0.3.0
+  -e HEIMDB_ROOT_PASSWORD='secret' -e HEIMDB_SITE_PASSWORD='site-secret' tsukinowa/heimdb:0.3.1
 
 mysql -h 127.0.0.1 -P 3306 -u root -p wordpress
 ```
@@ -79,7 +79,7 @@ x-db-host: &db-host
 
 services:
   db:
-    image: tsukinowa/heimdb:${HEIMDB_VERSION:-0.3.0}
+    image: tsukinowa/heimdb:${HEIMDB_VERSION:-0.3.1}
     environment:
       HEIMDB_ROOT_PASSWORD: ${HEIMDB_ROOT_PASSWORD:?set HEIMDB_ROOT_PASSWORD}  # creates root@'%' on first start
       HEIMDB_SITE_PASSWORD: ${HEIMDB_SITE_PASSWORD:?set HEIMDB_SITE_PASSWORD}  # creates wordpress@'%' if missing
