@@ -71,7 +71,7 @@ func main() {
 	rootPassword := flag.String("root-password", "", "password of root@'%', created on the first start (or set HEIMDB_ROOT_PASSWORD)")
 	siteUser := flag.String("site-user", "wordpress", "user for WordPress, created with privileges on the -db database only when -site-password is set and it does not exist yet")
 	sitePassword := flag.String("site-password", "", "password of the -site-user (or set HEIMDB_SITE_PASSWORD)")
-	backupDir := flag.String("backup-dir", "", "directory where CALL heimdb_backup() writes backups (disabled if empty); put it on the same filesystem as -data, as all writes pause while a backup is taken")
+	backupDir := flag.String("backup-dir", "", "directory where CALL heimdb_backup() writes backups (disabled if empty); put it inside -data (e.g. <data>/backups) or on the same mount point, as all writes pause while a backup is taken and elsewhere every file is copied")
 	shutdownTimeout := flag.Duration("shutdown-timeout", 30*time.Second, "how long to wait for running statements on SIGTERM before exiting without closing the store")
 	slowQuery := flag.Duration("slow-query", 0, "log statements that take longer than this (0 disables; change it without a restart with SET GLOBAL long_query_time and slow_query_log)")
 	slowQueryRedact := flag.Bool("slow-query-redact", false, "replace the values in logged slow statements with ?")

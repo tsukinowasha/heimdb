@@ -319,6 +319,7 @@ Commit IDs cited in the documents for stages up to 129 (such as `65d845f`) are f
 | 128 | Throughput not scaling with 2 connections (wake a sleeping Go thread when a statement starts, and keep a network poller) |
 | 129 | Preparing for publication (removing internal names, English README, contribution and vulnerability reporting channels) |
 | 130 | Measuring the effect of a backup on running queries (reads wait too when the backup copies files; recorded) |
+| 131 | Reads no longer wait for a backup's write lock, and `-backup-dir` can be inside `-data` (for Docker, a backup on the same volume hard-links the files) |
 
 In stages 2 and 3, without indexes, every lookup is a full scan; this is acceptable at test data sizes. Character-set failures in the wpdb group get lower priority; only the dropped-connection problem is fixed, by returning an error for unsupported character sets.
 

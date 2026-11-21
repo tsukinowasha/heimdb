@@ -45,7 +45,7 @@ This section collects, by topic, the differences between HeimDB and real MySQL 8
 | [Aggregates and window functions](#aggregates-and-window-functions) | 11 | 0 / 0 |
 | [SQL syntax](#sql-syntax) | 29 | 0 / 0 |
 | [Error numbers and warnings](#error-numbers-and-warnings) | 26 | 0 / 0 |
-| [Other](#other) | 11 | 3 / 1 |
+| [Other](#other) | 9 | 1 / 1 |
 
 ## Dates and times
 
@@ -694,13 +694,6 @@ This section collects, by topic, the differences between HeimDB and real MySQL 8
 
 ## Other
 
-- **A read-only transaction waits for the write lock while an AUTO_INCREMENT value is unsaved** (stage 130. WordPress: yes)
-  - MySQL: reads do not wait for writes. HeimDB: an `INSERT` that waits for the write lock has already taken its AUTO_INCREMENT value, and a read-only transaction (an autocommit `SELECT` too) that commits while a value is unsaved tries to save it (`Txn.Commit` → `flushAutoIncrements` in `internal/store`) and waits for the same lock. While a backup to another filesystem holds the lock (11.7 seconds for 2 GB), every page stops, reads included
-  - Repro: with `-backup-dir` on another filesystem and a store of a few GB, start `CALL heimdb_backup()`, then an `INSERT` into a table with AUTO_INCREMENT, then a `SELECT`: the `SELECT` returns only after the backup ("During a backup" in [`bench.md`](bench.md))
-  - Note: the results are the same; it is a latency problem. It also makes reads wait behind any long commit while an `INSERT` waits. A candidate for the next stage (for example, save the unsaved values without waiting when a writer holds the lock, since the next commit saves them)
-- **With the Docker image, `-backup-dir` on its own volume makes every backup a full copy** (stage 130. WordPress: yes)
-  - HeimDB: a backup hard-links the data files only on the same filesystem and mount point as `-data`. The image fixes `-data /data` as a volume, so a backup volume such as `/backups` is another mount point, and every backup copies all files while writes wait (and reads, with the item above)
-  - Note: an operational limitation ("Operating notes" in [`operations.md`](operations.md)). A candidate for the next stage: a layout where the data and the backups share one volume, or a backup that does not hold the write lock while copying
 - **If a row error happens after the first 128 rows have been sent, the connection is closed** (stage 124. WordPress: no (inferred))
   - MySQL: returns an error packet after the rows sent, and the connection stays usable. HeimDB: vitess logs "Error in the middle of a stream" and closes the connection (go-sql-driver gives `invalid connection`). An error before the first batch is sent returns the error and keeps the connection
   - Repro: `SELECT i, JSON_EXTRACT(v, '$.a') FROM r ORDER BY i` on a table whose value in row 500 is not JSON
