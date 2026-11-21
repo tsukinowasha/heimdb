@@ -1,70 +1,70 @@
-# HeimDB の手続き
+# HeimDB procedures
 
-HeimDB の操作は、すべて SQL の `CALL heimdb_*(...)` で行う。mysql クライアント、wp-cli の `wp db query`、phpMyAdmin など、MySQL につながるものならどれからでも呼べる。
+You operate HeimDB entirely with SQL `CALL heimdb_*(...)` statements. You can call them from anything that connects to MySQL: the mysql client, wp-cli's `wp db query`, phpMyAdmin and so on.
 
-- 呼べるのは管理者（SUPER 権限。`root` か `GRANT ALL ON *.*` のユーザー）だけ。ステージングのサイトのユーザーからは呼べない。例外は 2 つ。
-  - 読むだけの [`heimdb_merge_excludes()`](#heimdb_merge_excludes) は、サイトのユーザーとブランチだけの権限のユーザーも呼べる（そのデータベースの EXECUTE 権限。`GRANT ALL ON <データベース>.*` に含まれる）。
-  - 起動フラグ `-branch-procedures` を付けると、ブランチだけの権限のユーザーが、自分のブランチの差分、解決、変更の一覧、復元を呼べる（[ブランチのユーザーが呼べる手続き](#ブランチのユーザーが呼べる手続き)）。
-- `heimdb_branch_diff`、`heimdb_branch_resolve`、`heimdb_changes`、`heimdb_restore_preview`、`heimdb_restore` は、ブランチに `''` を渡すと、接続中のデータベースのブランチを対象にする（`wordpress@staging` につないでいれば `staging`、`wordpress` なら `main`）。
-- 時刻は `'YYYY-MM-DD HH:MM:SS'`（小数の秒も可）で、セッションの `time_zone` の時刻として読む。`'2026-10-10 12:31:10.396594+00:00'` のようにオフセットを付ければ、その時刻そのもの（HeimDB が結果に出す時刻はこの形）。
-- ブランチの名前は、英小文字、数字、`_`、`-`。`main` が本番。
-- レプリカでは、データを変える手続き（ブランチの作成、削除、解決、マージ、復元）は `HeimDB: this server is a read-only replica` になる。
-- 引数の数が違うと、エラーになる（接続は切れない）。
+- Only administrators (SUPER privilege: `root` or a user with `GRANT ALL ON *.*`) can call them. The staging site's user cannot. There are two exceptions.
+  - The read-only [`heimdb_merge_excludes()`](#heimdb_merge_excludes) can also be called by the site's users and by users with branch-only privileges (EXECUTE privilege on that database, which `GRANT ALL ON <database>.*` includes).
+  - With the startup flag `-branch-procedures`, a user with branch-only privileges can call diff, resolve, the change list and restore on their own branch ([Procedures branch users can call](#procedures-branch-users-can-call)).
+- `heimdb_branch_diff`, `heimdb_branch_resolve`, `heimdb_changes`, `heimdb_restore_preview` and `heimdb_restore` act on the branch of the connected database when you pass `''` as the branch (`staging` when connected to `wordpress@staging`, `main` when connected to `wordpress`).
+- Times are `'YYYY-MM-DD HH:MM:SS'` (fractional seconds allowed), read as a time in the session's `time_zone`. With an offset, as in `'2026-10-10 12:31:10.396594+00:00'`, the time is taken as is (HeimDB returns times in this form).
+- Branch names use lowercase letters, digits, `_` and `-`. `main` is production.
+- On a replica, procedures that change data (creating, deleting, resolving, merging, restoring) fail with `HeimDB: this server is a read-only replica`.
+- A wrong number of arguments returns an error (the connection is not closed).
 
-## 一覧
+## Overview
 
-| 手続き | すること | データを変える | ブランチのユーザー |
+| Procedure | What it does | Changes data | Branch users |
 | --- | --- | --- | --- |
-| [`heimdb_branch_create(名前[, 親[, 時刻]])`](#heimdb_branch_create) | ブランチを作る | ○ | |
-| [`heimdb_branch_list()`](#heimdb_branch_list) | ブランチの一覧 | | |
-| [`heimdb_branch_delete(名前)`](#heimdb_branch_delete) | ブランチを消す | ○ | |
-| [`heimdb_branch_limit(名前, 大きさ, 時間)`](#heimdb_branch_limit) | ブランチの大きさと文の実行時間に上限を付ける | ○ | |
-| [`heimdb_branch_diff(名前[, テーブル[, 開始, 件数]])`](#heimdb_branch_diff) | 親との差分を見る | | フラグで可 |
-| [`heimdb_branch_resolve(名前, テーブル, 行, 側)`](#heimdb_branch_resolve) | 競合をどちらで解決するか記録する | ○ | フラグで可（行の指定だけ） |
-| [`heimdb_branch_merge(名前[, 'dry_run'])`](#heimdb_branch_merge) | 親にマージする（`'dry_run'` なら確かめるだけ） | ○ | |
-| [`heimdb_branch_sync(名前[, 側][, 'dry_run'])`](#heimdb_branch_sync) | 親の変更をブランチに取り込む | ○ | |
-| [`heimdb_merge_exclude(パターン)`](#heimdb_merge_exclude) | マージから外す表を足す | ○ | |
-| [`heimdb_merge_include(パターン)`](#heimdb_merge_include) | マージから外した表を戻す | ○ | |
-| [`heimdb_merge_excludes()`](#heimdb_merge_excludes) | マージから外す表の一覧（サイトのユーザーも呼べる） | | 可 |
-| [`heimdb_changes(ブランチ, 時刻[, テーブル])`](#heimdb_changes) | ある時刻から後に変わった行を見る | | フラグで可 |
-| [`heimdb_restore_preview(ブランチ, 時刻[, テーブル])`](#heimdb_restore_preview) | 復元で何が変わるかを見る | | フラグで可 |
-| [`heimdb_restore(ブランチ, 時刻[, テーブル])`](#heimdb_restore) | 過去の時点に戻す | ○ | フラグで可 |
-| [`heimdb_status()`](#heimdb_status) | 運用のための状態 | | |
-| [`heimdb_backup([名前[, 鍵]])`](#heimdb_backup) | 動いたままバックアップを取る（鍵を指定すれば暗号化する） | | |
-| [`heimdb_gc()`](#heimdb_gc) | 古いバージョンを今すぐ消す | | |
-| [`heimdb_rebuild_indexes()`](#heimdb_rebuild_indexes) | 前からある DECIMAL、SET、BIT などの列のインデックスにエントリを作る | ○ | |
+| [`heimdb_branch_create(name[, parent[, time]])`](#heimdb_branch_create) | Create a branch | ○ | |
+| [`heimdb_branch_list()`](#heimdb_branch_list) | List branches | | |
+| [`heimdb_branch_delete(name)`](#heimdb_branch_delete) | Delete a branch | ○ | |
+| [`heimdb_branch_limit(name, size, time)`](#heimdb_branch_limit) | Limit a branch's size and statement execution time | ○ | |
+| [`heimdb_branch_diff(name[, table[, offset, count]])`](#heimdb_branch_diff) | Show the diff against the parent | | With the flag |
+| [`heimdb_branch_resolve(name, table, row, side)`](#heimdb_branch_resolve) | Record which side resolves a conflict | ○ | With the flag (named rows only) |
+| [`heimdb_branch_merge(name[, 'dry_run'])`](#heimdb_branch_merge) | Merge into the parent (`'dry_run'` only checks) | ○ | |
+| [`heimdb_branch_sync(name[, side][, 'dry_run'])`](#heimdb_branch_sync) | Bring the parent's changes into the branch | ○ | |
+| [`heimdb_merge_exclude(pattern)`](#heimdb_merge_exclude) | Add tables to exclude from merges | ○ | |
+| [`heimdb_merge_include(pattern)`](#heimdb_merge_include) | Stop excluding tables from merges | ○ | |
+| [`heimdb_merge_excludes()`](#heimdb_merge_excludes) | List the tables excluded from merges (the site's users can call it too) | | Yes |
+| [`heimdb_changes(branch, time[, tables])`](#heimdb_changes) | Show the rows changed since a time | | With the flag |
+| [`heimdb_restore_preview(branch, time[, tables])`](#heimdb_restore_preview) | Show what a restore would change | | With the flag |
+| [`heimdb_restore(branch, time[, tables])`](#heimdb_restore) | Restore to a past time | ○ | With the flag |
+| [`heimdb_status()`](#heimdb_status) | Status for operations | | |
+| [`heimdb_backup([name[, key]])`](#heimdb_backup) | Take a backup while running (encrypted if a key is given) | | |
+| [`heimdb_gc()`](#heimdb_gc) | Delete old versions now | | |
+| [`heimdb_rebuild_indexes()`](#heimdb_rebuild_indexes) | Create entries for existing indexes on DECIMAL, SET, BIT and similar columns | ○ | |
 
-「ブランチのユーザー」は、[ブランチだけの権限](#ブランチだけの権限)のユーザーが呼べるか。「フラグで可」は、起動フラグ `-branch-procedures` を付けたときだけ、接続中のブランチに限って呼べる。
+"Branch users" says whether a user with [branch-only privileges](#branch-only-privileges) can call it. "With the flag" means they can call it only when the startup flag `-branch-procedures` is set, and only on the branch they are connected to.
 
-手続きではないが、過去の時点のデータは `AS OF` で読める（[タイムトラベル](#as-of)）。
+It is not a procedure, but you can read data as of a past time with `AS OF` ([time travel](#as-of)).
 
-## ブランチ
+## Branches
 
-ブランチは、親のある時点の状態から分かれた、書き込みのできる DB の写し。作るのは一瞬で、データは複製しない（変えた行だけを持つ）。ブランチは `wordpress@ブランチ名` という名前のデータベースに見える。WordPress の `DB_NAME` をこの名前にすれば、そのブランチで動く。
+A branch is a writable copy of the DB that splits off from the parent's state at some point. Creating one is instant and copies no data (it holds only the rows you change). A branch appears as a database named `wordpress@<branch>`. Set WordPress's `DB_NAME` to that name and WordPress runs on the branch.
 
 ### heimdb_branch_create
 
 ```sql
-CALL heimdb_branch_create('staging');                                -- 今の main から
-CALL heimdb_branch_create('child', 'staging');                       -- 親を指定する
-CALL heimdb_branch_create('test', 'main', '2026-10-08 09:00:00');    -- 過去の時点から
+CALL heimdb_branch_create('staging');                                -- from the current main
+CALL heimdb_branch_create('child', 'staging');                       -- with a given parent
+CALL heimdb_branch_create('test', 'main', '2026-10-08 09:00:00');    -- from a past time
 ```
 
-作ったブランチを 1 行で返す（列は [`heimdb_branch_list`](#heimdb_branch_list) と同じ）。過去の時点から作れるのは、古いバージョンを残す期間（`-retention`、既定 30 日）の中だけ。
+Returns the created branch as one row (same columns as [`heimdb_branch_list`](#heimdb_branch_list)). You can create a branch from a past time only within the period old versions are kept (`-retention`, default 30 days).
 
-0.2.42 から、作る間は親の書き込みのロックを取る（段階 121）。親に書き込み中のトランザクションや、インデックスの作成（`CREATE INDEX`、表を書き直す `ALTER TABLE`、`heimdb_rebuild_indexes`、起動の後の作り直し）があれば、それが終わるのを `-lock-wait-timeout` まで待つ（過ぎたら `1205`）。呼んだ接続のトランザクションが親のロックを持っていれば待たない。それまでは、何回かに分けてコミットするインデックスの作成の途中に分岐点が入ることがあり、そのブランチでインデックスを作り直すと、ブランチで消した行がインデックスで引けた。
+Since 0.2.42, creating a branch takes the parent's write lock (stage 121). If a transaction is writing to the parent, or an index is being built (`CREATE INDEX`, an `ALTER TABLE` that rewrites the table, `heimdb_rebuild_indexes`, the rebuild after startup), it waits for that to finish, up to `-lock-wait-timeout` (then `1205`). It does not wait if the calling connection's transaction holds the parent's lock. Before that, the fork point could fall in the middle of an index build that commits in several parts, and if the index was then rebuilt on that branch, rows deleted on the branch could still be found through the index.
 
-ブランチで追加した行の AUTO_INCREMENT は、本番と重ならない番号帯から採る。マージした行は、その番号のまま本番に入り、本番はその後も本番の帯の中で続きを振る。
+AUTO_INCREMENT values for rows added on a branch come from a range that does not overlap production. Merged rows enter production with those numbers, and production keeps numbering within its own range afterwards.
 
-| 列の型 | 本番（main） | ブランチ ID n（2 以上） |
+| Column type | Production (main) | Branch ID n (2 or more) |
 |---|---|---|
-| `bigint`（符号の有無とも） | 1 から 10^10 未満 | (n - 1) × 10^10 から 10^10 の幅（最初のブランチは `10000000000`） |
-| `int`（符号の有無とも） | 1 から 10^9 未満 | 10^9 + ((n - 2) mod 100) × 10^7 から 10^7 の幅（最初のブランチは `1000000000`） |
-| `mediumint` 以下、一時テーブル | 分けない | 分けない |
+| `bigint` (signed or unsigned) | 1 up to below 10^10 | a range of width 10^10 from (n - 1) × 10^10 (the first branch starts at `10000000000`) |
+| `int` (signed or unsigned) | 1 up to below 10^9 | a range of width 10^7 from 10^9 + ((n - 2) mod 100) × 10^7 (the first branch starts at `1000000000`) |
+| `mediumint` and smaller, temporary tables | not split | not split |
 
-`int` の帯は 100 個の枠を使い回す。枠の中の見えている行（前に同じ枠を使ったブランチのマージ済みの行を含む）の最大値 + 1 から振るので、ふつうは番号が重ならない。重なるのは、ブランチ ID が 100 違う 2 つのブランチが同時に同じ表に足したとき、同じ枠の前のブランチのマージより前の時点からブランチを作ったとき、マージの後に本番で消した行の番号（100 本後のブランチが振り直すことがある）。重なった行と、帯を分けない型で両側が足した行は、マージの競合になる（`docs/plugins.md` の「ブランチのマージで注意の要る表」）。
+The `int` ranges reuse 100 slots. Numbering starts from the largest visible value in the slot + 1 (including merged rows of earlier branches that used the same slot), so numbers normally do not overlap. They overlap when two branches whose IDs differ by 100 add rows to the same table at the same time, when a branch is created from a time before the merge of the previous branch in the same slot, and for numbers of rows deleted on production after a merge (the branch 100 later may number them again). Overlapping rows, and rows added on both sides in types whose ranges are not split, become merge conflicts ("Tables that need care when merging branches" in `docs/plugins.md`).
 
-`ALTER TABLE ... AUTO_INCREMENT = v` は帯の中で効く。帯の下限より小さい v は下限に上げ、帯の上の v（ほかのブランチの番号を含むダンプを流したときなど）は無視する（MySQL はその値から振る）。帯を使い切ると、INSERT が `HeimDB: AUTO_INCREMENT range is exhausted: table <表>, values below <上限> on this branch` で失敗する（本番の `int` の表なら 10^9 未満を使い切ったとき）。
+`ALTER TABLE ... AUTO_INCREMENT = v` works within the range. A v below the range's lower bound is raised to the lower bound, and a v above the range (for example after loading a dump that contains another branch's numbers) is ignored (MySQL numbers from that value). When the range is used up, INSERT fails with `HeimDB: AUTO_INCREMENT range is exhausted: table <table>, values below <limit> on this branch` (for an `int` table on production, when the values below 10^9 are used up).
 
 ### heimdb_branch_list
 
@@ -81,9 +81,9 @@ CALL heimdb_branch_list();
 +---------+--------+----------------------------+-------------------+------------+----------------+------------------+
 ```
 
-- `forked_at`: 分岐した時刻（セッションの `time_zone`）。
-- `size_bytes`: そのブランチが持つデータの大きさの推定。ディスクに書き出す前の分は数えないので、作った直後は 0 のことがある。
-- `max_size_bytes`、`max_execution_ms`: [`heimdb_branch_limit`](#heimdb_branch_limit) で付けた上限（なければ `NULL`）。
+- `forked_at`: when the branch forked (in the session's `time_zone`).
+- `size_bytes`: an estimate of the size of the data the branch holds. Data not yet flushed to disk is not counted, so it can be 0 right after creation.
+- `max_size_bytes`, `max_execution_ms`: limits set with [`heimdb_branch_limit`](#heimdb_branch_limit) (`NULL` if none).
 
 ### heimdb_branch_delete
 
@@ -91,92 +91,92 @@ CALL heimdb_branch_list();
 CALL heimdb_branch_delete('test');
 ```
 
-子のブランチがあれば拒否する（`HeimDB: branch has child branches`）。`main` は消せない。解決の記録も一緒に消える。
+Refused if the branch has child branches (`HeimDB: branch has child branches`). `main` cannot be deleted. Recorded resolutions are deleted with the branch.
 
 ### heimdb_branch_limit
 
 ```sql
-CALL heimdb_branch_limit('staging', '2G', '30s');   -- 大きさの上限と、1 つの文の実行時間の上限
-CALL heimdb_branch_limit('staging', '0', '0');      -- 外す（0 は上限なし）
+CALL heimdb_branch_limit('staging', '2G', '30s');   -- size limit, and execution time limit per statement
+CALL heimdb_branch_limit('staging', '0', '0');      -- remove (0 means no limit)
 ```
 
-検証環境のブランチが、本番と同じ HeimDB のディスクと時間を食い尽くさないようにする。設定したブランチを 1 行で返す（列は [`heimdb_branch_list`](#heimdb_branch_list) と同じ）。大きさは `K`、`M`、`G`、`T`（1024 倍）を付けた数か、バイト数。時間は `ms`、`s`、`m` を付ける。`main` には実行時間の上限だけを付けられる（大きさの上限は、誤って本番を止めないため付けられない。`CALL heimdb_branch_limit('main', '0', '30s')`）。`main` の実行時間の上限は、管理者でない接続の `SELECT` と書き込みの文（`INSERT`、`UPDATE`、`DELETE`、`REPLACE`）にだけ効き、DDL と `CALL` には効かない（プラグインの更新の大きな `ALTER TABLE` を止めない）。WordPress の cron の重い書き込み（期限切れのトランジェントの削除など）が上限を超えると、毎回止まってやり直し続けるので、上限は画面の処理より十分長くする。子のブランチは上限を引き継がない。上限はレプリカにも届く。
+Keeps a test branch from using up the disk and time of the HeimDB it shares with production. Returns the configured branch as one row (same columns as [`heimdb_branch_list`](#heimdb_branch_list)). The size is a number with `K`, `M`, `G` or `T` (times 1024), or a number of bytes. The time takes `ms`, `s` or `m`. On `main` you can set only the execution time limit (a size limit is not allowed, so production is not stopped by mistake: `CALL heimdb_branch_limit('main', '0', '30s')`). The execution time limit on `main` applies only to `SELECT` and write statements (`INSERT`, `UPDATE`, `DELETE`, `REPLACE`) on non-administrator connections, not to DDL or `CALL` (so it does not stop a large `ALTER TABLE` in a plugin update). If a heavy WordPress cron write (such as deleting expired transients) exceeds the limit, it is stopped and retried every time, so make the limit well above what page requests need. Child branches do not inherit limits. Limits reach replicas too.
 
-- **大きさの上限**: 書き込みの始まり（文が最初に行を書く前と、DDL の前）に、`size_bytes` と同じ推定（1 秒ほど覚える）が上限を超えていれば、エラー 1114（`The table 'wp_posts' is full`。MySQL でディスクや表領域が尽きたときと同じ）で拒否し、ログに警告（`HeimDB: branch staging is over its size limit`。ブランチごとに 1 分に 1 回）を出す。読み取りと、表を消す `DROP TABLE` と `TRUNCATE` は通る。始まった文は止めないので、ディスクに書き出す前の分（数十 MB）と、1 つの文が書く分（大きな表に列を足す `ALTER` は表を丸ごと書き直す）だけ超えうる。実行時間の上限と組み合わせて使う。上限に当たったら、上限を上げるか、ブランチを作り直す（行を消しても大きさは減らない。消した印も書き込みで、古いバージョンは GC まで残る）。マージ（子からこのブランチへ）と復元は止めない。
-- **トランザクションの大きさ**: コミットしていない書き込みはメモリに持つので、大きさの上限を付けたブランチに書くトランザクションは、上限の大きさ（最大 256MB）までにする。超えた文はエラー 1197（MySQL で `max_binlog_cache_size` を超えたときと同じ）で取り消す。それまでの書き込みは残る。
-- **実行時間の上限**: このブランチの権限を持つユーザー（[ブランチだけの権限](#ブランチだけの権限)）のすべての文（読み取り、書き込み、DDL）に効く。接続中のデータベースによらない（データベースを指定せずにつないでも、別のデータベースに `USE` しても効く）。権限を持つブランチが複数あれば、短い方の上限に従う。管理者（SUPER 権限。`root` か `GRANT ALL ON *.*` のユーザー）には効かない（`GRANT SELECT ON *.*` のような、SUPER のない全体の権限では外れない）。認証を有効にしていないとき（`-no-auth`）は、接続中のデータベースがこのブランチなら、`heimdb_*` の手続きを除くすべての文に効く。過ぎたら文を止め、エラー 3024（`Query execution was interrupted, maximum statement execution time exceeded`。MySQL の `max_execution_time` と同じ）を返す。止めた文の書き込みは残らない（明示的なトランザクションの中なら、その文だけを取り消す）。ただし、自動コミットの文がコミットを終えた直後に止まると、書き込みが残ったままエラー 3024 になることがある（MySQL も同じ）。サイトの PHP が `SET` で外せない（接続ごとの `max_execution_time` は `SELECT` の文にだけ効き、この上限より長くはできない。[`operations.md`](operations.md) の「遅い文のログ」）。
-- **一時テーブル**: 一時テーブルは上限の外の場所に置くので、上限を付けたブランチの権限を持つユーザー（認証のないときは、そのブランチにつないだ接続）は作れない（エラー 1235）。WordPress は使わない。
+- **Size limit**: at the start of a write (before a statement writes its first row, and before DDL), if the same estimate as `size_bytes` (cached for about 1 second) is over the limit, the write is refused with error 1114 (`The table 'wp_posts' is full`, the same as MySQL when the disk or tablespace is full), and a warning is logged (`HeimDB: branch staging is over its size limit`, at most once a minute per branch). Reads, and `DROP TABLE` and `TRUNCATE` (which remove tables), go through. A statement that has started is not stopped, so the branch can go over by the data not yet flushed to disk (tens of MB) plus what one statement writes (an `ALTER` that adds a column to a large table rewrites the whole table). Use it together with the execution time limit. When a branch hits the limit, raise the limit or recreate the branch (deleting rows does not reduce the size: the deletion marks are writes too, and old versions stay until GC). Merges (from a child into this branch) and restores are not stopped.
+- **Transaction size**: uncommitted writes are held in memory, so keep a transaction that writes to a branch with a size limit within that limit (at most 256MB). A statement that goes over is rolled back with error 1197 (the same as MySQL when `max_binlog_cache_size` is exceeded). Earlier writes in the transaction remain.
+- **Execution time limit**: applies to every statement (reads, writes, DDL) of a user with privileges on this branch ([branch-only privileges](#branch-only-privileges)). It does not depend on the connected database (it applies when connecting without a database, and after `USE` of another database). If the user has privileges on several branches, the shorter limit applies. It does not apply to administrators (SUPER privilege: `root` or a user with `GRANT ALL ON *.*`); global privileges without SUPER, such as `GRANT SELECT ON *.*`, do not lift it. Without authentication (`-no-auth`), it applies to every statement except the `heimdb_*` procedures when the connected database is this branch. When the limit passes, the statement is stopped and error 3024 is returned (`Query execution was interrupted, maximum statement execution time exceeded`, the same as MySQL's `max_execution_time`). The stopped statement's writes do not remain (inside an explicit transaction, only that statement is rolled back). However, an autocommit statement stopped right after it finished committing may return error 3024 with its writes kept (MySQL does the same). The site's PHP cannot lift it with `SET` (the per-connection `max_execution_time` applies only to `SELECT` statements and cannot be longer than this limit; "Slow query log" in [`operations.md`](operations.md)).
+- **Temporary tables**: temporary tables are stored outside the limited space, so a user with privileges on a branch with limits (without authentication, a connection to that branch) cannot create them (error 1235). WordPress does not use them.
 
-接続の数は、ユーザーに `MAX_USER_CONNECTIONS` を付けて抑える（[ブランチだけの権限](#ブランチだけの権限)）。
+Limit the number of connections with `MAX_USER_CONNECTIONS` on the user ([branch-only privileges](#branch-only-privileges)).
 
-### ブランチだけの権限
+### Branch-only privileges
 
-ステージングのサイトには、そのブランチだけの権限のユーザーを使う（サイトが乗っ取られても本番に届かない）。
+For a staging site, use a user with privileges on that branch only (if the site is compromised, the attacker cannot reach production).
 
 ```sql
 CREATE USER 'staging'@'%' IDENTIFIED BY 'pw' WITH MAX_USER_CONNECTIONS 20;
 GRANT ALL ON `wordpress@staging`.* TO 'staging'@'%';
 ```
 
-`MAX_USER_CONNECTIONS` は、そのアカウントの同時接続数の上限（0 なら上限なし）。超えた接続は、MySQL と同じエラー 1203 で拒否する。後から `ALTER USER 'staging'@'%' WITH MAX_USER_CONNECTIONS 10` で変えられる（`IDENTIFIED` を書かなければパスワードは変わらない）。全体の `@@max_user_connections` は効かない（本番のユーザーにも効いてしまうため）。
+`MAX_USER_CONNECTIONS` is the limit on the account's concurrent connections (0 means no limit). Connections over it are refused with error 1203, as in MySQL. You can change it later with `ALTER USER 'staging'@'%' WITH MAX_USER_CONNECTIONS 10` (without `IDENTIFIED`, the password does not change). The global `@@max_user_connections` has no effect (it would also apply to production's users).
 
-### ブランチのユーザーが呼べる手続き
+### Procedures branch users can call
 
-起動フラグ `-branch-procedures`（または環境変数 `HEIMDB_BRANCH_PROCEDURES=1`。フラグを書けば、`-branch-procedures=false` を含めてフラグが優先する）を付けると、ブランチだけの権限のユーザーが、次の 5 つを呼べる。WordPress の管理画面（プラグイン）から、`$wpdb` のまま差分を見て、競合の解決を記録できるようにするため。既定はオフで、オフなら今までどおり管理者だけ。
+With the startup flag `-branch-procedures` (or the environment variable `HEIMDB_BRANCH_PROCEDURES=1`; if the flag is given, including `-branch-procedures=false`, the flag wins), users with branch-only privileges can call the following 5. This lets the WordPress admin screen (a plugin) show the diff and record conflict resolutions through `$wpdb` as it is. It is off by default; when off, only administrators can call them, as before.
 
-| 手続き | ブランチのユーザーができること |
+| Procedure | What a branch user can do |
 | --- | --- |
-| [`heimdb_branch_diff`](#heimdb_branch_diff) | 自分のブランチの差分を見る |
-| [`heimdb_branch_resolve`](#heimdb_branch_resolve) | 自分のブランチの競合の解決を、行を指定して記録する（`'*'` は管理者だけ） |
-| [`heimdb_changes`](#heimdb_changes)、[`heimdb_restore_preview`](#heimdb_restore_preview) | 自分のブランチの変更と、復元の中身を見る |
-| [`heimdb_restore`](#heimdb_restore) | 自分のブランチを過去の時点に戻す |
+| [`heimdb_branch_diff`](#heimdb_branch_diff) | Show the diff of their own branch |
+| [`heimdb_branch_resolve`](#heimdb_branch_resolve) | Record conflict resolutions on their own branch for named rows (`'*'` is for administrators only) |
+| [`heimdb_changes`](#heimdb_changes), [`heimdb_restore_preview`](#heimdb_restore_preview) | Show their own branch's changes and what a restore would do |
+| [`heimdb_restore`](#heimdb_restore) | Restore their own branch to a past time |
 
-マージ、ブランチの作成と削除、上限の変更、マージから外す表の変更は、管理者だけのまま（上限は、ブランチのユーザーが自分で外せては意味がない）。
+Merging, creating and deleting branches, changing limits, and changing the tables excluded from merges stay administrator-only (a limit is pointless if the branch user can remove it).
 
-- **対象は接続から決まる。** 対象にできるのは、接続中のデータベースのブランチだけ。ブランチに `''` を渡すのが勧める呼び方（`CALL heimdb_branch_diff('')`）。名前を書いてもよいが、接続中のブランチと違えばエラーになる（`HeimDB: a branch user can call heimdb_branch_diff only on the branch it is connected to (connected to "wordpress@staging")`）。`CALL` をデータベース名で修飾しても、別のブランチは指せない。
-- **main は対象にできない。** 本番のサイトのユーザー（`wordpress` の権限）がフラグで呼べるようになるわけではない（`HeimDB: only an administrator can call heimdb_restore on the main branch`）。
-- **ブランチを作る前の時刻は使えない。** `heimdb_changes`、`heimdb_restore_preview`、`heimdb_restore` に、ブランチを作った時刻より前の時刻を渡すとエラーになる（`HeimDB: a branch user cannot use a time before the branch was created (...)`）。その時刻のブランチは親の状態で、親の履歴を見せることになるため。ただし、`SELECT ... AS OF` はこれまでどおりブランチを作る前の時刻も読める（ブランチを作る前の親の状態。作った後に親で変わった値は読めない）。
-- **要る権限は、接続中のデータベースの EXECUTE。** `GRANT ALL ON <データベース>.*` に含まれる。権限を列挙して付けているなら、足す。
+- **The target comes from the connection.** Only the branch of the connected database can be the target. Passing `''` as the branch is the recommended form (`CALL heimdb_branch_diff('')`). You may write the name, but if it differs from the connected branch, it is an error (`HeimDB: a branch user can call heimdb_branch_diff only on the branch it is connected to (connected to "wordpress@staging")`). Qualifying `CALL` with a database name cannot point to another branch.
+- **main cannot be the target.** The flag does not let production's site user (privileges on `wordpress`) call them (`HeimDB: only an administrator can call heimdb_restore on the main branch`).
+- **Times before the branch was created cannot be used.** Passing `heimdb_changes`, `heimdb_restore_preview` or `heimdb_restore` a time before the branch was created is an error (`HeimDB: a branch user cannot use a time before the branch was created (...)`). At such a time the branch is the parent's state, so it would show the parent's history. `SELECT ... AS OF` can still read times before the branch was created, as before (the parent's state before the branch was created; values changed on the parent after creation cannot be read).
+- **The required privilege is EXECUTE on the connected database.** `GRANT ALL ON <database>.*` includes it. If you grant privileges one by one, add it.
 
   ```sql
   GRANT EXECUTE ON `wordpress@staging`.* TO 'staging'@'%';
   ```
 
-- **ブランチの上限が効く。** ブランチのユーザーが呼んだ手続きにも、[`heimdb_branch_limit`](#heimdb_branch_limit) の実行時間の上限が効く（差分、解決、変更の一覧、復元は、読みながら上限を確かめ、過ぎたらエラー 3024 で止まる）。同時接続数は `MAX_USER_CONNECTIONS` で抑える。管理者（`root` など）には、今までどおり効かない。
-- **差分は親の変更を教える。** 差分の要約と行ごとの差分は、分岐の後に親（本番）で変わった行と、競合した列の親の値（`conflict_values`）を返す。ブランチのユーザーは親に権限を持たないので、権限の上では親の情報が流れる向き。同じサイトの本番とその検証環境なら問題にならないが、ブランチをテナントの分離に使うなら、フラグを付けない。
+- **Branch limits apply.** The execution time limit of [`heimdb_branch_limit`](#heimdb_branch_limit) also applies to procedures called by branch users (diff, resolve, the change list and restore check the limit as they read, and stop with error 3024 when it passes). Limit concurrent connections with `MAX_USER_CONNECTIONS`. Limits still do not apply to administrators (`root` and so on).
+- **The diff reveals the parent's changes.** The diff summary and the per-row diff return the rows changed on the parent (production) after the fork, and the parent's values of conflicting columns (`conflict_values`). Branch users have no privileges on the parent, so in terms of privileges, information flows from the parent. This is not a problem for a site's production and its own test environment, but if you use branches to separate tenants, do not set the flag.
 
-競合の解決を分担するときは、ブランチのユーザー（管理画面）が行ごとに解決を記録し、管理者が差分の `resolved_by` と `resolution` を見てからマージする（[heimdb_branch_resolve](#heimdb_branch_resolve)）。
+To split up conflict resolution, the branch user (the admin screen) records resolutions row by row, and an administrator checks `resolved_by` and `resolution` in the diff before merging ([heimdb_branch_resolve](#heimdb_branch_resolve)).
 
-## 差分とマージ
+## Diff and merge
 
-ふつうの流れは、差分を見る → 競合があれば解決を記録する → マージする。同じブランチで作業を続けて、何度でもマージできる（2 回目からは前のマージとの差分になる）。
+The usual flow is: look at the diff, record resolutions if there are conflicts, then merge. You can keep working on the same branch and merge as many times as you like (from the second time, the diff is against the previous merge).
 
 ```sql
-CALL heimdb_branch_diff('staging');                                 -- 要約
-CALL heimdb_branch_diff('staging', 'wp_posts');                     -- 行ごと
+CALL heimdb_branch_diff('staging');                                 -- summary
+CALL heimdb_branch_diff('staging', 'wp_posts');                     -- per row
 CALL heimdb_branch_resolve('staging', 'wp_posts', 'ID=1', 'branch');
 CALL heimdb_branch_merge('staging');
 ```
 
-### マージの規則
+### Merge rules
 
-- 行は主キーで対応づける（`wp_options` だけは `option_name`）。
-- 列ごとに、分岐の時点（2 回目からは前のマージ）、今のブランチ、今の親の三方向で比べる。ブランチだけが変えた列は反映し、親だけが変えた列は残す。両側が同じ列を違う値に変えたら競合。`post_modified` などの更新日時は競合にせず、新しい方を採る。
-- 両側で、同じ自然なキーの記事（`post_type` と `post_name`）やターム（`slug`）を別々に追加したら競合。ただし記事は、中身が同じなら競合にせず、親の行を残してブランチの行を飛ばす（`skip`、`same as the parent's ID=4`）。比べないのは主キーと、記事の `guid`、`post_date`、`post_date_gmt`、`post_modified`、`post_modified_gmt`（URL と作った時刻なので、同じ中身でも両側で違う）。ブロックテーマのサイトでは、ブランチを作った後に両側のページを開くだけで、WordPress が既定のナビゲーション（`wp_navigation`）を両側に 1 件ずつ作るため。飛ばした行に付いたブランチのメタなどは、「マージしない記事に属する行」として一緒に飛ばす。マージの後にブランチでその行を編集すると、重複の競合に戻る。タームは中身が同じでも競合のまま（ブロックテーマの `wp_theme` のタームを飛ばすと、ブランチで編集したテンプレートとテーマの結び付きも飛び、本番でテンプレートが効かないため）。記事のメタの重複は警告だけ。（0.2.16 から。それまでは中身が同じ記事も競合）
-- ブランチで足した記事のメタ、タームの関係、term_taxonomy、タームのメタが、親になく、このマージでも作らない記事・タームを指すなら飛ばす（`belongs to a post that is not on the parent`）。前のマージで飛ばした（または `'parent'` で解決した）記事に、後からメタを足した場合など。親に孤児の行を入れない（0.2.16 から）。
-- 次のものはマージしない（`skip`）。
-  - 環境ごとのオプション: `siteurl`、`home`、`blog_public`、`cron`、`rewrite_rules`、`db_version` など、`_transient_*`、`*_lock`、`https_*`
-  - 自動下書き、リビジョン、記事の編集ロック（`_edit_lock`、`_edit_last`）
-  - コメントとユーザー（`wp_comments`、`wp_commentmeta`、`wp_users`、`wp_usermeta`）。本番の側が正しい
-- テーブルの追加、列とインデックスの変更（プラグインの dbDelta）もマージする。列は列ごとに比べ、ブランチだけが変えた列は反映する。親（本番）だけが変えた列はそのままで、ブランチから入る行の、親だけにある列は既定値になる。主キーの列が両側で違うテーブルだけは、テーブルごとの競合（`schema differs`）になる。テーブルの削除はマージしない。
-- マージは 1 つのコミット。失敗すれば何も書かない。マージの後に、記事のコメント数とタームの件数を本番の側で数え直し、`rewrite_rules` を空にする（WordPress が次のリクエストで作り直す）。
-- 両側の `db_version` が違えば、マージは拒否する（差分は要約の最初の行で知らせる）。両側で WordPress の DB の更新を済ませてからマージする。
-- [マージから外した表](#マージから外す表)には、何もしない（行、列の定義、インデックスを比べず、書かない）。
-- WordPress の表の接頭辞（`wp-config.php` の `$table_prefix`）は、親の表から見つける（[本体の表の見分け方](#本体の表の見分け方)）。接頭辞が 2 つ以上見つかれば、差分とマージを拒否する（`ambiguous_prefix`）。
+- Rows are matched by primary key (`option_name` for `wp_options` only).
+- For each column, three states are compared: the fork point (from the second time, the previous merge), the current branch, and the current parent. A column changed only on the branch is applied, and a column changed only on the parent is kept. If both sides changed the same column to different values, it is a conflict. Modification times such as `post_modified` are not conflicts; the newer one wins.
+- If both sides separately added a post with the same natural key (`post_type` and `post_name`) or a term (`slug`), it is a conflict. But for posts with the same content, it is not a conflict: the parent's row is kept and the branch's row is skipped (`skip`, `same as the parent's ID=4`). Not compared: the primary key, and the posts' `guid`, `post_date`, `post_date_gmt`, `post_modified` and `post_modified_gmt` (URLs and creation times, which differ between the sides even with the same content). This is because on a block theme site, just opening pages on both sides after creating a branch makes WordPress create a default navigation (`wp_navigation`) on each side. The branch's meta and other rows attached to the skipped row are skipped too, as "rows that belong to a post that is not merged". If you edit that row on the branch after the merge, it goes back to a duplicate conflict. Terms stay conflicts even with the same content (skipping a block theme's `wp_theme` term would also drop the link between templates edited on the branch and the theme, and the templates would not work on production). Duplicated post meta is only a warning. (Since 0.2.16. Before that, posts with the same content were conflicts too.)
+- Post meta, term relationships, term_taxonomy and term meta added on the branch are skipped if they point to a post or term that is not on the parent and is not created by this merge either (`belongs to a post that is not on the parent`). For example, when meta is added later to a post skipped by an earlier merge (or resolved with `'parent'`). This keeps orphan rows out of the parent (since 0.2.16).
+- The following are not merged (`skip`).
+  - Environment-specific options: `siteurl`, `home`, `blog_public`, `cron`, `rewrite_rules`, `db_version` and so on, `_transient_*`, `*_lock`, `https_*`
+  - Auto-drafts, revisions, and post edit locks (`_edit_lock`, `_edit_last`)
+  - Comments and users (`wp_comments`, `wp_commentmeta`, `wp_users`, `wp_usermeta`). Production's side is the correct one
+- Added tables and changes to columns and indexes (a plugin's dbDelta) are merged too. Columns are compared one by one, and columns changed only on the branch are applied. Columns changed only on the parent (production) stay as they are, and in rows coming from the branch, columns that exist only on the parent get their default values. Only a table whose primary key columns differ between the sides becomes a whole-table conflict (`schema differs`). Dropped tables are not merged.
+- A merge is one commit. If it fails, nothing is written. After a merge, the posts' comment counts and the terms' counts are recounted on production, and `rewrite_rules` is emptied (WordPress rebuilds it on the next request).
+- If `db_version` differs between the sides, the merge is refused (the diff reports it in the first row of the summary). Run the WordPress database upgrade on both sides before merging.
+- [Tables excluded from merges](#tables-excluded-from-merges) are left alone (rows, column definitions and indexes are not compared or written).
+- The WordPress table prefix (`$table_prefix` in `wp-config.php`) is found from the parent's tables ([How core tables are identified](#how-core-tables-are-identified)). If two or more prefixes are found, diff and merge are refused (`ambiguous_prefix`).
 
 ### heimdb_branch_diff
 
-読むだけで、何も書かない。テーブルを省くと、テーブルごとの要約を返す。
+Only reads; writes nothing. Without a table, it returns a summary per table.
 
 ```sql
 CALL heimdb_branch_diff('staging');
@@ -191,20 +191,20 @@ CALL heimdb_branch_diff('staging');
 +------------+---------+---------+---------+---------+---------+-----------+----------+----------+--------+
 ```
 
-- `status`: `changed`、`new table`（ブランチで作った）、`dropped on branch`、`dropped on parent`、`schema differs`（主キーの列が両側で違う）、`unchanged`（マージで変えるものはないが、全行を比べる。下の `detail`。重さの知らせなので、マージするものがあるかを見るときは除く）、`excluded`（[マージから外した表](#マージから外す表)。マージでは何もしない）、`not excluded`（パターンに当たったが、本体の表なので外さない。その表の要約は別の行に出る）。
-- `inserts`、`updates`、`deletes`: マージで親に行う操作の数。`excluded` の行では、ブランチの側で追加、変更、削除された行の数（反映しない。列を足すと、全行の形が変わって変更に数える）。`skipped` はマージしない行、`conflicts` は解決していない競合、`resolved` は解決を記録した競合。
-- `detail`: 列とインデックスの変更（`columns: +w`）と、マージの重さ。
-  - `rewrite N rows`: マージで親のテーブルを書き直す（ブランチで列を変えた）。N は親の行数。
-  - `full compare N rows`: テーブルを書き直した（列の変更や `TRUNCATE`）側があるので、変わった行だけでなく全行を比べる。N は比べた行数。親の側では、記事、ターム、記事のメタ（親で足された行と重ならないかを分岐の時点から見るもの）がこうなり、ブランチを作り直すまで毎回かかる。
-  - どちらも、マージの間に親への書き込みが待たされる時間に響く。差分は親のロックを取らないので、重いマージかどうかを先に見られる。
+- `status`: `changed`, `new table` (created on the branch), `dropped on branch`, `dropped on parent`, `schema differs` (the primary key columns differ between the sides), `unchanged` (the merge changes nothing, but all rows are compared; see `detail` below. It is a notice about cost, so leave it out when checking whether there is anything to merge), `excluded` ([excluded from merges](#tables-excluded-from-merges); the merge does nothing), `not excluded` (a pattern matched, but it is a core table and is not excluded; that table's summary is in another row).
+- `inserts`, `updates`, `deletes`: the number of operations the merge performs on the parent. In `excluded` rows, the number of rows added, changed and deleted on the branch side (not applied; adding a column changes the shape of every row, so all rows count as changed). `skipped` is rows not merged, `conflicts` is unresolved conflicts, and `resolved` is conflicts with a recorded resolution.
+- `detail`: column and index changes (`columns: +w`), and the cost of the merge.
+  - `rewrite N rows`: the merge rewrites the parent's table (columns were changed on the branch). N is the number of rows on the parent.
+  - `full compare N rows`: one side rewrote the table (a column change or `TRUNCATE`), so all rows are compared, not only the changed ones. N is the number of rows compared. On the parent side, posts, terms and post meta (which are checked from the fork point for overlap with rows added on the parent) end up like this, and it costs that much every time until the branch is recreated.
+  - Both affect how long writes to the parent wait during the merge. The diff does not take the parent's lock, so you can find out beforehand whether a merge will be heavy.
 
-両側の `db_version` が違えば、最初に次の行を返し、続けてテーブルごとの要約を返す（マージは拒否する。テーブルを指定した行ごとの差分はエラー）。
+If `db_version` differs between the sides, the following row comes first, followed by the per-table summary (the merge is refused; a per-row diff for a given table is an error).
 
 ```
 | * | db_version differs | 0 | 0 | 0 | 0 | 0 | 0 | 0 | branch 60717, parent 60421; run the WordPress database upgrade on both sides before merging |
 ```
 
-テーブルを指定すると（`'*'` ならすべてのテーブル）、行ごとの判定を返す。
+With a table (`'*'` for all tables), it returns the decision for each row.
 
 ```sql
 CALL heimdb_branch_diff('staging', '*');
@@ -222,60 +222,60 @@ CALL heimdb_branch_diff('staging', '*');
 +------------+----------------------+---------------+---------------+----------+------------+--------------+---------------------------------------------+
 ```
 
-- `id`: 行の名前。[`heimdb_branch_resolve`](#heimdb_branch_resolve) にはこの形のまま渡す。列とインデックスの変更は `COLUMN 名前`、`INDEX 名前`、テーブルの定義の食い違いは `*`。
-- `branch_change`、`parent_change`: それぞれの側の変化（`insert`、`update`、`delete`、`none`）。同じ主キーの行の変化だが、同じ自然なキーの記事・タームの重複では、親に別の主キーで足された相手の行を指して `parent_change` が `insert`（0.2.16 から。それまでは `none`）。
-- `action`: マージで行うこと。`insert`、`update`、`delete`、`skip`、`conflict`、`warning`。外した表は、行の判定の代わりに `id` が `*` で `excluded`（または `not excluded`）の 1 行。
-- `resolution`: 記録した解決（`branch`、`parent`）。記録した後に行が変わっていれば `stale` で、決め直す。
-- `columns`: 反映する列（`update`）か、食い違った列（`conflict`）。
-- `detail`: 理由。
-- `resolved_by`、`resolved_at`: 解決（`resolution`）を記録したユーザー（`'staging'@'%'` の形）と時刻（UTC）。ワイルドカードの解決が当たった行では、そのワイルドカードを記録したユーザーと時刻。0.2.15 より前に記録した解決と、主キーの列が違うテーブルの行（`id` が `*`）では NULL。
-- `conflict_values`: 競合した行（`action` が `conflict`）の、競合した列の両側の今の値（JSON）。ほかの行は NULL。ブランチのユーザーは、ブランチを作った後に親で変わった値を読めないので、解決を選ぶ画面に両側の値を出すため。値は、SELECT の結果と同じ書き方の文字列（`DATE` は `2026-03-04`、`DECIMAL(19,4)` は `12.5000`、ゼロの日時は `0000-00-00 00:00:00`）で、`NULL` と行のない側（削除した側）は `null`。キーは列の名前の小文字（`ID` は `id`）。削除と変更の競合では、変更した側が変えた列を出す。同じ自然なキーの記事・タームの重複では、親の相手の行（`detail` の主キーの行）と食い違ったすべての列（主キーを含む）を出す。
+- `id`: the row's name. Pass it to [`heimdb_branch_resolve`](#heimdb_branch_resolve) in this form as is. Column and index changes are `COLUMN name` and `INDEX name`, and a mismatch in the table definition is `*`.
+- `branch_change`, `parent_change`: the change on each side (`insert`, `update`, `delete`, `none`). These are changes to the row with the same primary key, but for duplicate posts or terms with the same natural key, `parent_change` is `insert`, pointing to the counterpart row added on the parent with a different primary key (since 0.2.16; before that, `none`).
+- `action`: what the merge does: `insert`, `update`, `delete`, `skip`, `conflict`, `warning`. An excluded table is one row with `id` `*` and `excluded` (or `not excluded`) instead of per-row decisions.
+- `resolution`: the recorded resolution (`branch`, `parent`). If the row changed after it was recorded, it is `stale`, and you decide again.
+- `columns`: the columns to apply (`update`) or the columns that disagree (`conflict`).
+- `detail`: the reason.
+- `resolved_by`, `resolved_at`: the user who recorded the resolution (`resolution`), in the form `'staging'@'%'`, and the time (UTC). For rows matched by a wildcard resolution, the user and time that recorded the wildcard. NULL for resolutions recorded before 0.2.15 and for rows of tables whose primary key columns differ (`id` is `*`).
+- `conflict_values`: for conflicting rows (`action` is `conflict`), the current values of both sides for the conflicting columns (JSON). NULL for other rows. Branch users cannot read values changed on the parent after the branch was created, so this lets the screen for choosing a resolution show both sides' values. Values are strings written the same way as in SELECT results (`DATE` is `2026-03-04`, `DECIMAL(19,4)` is `12.5000`, a zero datetime is `0000-00-00 00:00:00`), and `NULL` and the side with no row (the side that deleted it) are `null`. Keys are the column names in lowercase (`ID` is `id`). In a delete/update conflict, the columns changed by the updating side are shown. For duplicate posts or terms with the same natural key, all columns (including the primary key) that differ from the parent's counterpart row (the row with the primary key in `detail`) are shown.
 
   ```
   {"post_title":{"branch":"Hello from staging","parent":"Hello (edited on main)"}}
   ```
 
-`resolved_by`、`resolved_at`、`conflict_values` の 3 列は 0.2.15 で最後に足した。列を名前で読むもの（`$wpdb->get_results` など）は変えなくてよいが、列の数と順で読むもの（Go の `rows.Scan` など）は、3 列を足して読む。
+The 3 columns `resolved_by`, `resolved_at` and `conflict_values` were added at the end in 0.2.15. Code that reads columns by name (`$wpdb->get_results` and so on) needs no change, but code that reads them by count and order (Go's `rows.Scan` and so on) must read the 3 added columns.
 
-行ごとの差分は、開始と件数を渡すと、その範囲だけを返す（`CALL` は `LIMIT` で包めないので）。
+For the per-row diff, passing an offset and a count returns only that range (because `CALL` cannot be wrapped in `LIMIT`).
 
 ```sql
-CALL heimdb_branch_diff('', 'wp_postmeta', 0, 500);     -- 最初の 500 行
-CALL heimdb_branch_diff('', 'wp_postmeta', 500, 500);   -- 続き
+CALL heimdb_branch_diff('', 'wp_postmeta', 0, 500);     -- first 500 rows
+CALL heimdb_branch_diff('', 'wp_postmeta', 500, 500);   -- the rest
 ```
 
-続きがあれば、最後に `table_name` と `id` が `*` で `action` が `more` の行を 1 つ足す。`detail` に、残りの行の数と次の呼び出しが入る（`3120 more rows; next: CALL heimdb_branch_diff('staging', 'wp_postmeta', 500, 500)`）。並びは開始を省いたときと同じ（テーブルの名前の順、テーブルの中は主キーの順）。呼ぶたびに差分を計算し直すので、軽くなるのは受け取る側（PHP）だけで、HeimDB の計算とメモリは変わらない（重さは表の大きさではなく、変わった行の数による）。間にブランチや親が変われば、ページの境目がずれる。テーブルは省けない（`'*'` は使える）。
+If there are more rows, one row with `table_name` and `id` `*` and `action` `more` is added at the end. Its `detail` holds the number of remaining rows and the next call (`3120 more rows; next: CALL heimdb_branch_diff('staging', 'wp_postmeta', 500, 500)`). The order is the same as without an offset (by table name, then by primary key within a table). The diff is computed again on every call, so only the receiving side (PHP) gets lighter; HeimDB's computation and memory do not change (the cost depends on the number of changed rows, not the table size). If the branch or the parent changes in between, page boundaries shift. The table cannot be left out (`'*'` can be used).
 
 ### heimdb_branch_resolve
 
 ```sql
-CALL heimdb_branch_resolve('staging', 'wp_posts', 'ID=1', 'branch');   -- この行はブランチの側を採る
-CALL heimdb_branch_resolve('staging', 'wp_posts', '*', 'parent');      -- このテーブルの競合はすべて親の側
-CALL heimdb_branch_resolve('staging', '*', '*', 'parent');             -- すべての競合を親の側
-CALL heimdb_branch_resolve('staging', 'wp_posts', 'ID=1', 'none');     -- 記録を取り消す
+CALL heimdb_branch_resolve('staging', 'wp_posts', 'ID=1', 'branch');   -- take the branch side for this row
+CALL heimdb_branch_resolve('staging', 'wp_posts', '*', 'parent');      -- all conflicts in this table go to the parent side
+CALL heimdb_branch_resolve('staging', '*', '*', 'parent');             -- all conflicts go to the parent side
+CALL heimdb_branch_resolve('staging', 'wp_posts', 'ID=1', 'none');     -- cancel the record
 ```
 
-引数は、ブランチ、テーブル（`'*'` ならすべて）、行（差分の `id` の形。`'*'` ならそのテーブルのすべての競合）、側。
+The arguments are the branch, the table (`'*'` for all), the row (in the diff's `id` form; `'*'` for all conflicts in that table), and the side.
 
-最後の引数は、競合した行でどちらの側の値を採るか。上の差分の例では、記事 ID=1 の `post_title` を、本番は `Hello (edited on main)` に、ステージングは `Hello from staging` に変えていた。
+The last argument says which side's values to take for the conflicting row. In the diff example above, production changed the `post_title` of post ID=1 to `Hello (edited on main)`, and staging changed it to `Hello from staging`.
 
-| 側 | 意味 | この例のマージ後のタイトル |
+| Side | Meaning | Title after merging in this example |
 | --- | --- | --- |
-| `'branch'` | ブランチ（ステージング）の値を採る | `Hello from staging` |
-| `'parent'` | 親（本番）の値を残す | `Hello (edited on main)` |
-| `'none'` | 記録した解決を取り消し、未解決に戻す | （マージできない） |
+| `'branch'` | Take the branch's (staging's) value | `Hello from staging` |
+| `'parent'` | Keep the parent's (production's) value | `Hello (edited on main)` |
+| `'none'` | Cancel the recorded resolution and make it unresolved again | (cannot merge) |
 
-決めるのは競合した列だけ。ステージングだけが変えた列（例えば `post_content`）は、`'parent'` でもステージングの値が入る。
+Only the conflicting columns are decided. Columns changed only on staging (for example `post_content`) get staging's value even with `'parent'`.
 
-- `branch`: 競合した列もブランチの値にする。削除と変更の競合なら、ブランチの側（削除、または残す）に従う。同じ自然なキーの記事・タームの重複なら、本番の既存の行にブランチの行の内容を写す。主キーが同じ別の行、著者のいない記事、主キーの列が違うテーブル（`schema differs`）では拒否する。ワイルドカードの `'branch'` はこれらの行に当たらず、行は競合のまま残る。そのとき差分の `detail` とマージのエラーに `only 'parent' can resolve this: <理由>` と出る。
-- `parent`: 競合した列は親のままにする（競合していない列は反映する）。主キーの列が違うテーブル（`schema differs`）なら、そのテーブルを除いてマージする。列の変更は列ごとにマージするので、プラグインの更新で列が変わっただけのテーブルは除かれない。
-- `none`: 記録を取り消す。
+- `branch`: conflicting columns also take the branch's value. In a delete/update conflict, the branch side wins (deleted, or kept). For duplicate posts or terms with the same natural key, the branch row's contents are copied onto production's existing row. It is refused for a different row with the same primary key, a post without an author, and a table whose primary key columns differ (`schema differs`). A wildcard `'branch'` does not match these rows, and they stay conflicts. Then the diff's `detail` and the merge error show `only 'parent' can resolve this: <reason>`.
+- `parent`: conflicting columns keep the parent's value (columns that do not conflict are applied). For a table whose primary key columns differ (`schema differs`), the merge proceeds without that table. Column changes are merged column by column, so a table whose columns only changed in a plugin update is not left out.
+- `none`: cancels the record.
 
-行を指定した解決は、ワイルドカードより優先する。行を指定するときは、その行が今の差分で競合になっていなければならない（`'42'` のように数だけでは見つからない。`'ID=42'`）。記録はマージの成功とブランチの削除で消える。
+A resolution for a named row takes priority over a wildcard. When naming a row, that row must be a conflict in the current diff (a bare number such as `'42'` is not found; use `'ID=42'`). Records are deleted when a merge succeeds and when the branch is deleted.
 
-記録には、記録したユーザーと時刻が残り、差分の `resolved_by` と `resolved_at` に出る。解決を記録するたびに、ログにも 1 行出す（`HeimDB: 'staging'@'%' resolved wp_posts ID=1 on branch staging: branch`）。
+A record keeps the user who recorded it and the time, shown in the diff's `resolved_by` and `resolved_at`. Each time a resolution is recorded, one line is also logged (`HeimDB: 'staging'@'%' resolved wp_posts ID=1 on branch staging: branch`).
 
-[ブランチのユーザー](#ブランチのユーザーが呼べる手続き)は、行を指定した記録だけができる。テーブルや行に `'*'` を使う呼び出し（`'none'` で消すときも）は、`HeimDB: a branch user must name a row; only an administrator can resolve with '*'` になる。行を指定した記録は、記録した時点の競合した列の両側の値を覚えていて、その後にどちらかの側で値が変わると使われない（`resolution` が `stale` になり、マージは拒否される）。ブランチのユーザーが見た値と違う値で、管理者のマージが通ることはない。
+[Branch users](#procedures-branch-users-can-call) can record only named rows. A call with `'*'` for the table or the row (including deleting with `'none'`) fails with `HeimDB: a branch user must name a row; only an administrator can resolve with '*'`. A record for a named row remembers both sides' values of the conflicting columns at the time it was recorded, and is not used if either side's values change afterwards (`resolution` becomes `stale` and the merge is refused). An administrator's merge never goes through with values different from what the branch user saw.
 
 ### heimdb_branch_merge
 
@@ -292,32 +292,32 @@ CALL heimdb_branch_merge('staging');
 +------------+--------+---------+---------+---------+---------+-----------+----------+----------+--------+
 ```
 
-- `status`: `merged`、`dropped on branch (not merged)` など反映しなかったもの、`excluded`（外した表。件数は反映しなかったブランチの側の変更）、`not excluded`（パターンに当たったが本体の表なので外さなかった。`detail` に当たったパターン）。変えるもののない表は出さない（`excluded` と `not excluded` の行は、変更がなくても出す）。
-- 結果の読み方は [マージの結果をプラグインで読む](#マージの結果をプラグインで読む)。
+- `status`: `merged`; things not applied, such as `dropped on branch (not merged)`; `excluded` (an excluded table; the counts are the branch-side changes that were not applied); `not excluded` (a pattern matched, but it is a core table and was not excluded; `detail` shows the matching pattern). Tables with nothing to change are not shown (`excluded` and `not excluded` rows are shown even without changes).
+- How to read the result: [Reading merge results from a plugin](#reading-merge-results-from-a-plugin).
 
-解決していない競合が残っていれば、何も書かずに拒否する（[マージを拒否する理由](#マージを拒否する理由)）。
+If unresolved conflicts remain, it is refused without writing anything ([Reasons a merge is refused](#reasons-a-merge-is-refused)).
 
 ```
 ERROR 51004 (HY000): HeimDB: merge refused (unresolved_conflicts): unresolved conflicts: wp_posts ID=1; resolve them with heimdb_branch_resolve
 ```
 
-トランザクションの途中では呼べない（`COMMIT` か `ROLLBACK` をしてから）。マージの間、親への書き込みは待たされる。
+It cannot be called in the middle of a transaction (`COMMIT` or `ROLLBACK` first). Writes to the parent wait during the merge.
 
-マージが何かを書いたら、最後の行に、マージを戻す文を返す。
+If the merge wrote anything, the last row holds a statement that undoes the merge.
 
 ```
 | * | undo | 0 | 0 | 0 | 0 | 0 | 0 | 0 | CALL heimdb_restore('main', '2026-10-14 01:23:45.678901+00:00', 'wp_options,wp_posts') |
 ```
 
-- 時刻は、マージの直前の親の状態そのもの（マージは親のロックを取ってから差分を読むので、その時点の後に親は変わっていない）。どの `time_zone` でも同じ時刻として読める形。
-- テーブルは、マージが書いたものだけ（行、列、インデックス、作ったテーブル、数え直した件数、空にした `rewrite_rules`）。
-- [`heimdb_restore`](#heimdb_restore) なので、戻すとマージの後に本番がそのテーブルに書いたものも消える。古いバージョンを消した後（[`heimdb_gc`](#heimdb_gc)）は戻せない。
-- 記事を戻してコメントは戻さないので、記事のコメント数は今のコメントの数に数え直す（マージの後に本番に付いたコメントは残る）。
-- ブランチのマージの起点もマージの前に戻るので、ブランチを直してもう一度マージできる。解決の記録はマージで消えたままなので、競合はもう一度解決する。
+- The time is exactly the parent's state just before the merge (the merge takes the parent's lock before reading the diff, so the parent did not change after that point). It is in a form read as the same time in any `time_zone`.
+- The tables are only those the merge wrote (rows, columns, indexes, created tables, recounted counts, the emptied `rewrite_rules`).
+- It is [`heimdb_restore`](#heimdb_restore), so undoing also removes what production wrote to those tables after the merge. It cannot be undone after old versions are deleted ([`heimdb_gc`](#heimdb_gc)).
+- Posts are restored but comments are not, so the posts' comment counts are recounted from the current comments (comments added on production after the merge remain).
+- The branch's merge base also goes back to before the merge, so you can fix the branch and merge again. Recorded resolutions stay deleted by the merge, so resolve the conflicts again.
 
-結果には、マージで変えたテーブルだけを出す（差分の要約の `unchanged` の行は出さない）。
+The result shows only the tables the merge changed (the `unchanged` rows of the diff summary are not shown).
 
-空打ち: 第 2 引数に `'dry_run'` を渡すと、実際のマージと同じ経路を最後まで通り（解決していない競合や `db_version` の違いは同じエラー）、コミットせずに捨てる。解決の記録とマージの起点も残る。結果は実際のマージと同じテーブルの行に、最後の `* | dry run` の行を足したもの。親のロックを取る時間は実際のマージと同じなので、本番の書き込みはその間待たされる。
+Dry run: passing `'dry_run'` as the second argument goes through the same path as a real merge to the end (unresolved conflicts and a `db_version` difference give the same errors), then discards it without committing. Recorded resolutions and the merge base remain. The result is the same table rows as a real merge, plus a final `* | dry run` row. It holds the parent's lock as long as a real merge, so production's writes wait during that time.
 
 ```sql
 CALL heimdb_branch_merge('staging', 'dry_run');
@@ -325,13 +325,13 @@ CALL heimdb_branch_merge('staging', 'dry_run');
 
 ### heimdb_branch_sync
 
-親（本番）の変更を、ブランチに取り込む。ブランチ A と B を本番にマージした後、検証に時間のかかるブランチ C に本番の最新を入れてから確かめる、という使い方をする。ブランチの検証中の変更（まだマージしていない変更）は残る。
+Brings the parent's (production's) changes into a branch. For example, after branches A and B have been merged into production, you bring production's latest into branch C, whose review takes longer, and then check it. The branch's changes under review (not yet merged) are kept.
 
 ```sql
-CALL heimdb_branch_sync('c', 'dry_run');   -- 書かずに、取り込む件数と競合を確かめる
-CALL heimdb_branch_sync('c');              -- 競合があれば何も書かずに拒否する
-CALL heimdb_branch_sync('c', 'branch');    -- 競合した列はブランチの値を残す
-CALL heimdb_branch_sync('c', 'parent');    -- 競合した列は親の値を採る
+CALL heimdb_branch_sync('c', 'dry_run');   -- check the counts and conflicts without writing
+CALL heimdb_branch_sync('c');              -- refused without writing anything if there are conflicts
+CALL heimdb_branch_sync('c', 'branch');    -- conflicting columns keep the branch's value
+CALL heimdb_branch_sync('c', 'parent');    -- conflicting columns take the parent's value
 CALL heimdb_branch_sync('c', 'parent', 'dry_run');
 ```
 
@@ -346,40 +346,40 @@ CALL heimdb_branch_sync('c', 'parent', 'dry_run');
 +-------------+--------+---------+---------+---------+---------+-----------+----------+----------+--------+
 ```
 
-- 比べ方はマージと同じ三方向で、向きが逆になる。親だけが変えた列はブランチに書き、ブランチだけが変えた列は残す。基準は、前の取り込み（なければ前のマージ、どちらもなければ分岐）の時点。
-- 取り込むもの: 行はすべて（記事、メタ、ターム、コメント、ユーザー、自動下書き、リビジョンも）。親で作られた表は、ブランチに作って行を写す。コメントを写した記事のコメント数とタームの件数は、ブランチの側で数え直し、`rewrite_rules` を空にする。
-- 取り込まないもの: 環境ごとのオプション（`siteurl`、`home`、transient、`cron` など。マージと同じ）、[マージから外した表](#マージから外す表)、ブランチが足した記事やタームと同じ自然なキー（記事は種類とスラッグ、タームはスラッグ）の親の新しい行（ブランチの行を残し、`warnings` に出す。その行にぶら下がるメタなども写さない）、競合でブランチの側を採ったために入れなかった親の記事やタームにぶら下がる行（メタ、コメント、タームの関連）、親で消した表。マージから外した表は `excluded` の行に出す（件数は 0）。
-- 競合（両側が同じ列を違う値に変えた行、片側が消して片側が変えた行、両側が同じ ID で違う行を足した行）があれば、何も書かずに 51004 で拒否し、競合の行を出す。第 2 引数の `'branch'` か `'parent'` で、すべての競合をまとめてどちらかに決める。`'branch'` で残したブランチの値は、次のマージで本番に入る。両側が同じ ID で別の行を足した競合は `'parent'` でしか決められない（`'branch'` でも 51004 で拒否する。ブランチの行を残すと、次のマージで本番の行を上書きするため）。行ごとに決めたいときは、ブランチでその行を親と同じ値に直してから取り込む。[`heimdb_branch_resolve`](#heimdb_branch_resolve) の記録は使わない（取り込むと、その前の記録は使われなくなる）。
-- 両側で定義の違う表（列、インデックス、主キー）があれば、何も書かずに 51010 で拒否する。ブランチでも同じプラグインの更新（dbDelta）か `ALTER TABLE` をしてから取り込む。
-- `db_version` が違えば拒否する（51005）。
-- ブランチの書き込みは取り込みの間待たされるが、親（本番）はロックしない（スナップショットで読む）。同じブランチのマージ、取り込み、復元は同時に流れない。トランザクションの途中では呼べない。
-- 最後の行は取り込みを戻す文。時刻は取り込みの直前のブランチの状態で、戻すと取り込みの記録も消え、基準も取り込みの前に戻る（戻した後のマージは、取り込まなかったときと同じ）。
-- ファイル（プラグイン、テーマ、アップロード）は取り込まない。
-- 前のマージより前にブランチで消した表は、親にあれば取り込みで作り直す（前のマージの時点のブランチを基準に比べるため。プラグインを消すときは本番でも消してから取り込む）。
-- 拒否の文は `HeimDB: sync refused (<語>): <説明>` で、語と番号は [マージを拒否する理由](#マージを拒否する理由) と同じ。
+- It compares the same three states as a merge, in the opposite direction. Columns changed only on the parent are written to the branch, and columns changed only on the branch are kept. The base is the time of the previous sync (if none, the previous merge; if neither, the fork).
+- What is synced: all rows (including posts, meta, terms, comments, users, auto-drafts and revisions). Tables created on the parent are created on the branch and their rows copied. For posts whose comments were copied, the comment counts, and the terms' counts, are recounted on the branch side, and `rewrite_rules` is emptied.
+- What is not synced: environment-specific options (`siteurl`, `home`, transients, `cron` and so on, as in a merge); [tables excluded from merges](#tables-excluded-from-merges); new parent rows with the same natural key (posts: type and slug; terms: slug) as a post or term the branch added (the branch's row is kept and it is shown in `warnings`; meta and other rows hanging off that row are not copied either); rows (meta, comments, term relationships) hanging off parent posts or terms that were not brought in because a conflict took the branch side; and tables dropped on the parent. Tables excluded from merges are shown in `excluded` rows (with counts of 0).
+- If there are conflicts (rows where both sides changed the same column to different values, rows deleted on one side and changed on the other, rows added on both sides with the same ID but different contents), it is refused with 51004 without writing anything, and the conflicting rows are shown. The second argument, `'branch'` or `'parent'`, decides all conflicts at once for one side. Branch values kept with `'branch'` go into production at the next merge. A conflict where both sides added different rows with the same ID can only be decided with `'parent'` (`'branch'` also refuses with 51004, because keeping the branch's row would overwrite production's row at the next merge). To decide row by row, change that row on the branch to the parent's values, then sync. Records from [`heimdb_branch_resolve`](#heimdb_branch_resolve) are not used (after a sync, records made before it are no longer used).
+- If there are tables whose definitions (columns, indexes, primary key) differ between the sides, it is refused with 51010 without writing anything. Run the same plugin update (dbDelta) or `ALTER TABLE` on the branch too, then sync.
+- If `db_version` differs, it is refused (51005).
+- Writes to the branch wait during the sync, but the parent (production) is not locked (it is read from a snapshot). Merges, syncs and restores of the same branch do not run at the same time. It cannot be called in the middle of a transaction.
+- The last row is a statement that undoes the sync. The time is the branch's state just before the sync. Undoing also deletes the sync's record and moves the base back to before the sync (a merge after undoing behaves as if the sync never happened).
+- Files (plugins, themes, uploads) are not synced.
+- A table deleted on the branch before the previous merge is recreated by the sync if it exists on the parent (because the comparison uses the branch at the previous merge as the base). When removing a plugin, remove it on production too before syncing.
+- The refusal message is `HeimDB: sync refused (<word>): <description>`, and the words and numbers are the same as in [Reasons a merge is refused](#reasons-a-merge-is-refused).
 
-取り込んだ後の [`heimdb_branch_diff`](#heimdb_branch_diff) と [`heimdb_branch_merge`](#heimdb_branch_merge) は、取り込みが読んだ親の状態を基準に比べるので、写した行はブランチの変更に数えない。取り込みの後に本番を取り込みの前に戻しても、取り込みの記録は残る（本番を戻したことは本番の変更として扱い、写した行をもう一度本番に入れない）。
+After a sync, [`heimdb_branch_diff`](#heimdb_branch_diff) and [`heimdb_branch_merge`](#heimdb_branch_merge) compare against the parent state the sync read, so copied rows are not counted as the branch's changes. If production is restored to before the sync after the sync, the sync's record remains (restoring production is treated as a change on production, and the copied rows are not put into production again).
 
-### マージから外す表
+### Tables excluded from merges
 
-マージに含めたくない表（作り直せる索引など）は、表の名前のパターンで外す。外した表には、マージで何もしない。本番（親）の定義とデータをそのまま使い、空にも置き換えもしない。行、列の定義、インデックスを比べないので、ブランチがプラグインの更新をまたいで表の定義が片側だけ変わっても、マージは止まらない。ブランチで作った表も親に作らず、ブランチで消した表も消さない。マージの `undo` の表の一覧にも入らない（戻すときにも触らない）。
+Tables you do not want in merges (indexes that can be rebuilt and so on) are excluded by a table name pattern. The merge does nothing to excluded tables. Production's (the parent's) definition and data are used as they are; the table is neither emptied nor replaced. Rows, column definitions and indexes are not compared, so the merge does not stop even if the branch went through a plugin update and the table definition changed on only one side. Tables created on the branch are not created on the parent, and tables dropped on the branch are not dropped. They are not in the merge's `undo` table list either (undoing does not touch them).
 
 ```sql
-CALL heimdb_merge_exclude('wp_yoast_%');   -- 足す
-CALL heimdb_merge_include('wp_yoast_%');   -- 戻す
-CALL heimdb_merge_excludes();              -- 一覧
+CALL heimdb_merge_exclude('wp_yoast_%');   -- add
+CALL heimdb_merge_include('wp_yoast_%');   -- remove
+CALL heimdb_merge_excludes();              -- list
 ```
 
-- パターンは表の名前で、`LIKE` と同じく `%` が 0 文字以上、`_` が任意の 1 文字に当たる（エスケープはない。`wp_yoast_%` は `wp_yoast_indexable` に当たり、`wp_posts` は `wpxposts` にも当たる）。大小を区別しない。
-- パターンに当たっても、ブランチの側に一度もなかった表（本番だけで作った表）は、結果に行を出さない。
-- 設定はサーバ（1 つのサイト）に 1 つで、すべてのブランチのマージに効く。バージョンを持たない設定で、コミットを通して書くので、レプリカとバックアップに付いていく。新しく作ったサイトでは空。
-- Yoast SEO を外すときの手順は [`plugins.md`](plugins.md) の「マージから外す表」。
+- A pattern is a table name where, as in `LIKE`, `%` matches zero or more characters and `_` matches any one character (there is no escape: `wp_yoast_%` matches `wp_yoast_indexable`, and `wp_posts` also matches `wpxposts`). It is case-insensitive.
+- Tables that match a pattern but never existed on the branch side (tables created only on production) get no row in the result.
+- There is one setting per server (one site), and it applies to merges of all branches. It is an unversioned setting written through commits, so it follows replicas and backups. It is empty on a newly created site.
+- The steps for excluding Yoast SEO: "Tables to exclude from merges" in [`plugins.md`](plugins.md).
 
 #### heimdb_merge_exclude
 
-パターンを足し、足した後の一覧を返す。同じパターン（大小の違いを含む）がすでにあれば何もしない（何度流してもよい）。管理者だけが呼べる。
+Adds a pattern and returns the list after adding. If the same pattern (including case differences) already exists, it does nothing (safe to run any number of times). Only administrators can call it.
 
-本番の表で接頭辞が決まっていれば、[本体の表](#本体の表の見分け方)に当たるパターンはエラーにする。WordPress のインストールの前（接頭辞が決まらない）は受け付け、マージのときに本体の表を外さない（結果に `not excluded` の行を出す）。
+If production's tables determine the prefix, a pattern that matches a [core table](#how-core-tables-are-identified) is an error. Before WordPress is installed (the prefix cannot be determined), it is accepted, and the merge does not exclude core tables (it shows `not excluded` rows in the result).
 
 ```
 ERROR 51009 (HY000): HeimDB: merge refused (core_table): the pattern "wp_%" matches the WordPress core table wp_posts, which cannot be excluded from merges
@@ -387,19 +387,19 @@ ERROR 51009 (HY000): HeimDB: merge refused (core_table): the pattern "wp_%" matc
 
 #### heimdb_merge_include
 
-パターンを消し、消した後の一覧を返す。なければ何もしない。管理者だけが呼べる。大小を区別せずに一致するものを消す。
+Removes a pattern and returns the list after removing. If it does not exist, it does nothing. Only administrators can call it. It removes the matching pattern case-insensitively.
 
 #### heimdb_merge_excludes
 
-一覧（`pattern` の列。足した順）を返す。管理者のほか、サイトのユーザーとブランチだけの権限のユーザーも呼べる（プラグインが状態を表示するため。変えることはできない）。
+Returns the list (a `pattern` column, in the order added). Besides administrators, the site's users and users with branch-only privileges can call it (so plugins can show the status; they cannot change it).
 
-### 本体の表の見分け方
+### How core tables are identified
 
-WordPress 本体の表はマージから外せない（記事とメタの関係や件数の数え直しなど、マージの規則が崩れるため）。本体の表は、次の接頭辞に、`posts`、`postmeta`、`options`、`comments`、`commentmeta`、`terms`、`term_taxonomy`、`term_relationships`、`termmeta`、`links`、`users`、`usermeta` を付けた名前と、大小を区別せずに完全に一致する表。名前の終わりだけでは見ないので、`wp_foo_posts` は本体ではない（外せる）。
+WordPress core tables cannot be excluded from merges (the merge rules, such as the relation between posts and meta and recounting counts, would break). Core tables are tables whose names match, case-insensitively and exactly, the prefix below followed by `posts`, `postmeta`, `options`, `comments`, `commentmeta`, `terms`, `term_taxonomy`, `term_relationships`, `termmeta`, `links`, `users` or `usermeta`. Only the end of the name is not enough, so `wp_foo_posts` is not a core table (it can be excluded).
 
-接頭辞は、親（本番）の表のうち、`option_name` 列を持つ `<接頭辞>options` と `<接頭辞>posts` がそろうものから求める。組が 1 つならその接頭辞、なければ `wp_`。マルチサイトのサブサイトの組（ネットワークの表 `<接頭辞>blogs` を持つ接頭辞 `wp_` に対する `wp_2_options` と `wp_2_posts` のように、ほかの組の接頭辞 + 数字 + `_`）は数えない。サブサイトの表は、記事とメタの関係などの規則を当てずに、ふつうの表としてマージし、本体の表の扱いでもないので、パターンに当たれば外せる。`wp_blogs` がなければ、`wp_2_` も 2 つ目の組として数える（数字だけの接頭辞のサイトに古いインストールの表が残った形）。組が 2 つ以上（古いインストールの表が残った `wp_` と `wp_old_`、同じデータベースに複製を作るプラグインの残り（WP Staging の `wpstg0_` など）など）なら、接頭辞が決まらないので、差分とマージと解決の記録を `ambiguous_prefix` で拒否する（使っていない方の表を消すか、名前を変える）。
+The prefix is found from the parent's (production's) tables: a prefix for which both `<prefix>options` with an `option_name` column and `<prefix>posts` exist. If there is one such pair, that is the prefix; if none, `wp_`. Multisite subsite pairs (another pair's prefix + digits + `_`, such as `wp_2_options` and `wp_2_posts` for the prefix `wp_` that has the network table `<prefix>blogs`) are not counted. Subsite tables are merged as ordinary tables without the rules for posts and meta and so on, and are not treated as core tables either, so they can be excluded if a pattern matches. Without `wp_blogs`, `wp_2_` is counted as a second pair too (the case of an old installation's tables left on a site with a digits-only prefix). With two or more pairs (`wp_` and `wp_old_` with an old installation's tables left behind, leftovers of a plugin that makes a copy in the same database, such as WP Staging's `wpstg0_`, and so on), the prefix cannot be determined, so diff, merge and recording resolutions are refused with `ambiguous_prefix` (delete or rename the unused tables).
 
-組は、次の文で一覧にできる（HeimDB でも MySQL でも動く）。マルチサイトのサブサイトの組（`<接頭辞>blogs` のある行の接頭辞 + 数字 + `_`）も出るので、それを除いて 2 つ以上なら拒否される。
+The following statement lists the pairs (it works on both HeimDB and MySQL). Multisite subsite pairs (a row's prefix + digits + `_`, where that row has `<prefix>blogs`) are listed too, so exclude those; if two or more remain, it is refused.
 
 ```sql
 SELECT LEFT(c.table_name, CHAR_LENGTH(c.table_name) - 7) AS prefix
@@ -410,64 +410,64 @@ JOIN information_schema.tables t
 WHERE c.table_schema = DATABASE() AND c.column_name = 'option_name' AND c.table_name LIKE '%options';
 ```
 
-### マージを拒否する理由
+### Reasons a merge is refused
 
-マージ（`dry_run` を含む）、取り込み、差分、解決の記録、除外の追加を拒否するときは、理由の語と、語ごとのエラー番号を付ける。形は `HeimDB: merge refused (<語>): <説明>`（差分と解決の記録でも同じ形。取り込みは `HeimDB: sync refused (<語>): <説明>`）。SQLSTATE は `HY000`。番号は MySQL が第三者に空けている範囲（50000〜51999）から取る。PHP の mysqli なら `errno`（`mysqli_errno()`、`mysqli_sql_exception::getCode()`）で分岐できる。
+When a merge (including `dry_run`), a sync, a diff, recording a resolution, or adding an exclusion is refused, a reason word and an error number for each word are given. The form is `HeimDB: merge refused (<word>): <description>` (the same form for diff and recording resolutions; for sync it is `HeimDB: sync refused (<word>): <description>`). The SQLSTATE is `HY000`. The numbers come from the range MySQL leaves free for third parties (50000 to 51999). With PHP's mysqli, you can branch on `errno` (`mysqli_errno()`, `mysqli_sql_exception::getCode()`).
 
-**語と番号は翻訳せず、足すだけで、変えも消しもしない**（プラグインが分岐に使う）。説明の文は変わることがある。
+**Words and numbers are not translated; they are only added to, never changed or removed** (plugins branch on them). The description text may change.
 
-| 番号 | 語 | 意味 |
+| Number | Word | Meaning |
 | --- | --- | --- |
-| 51001 | `branch_not_found` | ブランチがない |
-| 51002 | `no_parent` | 親のないブランチ（`main`）をマージしようとした |
-| 51003 | `in_transaction` | この接続のトランザクションが親に書いている（`COMMIT` か `ROLLBACK` をしてから） |
-| 51004 | `unresolved_conflicts` | 解決していない競合がある（[`heimdb_branch_diff`](#heimdb_branch_diff) で見て [`heimdb_branch_resolve`](#heimdb_branch_resolve) で解決する） |
-| 51005 | `db_version_differs` | 両側の `db_version` が違う（両側で WordPress の DB の更新を済ませる） |
-| 51006 | `ambiguous_prefix` | WordPress の表の接頭辞が 2 つ以上ある（[本体の表の見分け方](#本体の表の見分け方)） |
-| 51007 | `parent_changed` | マージの間に親の行が変わった（ふつうは起きない。もう一度マージする） |
-| 51008 | `read_only_replica` | レプリカでマージしようとした |
-| 51009 | `core_table` | [`heimdb_merge_exclude`](#heimdb_merge_exclude) のパターンが本体の表に当たる |
-| 51010 | `schema_differs` | 両側で定義の違う表があるので取り込まない（[`heimdb_branch_sync`](#heimdb_branch_sync)） |
+| 51001 | `branch_not_found` | The branch does not exist |
+| 51002 | `no_parent` | Tried to merge a branch with no parent (`main`) |
+| 51003 | `in_transaction` | This connection's transaction is writing to the parent (`COMMIT` or `ROLLBACK` first) |
+| 51004 | `unresolved_conflicts` | There are unresolved conflicts (look with [`heimdb_branch_diff`](#heimdb_branch_diff) and resolve with [`heimdb_branch_resolve`](#heimdb_branch_resolve)) |
+| 51005 | `db_version_differs` | `db_version` differs between the sides (run the WordPress database upgrade on both sides) |
+| 51006 | `ambiguous_prefix` | There are two or more WordPress table prefixes ([How core tables are identified](#how-core-tables-are-identified)) |
+| 51007 | `parent_changed` | A parent row changed during the merge (normally does not happen; merge again) |
+| 51008 | `read_only_replica` | Tried to merge on a replica |
+| 51009 | `core_table` | A [`heimdb_merge_exclude`](#heimdb_merge_exclude) pattern matches a core table |
+| 51010 | `schema_differs` | There are tables whose definitions differ between the sides, so the sync does not proceed ([`heimdb_branch_sync`](#heimdb_branch_sync)) |
 
-このほかに、マージがメモリの上限で止まれば 1041、マージの書き込みが大きすぎれば 1197（`docs/operations.md`）を返す。どちらも何も変えない。それ以外のエラー（引数の誤りなど）は 1105 で、語を持たない。
+Besides these, 1041 is returned if a merge stops at the memory limit, and 1197 if a merge's writes are too large (`docs/operations.md`). Neither changes anything. Other errors (wrong arguments and so on) are 1105 and have no word.
 
-### マージの結果をプラグインで読む
+### Reading merge results from a plugin
 
-マージは DB サーバの中の操作なので、PHP のフック（`heimdb_after_merge` のようなもの）は HeimDB からは呼べない。プラグインがマージを呼び、結果を読んでフックを出す。
+A merge is an operation inside the DB server, so HeimDB cannot call PHP hooks (something like `heimdb_after_merge`). A plugin calls the merge, reads the result and fires its hooks.
 
-- 成功: [`heimdb_branch_merge`](#heimdb_branch_merge) の結果の行。`table_name` が `*` の行は表ではない（`undo`、`dry run`）。
-  - 変えた表: `status` が `merged` の行（キャッシュのパージの範囲）。
-  - 外した表: `status` が `excluded` の行。件数が 0 でなければ、ブランチでその表が変わっていた（作り直しが要るかの判断に使う）。
-  - 外せなかったパターン: `status` が `not excluded` の行。
-  - 解決した競合の数: `resolved` の列。
-  - 戻すための文: `status` が `undo` の行の `detail`（[`heimdb_restore`](#heimdb_restore) の呼び出し）。
-- 失敗: エラー。番号と語は [マージを拒否する理由](#マージを拒否する理由)。何も書いていない。
-- 戻したとき（`undo`）: [`heimdb_restore`](#heimdb_restore) の結果の、`action` が `restore rows` の行が戻した表（列は `table_name`、`action`、`inserts`、`updates`、`deletes`、`detail`）。マージから外した表は戻さないので、マージの後に作り直した索引は、戻した内容に合わせて作り直す。表の一覧を省いた（または `'*'` の）`heimdb_restore` は、外した表も戻すので、`undo` の文の表の一覧はそのまま使う。
-- 時間のかかる処理（索引の作り直しなど）は、フックの中で待たずに、WordPress の予約イベントやジョブに回す。
+- Success: the result rows of [`heimdb_branch_merge`](#heimdb_branch_merge). Rows whose `table_name` is `*` are not tables (`undo`, `dry run`).
+  - Changed tables: rows whose `status` is `merged` (the scope for cache purging).
+  - Excluded tables: rows whose `status` is `excluded`. If the counts are not 0, the table changed on the branch (use this to decide whether a rebuild is needed).
+  - Patterns that could not exclude: rows whose `status` is `not excluded`.
+  - Number of resolved conflicts: the `resolved` column.
+  - Statement to undo: the `detail` of the row whose `status` is `undo` (a call to [`heimdb_restore`](#heimdb_restore)).
+- Failure: an error. Numbers and words: [Reasons a merge is refused](#reasons-a-merge-is-refused). Nothing was written.
+- When undone (`undo`): in the result of [`heimdb_restore`](#heimdb_restore), the rows whose `action` is `restore rows` are the restored tables (columns `table_name`, `action`, `inserts`, `updates`, `deletes`, `detail`). Tables excluded from merges are not restored, so rebuild indexes that were rebuilt after the merge to match the restored contents. A `heimdb_restore` without a table list (or with `'*'`) restores excluded tables too, so use the table list of the `undo` statement as it is.
+- Do not wait for slow work (rebuilding indexes and so on) inside the hook; hand it to a WordPress scheduled event or a job.
 
-## タイムトラベルと復元
+## Time travel and restore
 
-HeimDB は行を上書きせず、変更のたびにバージョンを足す。古いバージョンは `-retention`（既定 30 日）の間残り、その間の任意の時点を読める。
+HeimDB does not overwrite rows; it adds a version on every change. Old versions are kept for `-retention` (default 30 days), and any time within that period can be read.
 
 ### AS OF
 
 ```sql
 SET time_zone = '+09:00';
--- 過去の時点のデータを読む
+-- read data as of a past time
 SELECT ID, post_title FROM wp_posts AS OF '2026-10-08 09:00:00' WHERE ID = 123;
--- 消した記事を 1 件だけ戻す
+-- bring back just one deleted post
 INSERT INTO wp_posts SELECT * FROM wp_posts AS OF '2026-10-08 09:00:00' WHERE ID = 123;
 ```
 
-`AS OF` を付けたテーブルは読むだけ（書くとエラー）。
+Tables with `AS OF` are read-only (writing is an error).
 
 ### heimdb_changes
 
-ある時刻から今までに変わった行を、行が最後に変わった時刻の順に返す。何も書かない。見張りのログ（[`operations.md`](operations.md) の「危ない変更の見張り」）で気づいたときや、乗っ取られた疑いがあるときに、何が変わったかを調べる。
+Returns the rows changed from a time until now, in the order of when each row last changed. Writes nothing. Use it to find out what changed when the watch log ("Change watch" in [`operations.md`](operations.md)) alerts you, or when you suspect the site was compromised.
 
 ```sql
-CALL heimdb_changes('main', '2026-10-12 03:00:00');                          -- すべてのテーブル
-CALL heimdb_changes('main', '2026-10-12 03:00:00', 'wp_users,wp_usermeta');   -- 指定したテーブル
+CALL heimdb_changes('main', '2026-10-12 03:00:00');                          -- all tables
+CALL heimdb_changes('main', '2026-10-12 03:00:00', 'wp_users,wp_usermeta');   -- the given tables
 ```
 
 ```
@@ -482,18 +482,18 @@ CALL heimdb_changes('main', '2026-10-12 03:00:00', 'wp_users,wp_usermeta');   --
 +-------------+--------------------------+--------+-------------------------+----------------------------------+------------------------------------------------------+
 ```
 
-- `id`: 行の名前（[`heimdb_branch_diff`](#heimdb_branch_diff) と同じ書き方。`wp_options` は `option_name`）。
-- `change`: 時刻の時点の行と今の行を比べた結果（`insert`、`update`、`delete`）。変えて元に戻した行は出ない。`columns` は `update` で変わった列。
-- `changed_at`: 行が最後に変わった時刻（UTC）。
-- `detail`: 見張りの対象の変化なら、見張りのログと同じ説明。
-- 時刻の後に作ったテーブル、消したテーブル、列の変更や `TRUNCATE` で書き直したテーブルは、行ではなくテーブルの 1 行（`table created`、`table dropped`、`table changed`）。
-- 毎分のように変わる行（`_transient_*`、`_site_transient_*`、`cron`、記事の `_edit_lock`）は出さず、その数を最後の行に出す。
-- 値の前と後は出さない。`AS OF` で読む（`SELECT option_value FROM wp_options AS OF '2026-10-12 03:00:00' WHERE option_name = 'default_role'`）。
-- 時刻は、古いバージョンを残す期間（`-retention`）の中だけ。どのブランチでも使える（ブランチ名を渡す）。
+- `id`: the row's name (written the same way as in [`heimdb_branch_diff`](#heimdb_branch_diff); `option_name` for `wp_options`).
+- `change`: the result of comparing the row at the given time with the current row (`insert`, `update`, `delete`). Rows changed and then changed back are not shown. `columns` is the columns changed in an `update`.
+- `changed_at`: when the row last changed (UTC).
+- `detail`: for a change the watch covers, the same description as in the watch log.
+- Tables created or dropped after the time, and tables rewritten by a column change or `TRUNCATE`, are one row per table instead of per row (`table created`, `table dropped`, `table changed`).
+- Rows that change about every minute (`_transient_*`, `_site_transient_*`, `cron`, posts' `_edit_lock`) are not shown; their number is in the last row.
+- Values before and after are not shown. Read them with `AS OF` (`SELECT option_value FROM wp_options AS OF '2026-10-12 03:00:00' WHERE option_name = 'default_role'`).
+- The time must be within the period old versions are kept (`-retention`). It works on any branch (pass the branch name).
 
 ### heimdb_restore_preview
 
-[`heimdb_restore`](#heimdb_restore) と同じ引数で、何が戻るかを返す。何も書かない。
+Takes the same arguments as [`heimdb_restore`](#heimdb_restore) and returns what would be restored. Writes nothing.
 
 ```sql
 CALL heimdb_restore_preview('main', '2026-10-10 21:31:09');
@@ -508,43 +508,43 @@ CALL heimdb_restore_preview('main', '2026-10-10 21:31:09');
 +------------+--------------+---------+---------+---------+--------+
 ```
 
-- `action`: `restore rows`（行を戻す）、`restore definition`（テーブルの定義ごと戻す）、`drop`（その時点になかったテーブルを消す）。
-- `inserts`、`updates`、`deletes`: 戻すために行う操作の数。
-- `detail`: 警告（コメントを戻さないときに、戻すと消える記事にコメントが残る、など）。
+- `action`: `restore rows` (restore rows), `restore definition` (restore the table including its definition), `drop` (drop a table that did not exist at that time).
+- `inserts`, `updates`, `deletes`: the number of operations performed to restore.
+- `detail`: warnings (for example, when comments are not restored, comments remain on posts that the restore removes).
 
 ### heimdb_restore
 
 ```sql
-CALL heimdb_restore('main', '2026-10-08 09:00:00');                         -- コメントとユーザー以外
-CALL heimdb_restore('main', '2026-10-08 09:00:00', 'wp_options,wp_posts');  -- 指定したテーブル（カンマ区切り）
-CALL heimdb_restore('main', '2026-10-08 09:00:00', '*');                    -- すべて
+CALL heimdb_restore('main', '2026-10-08 09:00:00');                         -- everything except comments and users
+CALL heimdb_restore('main', '2026-10-08 09:00:00', 'wp_options,wp_posts');  -- the given tables (comma-separated)
+CALL heimdb_restore('main', '2026-10-08 09:00:00', '*');                    -- everything
 ```
 
-ブランチを過去の時点の状態に戻す。テーブルを省くと、コメントとユーザー（`wp_comments`、`wp_commentmeta`、`wp_users`、`wp_usermeta`）は今のまま残す（戻した後に付いたコメントや、作ったユーザーを失わないため）。記事とコメントの片方だけを戻したときは、記事のコメント数を数え直す。
+Restores a branch to its state at a past time. Without tables, comments and users (`wp_comments`, `wp_commentmeta`, `wp_users`, `wp_usermeta`) are left as they are now (so comments added after the time and users created after it are not lost). When only one of posts and comments is restored, the posts' comment counts are recounted.
 
-テーブルを省いたとき、戻さないユーザーのテーブルに、時刻の後のユーザーの追加、パスワードやメールアドレスの変更、administrator の役割の付与があれば、結果に `action` が `not restored` の行を出す（`heimdb_restore_preview` も同じ。復元したときはログにも警告で出す）。乗っ取られた後に復元しても、後から足された管理者は残るため。件数は、その変化の行の数（そのテーブルで変わったすべての行ではない）。ユーザーも戻すなら `'*'` で復元するか、そのユーザーを WordPress で消す。
+Without tables, if the user tables that are not restored have, after the time, added users, changed passwords or email addresses, or an administrator role granted, the result has rows whose `action` is `not restored` (the same for `heimdb_restore_preview`; a restore also logs them as warnings). This is because administrators added later would remain even after restoring from a compromise. The counts are the number of those changed rows (not all rows changed in that table). To restore users too, restore with `'*'`, or delete those users in WordPress.
 
 ```
 | wp_users    | not restored | 1 | 0 | 0 | user added: "evil" (ID 7); to restore users too: CALL heimdb_restore('main', '2026-10-12 03:00:00.000000+00:00', '*') |
 ```
 
-表を指定するときは、次の組を一緒に指定する。片方だけを戻すと、行とメタ（分類）が食い違う。消した記事はアイキャッチ、カスタムフィールド、カテゴリのない姿で戻り、後から作った記事のメタは残る。中身をメタに持つ記事（Elementor、ACF など）は、題名と状態だけが戻り、中身は今のままになる。
+When you give tables, give each of the following groups together. Restoring only one side makes rows and meta (taxonomy) disagree. A deleted post comes back without its featured image, custom fields and categories, and post meta created later remains. For posts that keep their content in meta (Elementor, ACF and so on), only the title and status come back, and the content stays as it is now.
 
-| 行の表 | 一緒に戻す表 |
+| Row table | Restore together with |
 |---|---|
-| `wp_posts` | `wp_postmeta`、`wp_term_relationships` |
+| `wp_posts` | `wp_postmeta`, `wp_term_relationships` |
 | `wp_comments` | `wp_commentmeta` |
 | `wp_users` | `wp_usermeta` |
 
-組の片方だけを指定し、時刻の後に同じ ID の行とメタの両方が変わっていれば、戻す表の行の `detail` に、その ID（最初の 5 件と残りの数）を組ごとに出し、最後に、当たった組の表をすべて加えた呼び出しを 1 つ出す（`heimdb_restore_preview` も同じ。復元したときはログにも警告で出す）。復元は止めない。片方だけが変わった ID（記事の題名だけを直した、など）は、戻しても食い違わないので出さない。記事の編集や保存のたびに WordPress が足し引きするメタ（`_edit_lock`、`_edit_last`、公開済みの記事の保存で足され、cron の ping が消す `_encloseme`、`_pingme`、`_trackbackme`）は数えない。時刻の後に組のどちらかの表を書き直した（`ALTER TABLE`、`TRUNCATE`）、作った、消したときは、行を比べず、そのことだけを出す。
+If you give only one side of a group, and both the row and the meta with the same ID changed after the time, the `detail` of the restored table's row lists those IDs (the first 5 and the number of the rest) for each group, and at the end gives one call that adds all the tables of the matching groups (the same for `heimdb_restore_preview`; a restore also logs them as warnings). The restore is not stopped. IDs where only one side changed (only the post title was fixed, and so on) are not shown, because restoring them causes no mismatch. Meta that WordPress adds and removes on every post edit or save (`_edit_lock`, `_edit_last`, and `_encloseme`, `_pingme` and `_trackbackme`, which are added when a published post is saved and removed by the cron ping) is not counted. If either table of a group was rewritten (`ALTER TABLE`, `TRUNCATE`), created or dropped after the time, rows are not compared and only that fact is shown.
 
 ```
 | wp_posts | restore rows | 1 | 0 | 1 | posts 7, 8 also changed in wp_postmeta after the restore time, which is not restored; posts 7, 8 also changed in wp_term_relationships after the restore time, which is not restored; to restore them together: CALL heimdb_restore('main', '2026-10-18 06:33:19.158171+00:00', 'wp_posts,wp_postmeta,wp_term_relationships') |
 ```
 
-分類の件数（`wp_term_taxonomy` の `count`）は数え直さない。プラグインの表どうしの組（WooCommerce の注文と注文のメタなど）と、マルチサイトのサブサイトの表（`wp_2_posts` など）は見ない。表を省いた既定の復元では組が割れない。確かめは、戻さない表の変わった行の主キーをメモリに持つので、メモリの上限（`-memory-limit`）が小さく、その表の大半が変わった後だと、記事だけの軽い復元でもエラー 1041 で止まることがある（何も変えない。組の表も一緒に戻すか、上限を上げる）。
+Taxonomy counts (`count` in `wp_term_taxonomy`) are not recounted. Groups of plugin tables (WooCommerce orders and order meta and so on) and multisite subsite tables (`wp_2_posts` and so on) are not checked. The default restore without tables does not split groups. The check holds in memory the primary keys of changed rows in the tables not restored, so with a small memory limit (`-memory-limit`) and after most of such a table has changed, even a light restore of only posts may stop with error 1041 (nothing is changed; restore the group's tables together, or raise the limit).
 
-復元は過去のバージョンを新しいバージョンとして書く 1 つのコミットで、履歴は消えない。結果の最後の行（`undo`）に、復元を取り消す（復元の直前に戻す）呼び出しが出る。
+A restore is one commit that writes past versions as new versions; history is not deleted. The last row of the result (`undo`) gives a call that cancels the restore (goes back to just before the restore).
 
 ```
 +------------+--------------+---------+---------+---------+-----------------------------------------------------------------------------+
@@ -555,11 +555,11 @@ CALL heimdb_restore('main', '2026-10-08 09:00:00', '*');                    -- �
 +------------+--------------+---------+---------+---------+-----------------------------------------------------------------------------+
 ```
 
-今より先の時刻はエラー。最後のコミットより後の時刻なら、何もしない。トランザクションの途中では呼べない。
+A time in the future is an error. A time after the last commit does nothing. It cannot be called in the middle of a transaction.
 
-戻したブランチを親とするブランチのマージの起点は、戻した時刻より前のもの（なければ分岐の時点）に戻る。マージを戻した後に、同じブランチをもう一度マージできる（すでに入っている変更は、両側が同じ値なので何もしない）。
+For branches whose parent is the restored branch, the merge base goes back to one before the restored time (if none, the fork point). After undoing a merge, you can merge the same branch again (changes already in place do nothing, because both sides have the same values).
 
-## 運用
+## Operations
 
 ### heimdb_status
 
@@ -567,37 +567,37 @@ CALL heimdb_restore('main', '2026-10-08 09:00:00', '*');                    -- �
 CALL heimdb_status();
 ```
 
-項目（`name`）と値（`value`）の行を返す。値のない項目は `NULL`。時刻は UTC のオフセット付き。
+Returns rows of items (`name`) and values (`value`). Items with no value are `NULL`. Times are in UTC with an offset.
 
-| 項目 | 内容 |
+| Item | Contents |
 | --- | --- |
-| `disk_bytes` | データのディスク使用量 |
-| `branches` | ブランチの数 |
-| `connections`、`running_statements` | 接続の数、実行中の文の数（この呼び出しを含む） |
-| `open_transactions`、`oldest_snapshot_age_seconds` | 開いたトランザクションの数と、最も古いものの経過秒数。長く開いたままのトランザクションは GC を止める。読むだけのトランザクション（論理ダンプなど）も含む |
-| `pinned_times`、`oldest_pinned_time_age_seconds` | 復元などのために GC から守っている時刻の数と、最も古いもの |
-| `gc_retention`、`gc_boundary`、`gc_boundary_age_seconds` | 古いバージョンを残す期間と、GC の境界（それより前の時点は読めない） |
-| `gc_last_run_at`、`gc_last_duration`、`gc_last_removed`、`gc_last_error` | 最後の GC |
-| `memory_limit_bytes`、`memory_abort_bytes` | メモリの上限（`-memory-limit`）と、文がエラー 1041 で止まる境目（上限の 75%）。上限がなければどちらも 0 |
-| `memory_live_bytes` | 直前の GC で生きていたヒープ。`memory_abort_bytes` を超えると文が止まり始める。監視はこの 2 つを比べる（[`operations.md`](operations.md) の「メモリの上限」） |
-| `memory_aborted_statements` | 起動から、メモリの上限で止めた文の数 |
-| `cache_size_bytes`、`cache_used_bytes` | ブロックキャッシュの大きさと、今使っている分。公式のイメージ（cgo なし）では `memory_live_bytes` に含まれる |
-| `idle_lock_timeout`、`idle_lock_disconnects` | 何もしないまま書き込みのロックを持つ接続を切る時間（`-idle-lock-timeout`）と、起動から切った数 |
-| `write_lock <ブランチ>`、`write_lock_waiters <ブランチ>` | 書き込みのロックの持ち主（接続 ID とユーザー、または内部の操作の名前）、持っている時間、状態（実行中か、何もしていない時間）、最後の文。待っている文の数（[`operations.md`](operations.md) の「書き込みが詰まったとき」） |
-| `stats`、`stats_ready_at`、`stats_build_duration`、`stats_tables`、`stats_error` | 起動した後に裏で作る main の表の統計。`stats` は `building`（作っている）、`ready`（起動したときの 1 回が終わった。失敗した表があっても `ready` で、`stats_tables` に `18 built, 0 failed` のように数が出る）、`failed`（表の一覧を読めなかった。理由は `stats_error`）。作り終えた時刻とかかった時間は `ready` のときだけ出る（[`operations.md`](operations.md) の「起動し直した直後」） |
-| `slow_query`、`slow_query_redact` | 遅い文のログの閾値（`off` か、`1s` のような時間。`SET GLOBAL long_query_time` と `slow_query_log` で変わる）と、値を畳むか（`-slow-query-redact`） |
-| `tls`、`tls_cert_not_after`、`connection_tls` | 通信の暗号化（`off`、`on`、`required`）、証明書の期限、この接続が TLS か |
-| `watch_changes`、`watch_last_change`、`watch_last_change_at` | 危ない変更の見張りで見つけた変更の、起動からの件数と最後の 1 件（[`operations.md`](operations.md) の「危ない変更の見張り」） |
-| `role`、`last_commit` | `primary` か `replica`、最後のコミットの時刻 |
-| `pending_commit` | 同期のレプリカの知らせを待っている（まだ見せていない）コミット（本番だけ。待っているときだけ出る） |
-| `replication_*`、`replica <名前>` | レプリケーションの状態（[`operations.md`](operations.md) の「読み取り専用のレプリカ」） |
+| `disk_bytes` | Disk usage of the data |
+| `branches` | Number of branches |
+| `connections`, `running_statements` | Number of connections, and number of running statements (including this call) |
+| `open_transactions`, `oldest_snapshot_age_seconds` | Number of open transactions, and the age in seconds of the oldest one. A transaction left open for a long time stops GC. Read-only transactions (logical dumps and so on) are included |
+| `pinned_times`, `oldest_pinned_time_age_seconds` | Number of times protected from GC for restores and so on, and the oldest one |
+| `gc_retention`, `gc_boundary`, `gc_boundary_age_seconds` | The period old versions are kept, and the GC boundary (times before it cannot be read) |
+| `gc_last_run_at`, `gc_last_duration`, `gc_last_removed`, `gc_last_error` | The last GC |
+| `memory_limit_bytes`, `memory_abort_bytes` | The memory limit (`-memory-limit`), and the point at which statements stop with error 1041 (75% of the limit). Both 0 without a limit |
+| `memory_live_bytes` | The heap live at the last GC. When it exceeds `memory_abort_bytes`, statements start to be stopped. Monitor by comparing these two ("Memory limit" under "Operating notes" in [`operations.md`](operations.md)) |
+| `memory_aborted_statements` | Number of statements stopped by the memory limit since startup |
+| `cache_size_bytes`, `cache_used_bytes` | The block cache size and how much is in use now. In the official image (no cgo), it is included in `memory_live_bytes` |
+| `idle_lock_timeout`, `idle_lock_disconnects` | How long a connection can hold the write lock while doing nothing before it is closed (`-idle-lock-timeout`), and how many were closed since startup |
+| `write_lock <branch>`, `write_lock_waiters <branch>` | The write lock's holder (connection ID and user, or the name of an internal operation), how long it has been held, its state (running, or how long idle), and its last statement; the number of waiting statements ("When writes are stuck" in [`operations.md`](operations.md)) |
+| `stats`, `stats_ready_at`, `stats_build_duration`, `stats_tables`, `stats_error` | Statistics of main's tables, built in the background after startup. `stats` is `building` (being built), `ready` (the one run at startup finished; it is `ready` even if some tables failed, and `stats_tables` shows the counts, such as `18 built, 0 failed`), or `failed` (the table list could not be read; the reason is in `stats_error`). The finish time and the duration are shown only when `ready` ("Right after a restart" in [`operations.md`](operations.md)) |
+| `slow_query`, `slow_query_redact` | The slow query log threshold (`off`, or a duration such as `1s`; changed by `SET GLOBAL long_query_time` and `slow_query_log`), and whether values are redacted (`-slow-query-redact`) |
+| `tls`, `tls_cert_not_after`, `connection_tls` | Connection encryption (`off`, `on`, `required`), the certificate's expiry, and whether this connection uses TLS |
+| `watch_changes`, `watch_last_change`, `watch_last_change_at` | The number of changes found by the change watch since startup, and the last one ("Change watch" in [`operations.md`](operations.md)) |
+| `role`, `last_commit` | `primary` or `replica`, and the time of the last commit |
+| `pending_commit` | A commit waiting for a synchronous replica's acknowledgement (not yet visible) (production only; shown only while waiting) |
+| `replication_*`, `replica <name>` | Replication status ("Replicas" in [`operations.md`](operations.md)) |
 
 ### heimdb_backup
 
 ```sql
-CALL heimdb_backup('before-upgrade');   -- 名前を付ける
-CALL heimdb_backup();                   -- 名前は時刻（20261010T123114.438826Z など）
-CALL heimdb_backup('', 'verify');       -- -backup-key verify=... の受取人に暗号化した 1 つのファイル
+CALL heimdb_backup('before-upgrade');   -- with a name
+CALL heimdb_backup();                   -- the name is the time (20261010T123114.438826Z and so on)
+CALL heimdb_backup('', 'verify');       -- one file encrypted to the recipient of -backup-key verify=...
 ```
 
 ```
@@ -608,11 +608,11 @@ CALL heimdb_backup('', 'verify');       -- -backup-key verify=... の受取人�
 +---------------------------------+----------------------------------+-------+
 ```
 
-動いたまま、整合したバックアップを、起動時の `-backup-dir` の下に作る（なければ `HeimDB: backups are disabled`）。すべてのブランチ、保持期間内の履歴、ユーザーと権限を含む。名前は英数字、`.`、`_`、`-` だけ（任意のパスには書けない）。同じ名前があれば拒否する。
+Creates a consistent backup while running, under the `-backup-dir` given at startup (without it, `HeimDB: backups are disabled`). It includes all branches, the history within the retention period, and users and privileges. Names use only letters, digits, `.`, `_` and `-` (it cannot write to an arbitrary path). If the same name exists, it is refused.
 
-そのディレクトリを `-data` に指定して起動すると、`backed_up_at` の時点に戻る。パスワードのハッシュを含むので、HeimDB を動かすユーザーだけが読めるようにしてある。
+Start HeimDB with that directory as `-data` and it comes back to the state at `backed_up_at`. It contains password hashes, so it is readable only by the user that runs HeimDB.
 
-2 つ目の引数に `-backup-key` の鍵の名前を指定すると、store の全体（WAL を含む）を、その鍵の age の受取人に暗号化した 1 つのファイル `<名前>.tar.gz.age` にする（`path` はそのファイル、`bytes` はその大きさ）。知らない鍵の名前はエラー。開くには `heimdb restore-backup` で展開する（[`operations.md`](operations.md) の「暗号化した退避」）。
+If you give the name of a `-backup-key` key as the second argument, the whole store (including the WAL) becomes one file `<name>.tar.gz.age`, encrypted to that key's age recipient (`path` is that file and `bytes` its size). An unknown key name is an error. To open it, extract it with `heimdb restore-backup` ("Encrypted backups" in [`operations.md`](operations.md)).
 
 ### heimdb_gc
 
@@ -628,7 +628,7 @@ CALL heimdb_gc();
 +----------------------------------+----------+--------+---------+---------------+
 ```
 
-保持期間（`-retention`）より古いバージョンを今すぐ消し、境界と消した数を返す。ふだんはサーバが `-gc-interval`（既定 1 時間）ごとに動かすので、呼ぶ必要はない。境界より前の時点は、`AS OF`、復元、ブランチの作成に使えなくなる。開いたままのトランザクションや復元の途中の時点があれば、境界はそこで止まる。`-retention 0` なら古いバージョンを消さないので、エラーになる。
+Deletes versions older than the retention period (`-retention`) now, and returns the boundary and the numbers deleted. Normally the server runs it every `-gc-interval` (default 1 hour), so you do not need to call it. Times before the boundary can no longer be used for `AS OF`, restores, or creating branches. If there is an open transaction or a time in the middle of a restore, the boundary stops there. With `-retention 0`, old versions are not deleted, so it is an error.
 
 ### heimdb_rebuild_indexes
 
@@ -645,11 +645,11 @@ CALL heimdb_rebuild_indexes();
 +---------------------------+----------------+
 ```
 
-接続中のデータベース（`wordpress` なら main、`wordpress@staging` ならそのブランチ）の表のうち、段階 117 より前の HeimDB（0.2.38 以前）で作った、`DECIMAL`、`FLOAT`、`DOUBLE`、`ENUM` の列を含むインデックスと、段階 120 より前の HeimDB（0.2.40 以前）で作った、`SET` と `BIT` の列を含むインデックスを作り直し、作り直したものを返す。そういうインデックスは、エントリを持たず、引くたびに表の全件を読む（WooCommerce の `wc_product_meta_lookup` の `min_max_price` と `stock_quantity` など）。`SET` の列のインデックスは、MySQL と同じく `=` と `IN` だけを範囲で引く（大小の比べは全件を読む）。作り直すと、新しく作ったインデックスと同じく範囲で引く。新しく作った表とインデックスと、表を書き直す `ALTER TABLE`（列の追加や型の変更など）の後のインデックスは、初めからエントリを持つ（`ALTER TABLE ... FORCE` は HeimDB では何もしないので、作り直しにならない）。
+Among the tables of the connected database (main for `wordpress`, that branch for `wordpress@staging`), rebuilds indexes that contain `DECIMAL`, `FLOAT`, `DOUBLE` or `ENUM` columns and were created by a HeimDB before stage 117 (0.2.38 or earlier), and indexes that contain `SET` or `BIT` columns and were created by a HeimDB before stage 120 (0.2.40 or earlier), and returns what it rebuilt. Such indexes have no entries, and every lookup reads the whole table (WooCommerce's `min_max_price` and `stock_quantity` in `wc_product_meta_lookup`, and so on). Indexes on `SET` columns are used for range lookups only with `=` and `IN`, as in MySQL (ordering comparisons such as `<` and `>` read the whole table). After the rebuild, they are used for range lookups like newly created indexes. Newly created tables and indexes, and indexes after an `ALTER TABLE` that rewrites the table (adding a column, changing a type and so on), have entries from the start (`ALTER TABLE ... FORCE` does nothing in HeimDB, so it does not rebuild).
 
-- `CREATE INDEX` と同じく、作り直す間はそのブランチへの書き込みを待たせる（読むのは止めない）。大きな表は何回かに分けてコミットし、途中で止まっても、作りかけは次の起動で消える。
-- 一意インデックスで、行の値が重複していれば `1062` のエラーで止まる（それより前の表で作り直したものは残る）。重複を直してから呼び直せば、残りを作り直す。作り直すものがなければ何もしない（何度呼んでもよい）。
-- 作り直す前の時点（`AS OF`、復元）と、作り直す前に作ったブランチは、前と同じく全件を読む。ブランチは、ブランチのデータベースにつないで呼べば、そのブランチで作り直す。
-- レプリカでは呼べない（本番で呼べば、作ったエントリがレプリカにも届く）。
-- 0.2.42 から、本番は起動の後に main のものを裏で 1 つずつ作り直す（`-rebuild-indexes`。既定で動く。[`operations.md`](operations.md) の「古いインデックスの作り直し」）。手続きを呼ぶのは、ブランチ、裏の処理が飛ばしたもの（一意のインデックスの重複、行の多いもの、ロックを取れなかったもの）、`-rebuild-indexes=false` のときになる。手続きと裏の処理が並んでも、後から始めた方は、もう作り直したものを飛ばす。手続きは前と同じく `1062` で止まる（裏の処理は飛ばして続ける）。
-- 起動時に、どれかのブランチに作り直していないインデックスがあれば、データベースごとに名前を並べて警告をログに出す（`HeimDB: N indexes on DECIMAL, FLOAT, DOUBLE, ENUM, SET or BIT columns were made by an older HeimDB (0.2.38 or earlier, or 0.2.40 or earlier for SET and BIT) and have no entries, ...`）。文の終わりは、裏の処理が動くときは main のものを裏で作り直す旨（`main's are rebuilt in the background now`）、`-rebuild-indexes=false` のときは前と同じく手続きを呼ぶ旨、レプリカでは本番が作り直してエントリが記録で届く旨になる。
+- As with `CREATE INDEX`, writes to that branch wait during the rebuild (reads are not stopped). Large tables are committed in several parts, and if it stops halfway, the partly built index is removed at the next startup.
+- For a unique index, if rows have duplicate values, it stops with error `1062` (indexes already rebuilt in earlier tables remain). Fix the duplicates and call it again to rebuild the rest. If there is nothing to rebuild, it does nothing (safe to call any number of times).
+- Times before the rebuild (`AS OF`, restores) and branches created before the rebuild still read the whole table, as before. For a branch, connect to the branch's database and call it to rebuild on that branch.
+- It cannot be called on a replica (call it on production and the created entries reach replicas too).
+- Since 0.2.42, production rebuilds main's indexes one by one in the background after startup (`-rebuild-indexes`, on by default; "Rebuilding old indexes" in [`operations.md`](operations.md)). You call the procedure for branches, for indexes the background work skipped (duplicates in a unique index, indexes with many rows, indexes whose lock could not be taken), and when `-rebuild-indexes=false`. If the procedure and the background work run at the same time, whichever starts later skips what is already rebuilt. The procedure still stops at `1062`, as before (the background work skips and continues).
+- At startup, if any branch has indexes that have not been rebuilt, a warning listing their names per database is logged (`HeimDB: N indexes on DECIMAL, FLOAT, DOUBLE, ENUM, SET or BIT columns were made by an older HeimDB (0.2.38 or earlier, or 0.2.40 or earlier for SET and BIT) and have no entries, ...`). The end of the message says that main's indexes are being rebuilt in the background when the background work runs (`main's are rebuilt in the background now`), that you should call the procedure, as before, when `-rebuild-indexes=false`, and on a replica that production rebuilds them and the entries arrive through replication.

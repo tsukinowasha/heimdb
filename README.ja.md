@@ -4,39 +4,34 @@
 
 WordPress 専用の、ブランチとタイムトラベルのできるデータベース。MySQL のプロトコルで話し、WordPress、wp-cli、mysqldump からは MySQL に見えるので、接続先を替えるだけで使える。
 
-- **タイムトラベル**: 過去の任意の時点のデータを読み、その時点に戻せる（戻したことも取り消せる）。
-- **ブランチ**: 本番からコピーなしでステージングを切り、差分を見て本番にマージできる（その間に本番に入ったコメントは残る）。
+- **タイムトラベル**: `AS OF` で過去の任意の時点のデータを読み、サイトをその時点に戻せる（戻したことも取り消せる）。
+- **ブランチ**: 本番からコピーなしでステージングを切り、差分を見て本番にマージできる。マージは WordPress の表を知っていて、その間に本番に入ったコメントとユーザーは残り、サイトの URL は上書きしない。
+- **MySQL の代わりにそのまま使える**: WordPress、wp-cli、mysqldump からは MySQL 8.0 に見える。mysqldump と `mysql` コマンドでサイトを移し、同じ手順で MySQL に戻せる。
+- **1 つのプロセスで 1 つのサイト**: 1 つのプロセスが 1 つの WordPress のデータベース（`-db`）とそのブランチ（`wordpress@staging`）を、それぞれのデータのディレクトリで受け持つ。サイトごとにプロセスを立てる。
+- **メモリの上限**: `-memory-limit`（既定はコンテナの上限の 8 割）でプロセスのメモリを抑える。超えそうな文はエラー 1041 で止まってトランザクションが取り消され、プロセスは落ちない。
+- **SQL で操作できる**: ブランチ、マージ、復元、バックアップ、状態の確認は `CALL heimdb_*` の手続きで、どの MySQL クライアントからでも使える。
+- **Prometheus 形式のメトリクス**: 文の数と時間、接続、メモリ、ディスク、GC、レプリカの状態を `/metrics` に出す。
+- **止めずに取れる、暗号化できるバックアップ**: 動かしたまま、すべてのブランチと履歴をそろった時点で書き出す（書き出す間、書き込みは待つ）。[age](https://age-encryption.org/) で暗号化もできる。
+- **レプリカ**: 本番のコミットを適用する読み取り専用のレプリカ。既定は同期（MySQL の準同期レプリケーションと同じ）で、昇格は手動。
+- **危ない変更の見張り**: サイトが乗っ取られるときに変わる行（管理者の追加、`siteurl`、`default_role`、有効にしたプラグインなど）が変わると、ログに警告を出す。その時刻を見つけて、直前に戻せる。
+- **TLS と遅い文のログ**: クライアントの接続とレプリカへの送り出しを TLS にでき、遅い文のログは動かしたまま切り替えられる。
+- **1 つの実行ファイル**: cgo を使わない Go の静的な実行ファイルと、linux/amd64 と linux/arm64 の Docker イメージ。
 
-> **開発中**。データ形式は 0.2.41 からバージョン 8（0.2.40 以前のバージョン 1 から 7 のデータは、起動時にそのまま移る。変えるときは、新しいバージョンが起動時に移す。上げた後のデータは古いバージョンでは開けない。そのように変えるときはマイナーバージョンを上げ（0.3.x から 0.4.0）、ほかはパッチのバージョンを上げる）。バックアップを取り、バージョンを決めて使うこと（手順は [`docs/operations.md`](docs/operations.md) の「HeimDB のバージョンを上げる」）。MySQL との違いは [`docs/differences.md`](docs/differences.md)、計画と経緯は [`docs/plan.md`](docs/plan.md)。
+> **開発中**。データ形式は 0.2.41 からバージョン 8（0.2.40 以前のバージョン 1 から 7 のデータは、起動時にそのまま移る。変えるときは、新しいバージョンが起動時に移す。上げた後のデータは古いバージョンでは開けない。そのように変えるときはマイナーバージョンを上げ（0.3.x から 0.4.0）、ほかはパッチのバージョンを上げる）。バックアップを取り、バージョンを決めて使うこと（手順は [`docs/operations.md`](docs/operations.md) の「Upgrading HeimDB」）。MySQL との違いは [`docs/differences.md`](docs/differences.md)、計画と経緯は [`docs/plan.md`](docs/plan.md)。
+
+HeimDB は WordPress 専用。ビュー、トリガー、ストアドプロシージャ、全文検索、utf8mb4 以外の文字セットは対応せず、明示的なエラーを返す。
+
+日本語の文書はこの README だけで、`docs/` などのほかの文書は英語。
 
 ## 性能
 
-同じ WordPress とデータ（記事 5,202 件、コメント 2 万件、オブジェクトキャッシュなし）での、本物の MySQL 8.0 との比較（2026-11-19、HeimDB 0.2.42）。GCE の n2-standard-4（東京、pd-balanced）の 1 台で、MySQL は Docker の既定の設定。測り方と全部の値は [`docs/bench.md`](docs/bench.md)。
+同じ WordPress とデータ（記事 5,002 件、固定ページ 200 件、コメント 2 万件、オブジェクトキャッシュなし）を GCE の n2-standard-4 に置き、Docker の既定の設定の MySQL 8.0 と比べた。
 
-| ページの表示（中央値） | HeimDB 全体 | MySQL 全体 | HeimDB の DB | MySQL の DB |
-|---|---|---|---|---|
-| トップページ | 114 ms | 97 ms | 30 ms | 15 ms |
-| 個別の記事（コメント 60 件） | 196 ms | 175 ms | 37 ms | 19 ms |
-| カテゴリの 2 ページ目（記事 5,001 件） | 130 ms | 103 ms | 46 ms | 21 ms |
-| 検索 | 145 ms | 189 ms | 56 ms | 103 ms |
-| REST API（記事 100 件） | 330 ms | 276 ms | 102 ms | 59 ms |
-| 管理画面のダッシュボード | 126 ms | 100 ms | 68 ms | 44 ms |
-| 投稿一覧 | 156 ms | 131 ms | 73 ms | 50 ms |
+- ページの DB の時間は MySQL の 1.5〜2.1 倍で、ページ全体では 1.1〜1.3 倍（検索は MySQL より短い）。コメントの追加とオプションの更新は MySQL より短い。
+- 負荷をかけたときの速さの上限は MySQL の 88%。上限を超えても、500 接続でも、エラーや切断はない。
+- 常駐のメモリは、表の行数にほぼよらず約 500 MiB。
 
-| 書き込み（1 回あたりの DB の時間）と同時アクセス | HeimDB | MySQL |
-|---|---|---|
-| 記事の作成 | 64 ms | 63 ms |
-| コメントの追加 | 3.3 ms | 6.5 ms |
-| オプションの更新 | 1.3 ms | 3.1 ms |
-| 記事の削除 | 43 ms | 46 ms |
-| トップページ（10 並列） | 22.4 件/秒 | 26.0 件/秒 |
-| 個別の記事（10 並列） | 12.3 件/秒 | 13.7 件/秒 |
-
-ページの DB の時間は MySQL の 1.5〜2.1 倍で、ページ全体では 1.1〜1.3 倍（検索は MySQL より短い）。同じインスタンスで測った 0.2.35 より、ページの DB の時間は 4〜11% 短い（うちトップページ、個別の記事、検索、カテゴリの 4〜8% は、ビルドの配置による揺れと同じくらい）。速度は目標にしていない（公開ページはページキャッシュで返す前提）。
-
-負荷への強さ（DB と負荷を別の n2-standard-4 に置き、7 つのページの文を多くの接続から流した。HeimDB 0.2.42）: 4 vCPU を使い切ったときの速さの上限は MySQL の 88%（毎秒 57.5 ページと 65.5 ページ）で、同じ速さでのサーバーの CPU は MySQL の 1.4 倍。上限を超えても、500 接続でも、誤りや切断はなく、30 分流しても時間とメモリは増えない（RSS は約 260 MB で、MySQL の半分以下）。詳しくは [`docs/bench.md`](docs/bench.md) の「段階 126」。
-
-メモリは、常駐が表の行数にほぼよらず約 500 MiB（`wp_postmeta` の形の 310 万行で）。大きな書き込み、マージ、復元は行数に比例して使うが、`-memory-limit` に近づくとエラー 1041 で止まる。経路ごとの目安は [`docs/operations.md`](docs/operations.md) の「運用の注意」の「メモリの目安」。
+速度は目標にしていない（公開ページはページキャッシュで返す前提）。測った条件、全部の値、測り方は [`docs/bench.md`](docs/bench.md)。
 
 ## ビルドと起動
 
@@ -84,7 +79,7 @@ mysql -h heimdb-host -u root -p wordpress < site.sql
 
 HeimDB はコミットしていない書き込みをメモリに持つ。`mariadb-dump` は既定で表ごとに 1 つのトランザクションで囲むので、大きな表があるなら `--skip-no-autocommit` を付けて取る。
 
-使えるプラグインと一部が使えないプラグイン（WooCommerce は注文の全文検索が使えない）の一覧は [`docs/plugins.md`](docs/plugins.md)。HeimDB は、ビュー、トリガー、全文検索、ストアドプロシージャ、utf8mb4 以外の文字セットなどを明示的なエラーで拒否する。
+使えるプラグインと一部が使えないプラグイン（WooCommerce は注文の全文検索が使えない）の一覧は [`docs/plugins.md`](docs/plugins.md)。
 
 ## 使い方
 
@@ -156,7 +151,7 @@ CALL heimdb_rebuild_indexes();          -- 前のバージョンで作った DEC
 
 バックアップは、すべてのブランチ、保持期間内の履歴、ユーザーと権限を含む。バックアップのディレクトリを `-data` に指定して起動すると、その時点に戻る。
 
-`-metrics-addr 127.0.0.1:9104` を付けると、同じ値と文の数・時間を Prometheus の形式で `/metrics` に出す（New Relic、Grafana などに取り込める。認証がないので外に開けない）。指標の一覧と設定の例は [`docs/operations.md`](docs/operations.md) の「指標」。
+`-metrics-addr 127.0.0.1:9104` を付けると、同じ値と文の数・時間を Prometheus の形式で `/metrics` に出す（New Relic、Grafana などに取り込める。認証がないので外に開けない）。指標の一覧と設定の例は [`docs/operations.md`](docs/operations.md) の「Metrics (Prometheus)」。
 
 読み取り専用のレプリカと、本番が壊れたときの昇格の手順は [`docs/operations.md`](docs/operations.md)。
 
@@ -173,7 +168,7 @@ go test ./internal/backend -run '^$' -fuzz '^FuzzQuery$' -fuzztime 1h -parallel 
 - [`docs/procedures.md`](docs/procedures.md): `heimdb_*` の手続きの一覧と使い方
 - [`docs/operations.md`](docs/operations.md): 起動のフラグ、Docker、メモリ、バージョンの上げ方、レプリカ、通信の暗号化（TLS）
 - [`docs/plugins.md`](docs/plugins.md): プラグインが HeimDB で使えるかの一覧と判定の基準（調べた記録は [`docs/plugins-research.md`](docs/plugins-research.md)）
-- [`docs/plan.md`](docs/plan.md): 計画、キーの設計、各段階の実装と結果、検証方法（PHPUnit をベースラインと比べる手順）
+- [`docs/plan.md`](docs/plan.md): 計画、キーの設計、各段階の要約、検証方法（PHPUnit をベースラインと比べる手順）
 - [`docs/bench.md`](docs/bench.md): 本物の MySQL との性能とメモリの比較
 - [`docs/engine.md`](docs/engine.md): SQL エンジン（`internal/sqlengine`、go-mysql-server v0.20.0 のフォーク）の取り込み元と変更の一覧
 - [`compat/README.md`](compat/README.md): MySQL との互換を WordPress の接続（wpdb）で確かめるテスト集（数秒で、本物の MySQL の記録と比べる）

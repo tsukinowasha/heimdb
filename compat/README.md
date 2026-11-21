@@ -1,26 +1,26 @@
-# MySQL 互換のテスト集
+# MySQL compatibility suite
 
-WordPress と同じ接続（wpdb と mysqli）で文を流し、返った値を、本物の MySQL 8.0 で取った記録と比べる（`docs/plan.md` の段階 91）。値は mysqli が返す字のまま、エラーの文と番号と SQLSTATE、`rows_affected`、`insert_id`、`SHOW WARNINGS` を記録する。テストは期待値を書かない。同じテストを本物の MySQL と調べる DB に流し、記録を並べる。
+This suite runs statements over the same connection as WordPress (wpdb and mysqli) and compares the returned values with a record taken on real MySQL 8.0 (stage 91 in `docs/plan.md`). It records values exactly as the strings mysqli returns, the error message, number and SQLSTATE, `rows_affected`, `insert_id`, and `SHOW WARNINGS`. The tests do not write expected values. The same tests run on real MySQL and on the database under test, and the records are compared side by side.
 
-PHPUnit の全体の比べ（`docs/plan.md` の「検証方法」、30 分ほど）は、テストが落ちない違いを見ない。このテスト集は、MySQL との小さな違い（警告、エラーの字、double の字の形、照合順序）を、数秒で見る。HeimDB に限らず、WordPress に MySQL 互換の DB を使うときの確かめに使える。
+The full PHPUnit comparison ("Validation method" in `docs/plan.md`, about 30 minutes) does not see differences that do not make a test fail. This suite looks at small differences from MySQL (warnings, error messages, the string form of doubles, collation) in a few seconds. It is not limited to HeimDB: you can use it to check any MySQL-compatible database for WordPress.
 
-## 流し方
+## Running
 
 ```sh
-# HeimDB（データベースの名前は -db で決める。テストが WordPress の表を消して入れ直すので、専用のデータで）
+# HeimDB (the database name is set with -db. The tests drop and recreate WordPress tables, so use dedicated data)
 heimdb -addr 127.0.0.1:3338 -data /tmp/compat-data -root-password root -db heimdb_compat &
 scripts/compat/run.sh 3338 /tmp/heimdb.json
 go run ./cmd/compatdiff compat/baseline/mysql-8.0.json /tmp/heimdb.json
 ```
 
-- `scripts/compat/run.sh <port> <out.json>` は、wordpress-develop（`WP_DEVELOP_DIR`、既定はこのリポジトリと並べた `../wordpress-develop`）を `/app` に、このディレクトリを `/compat` にマウントした PHPUnit のコンテナ（`scripts/wpphp` と同じイメージ）で、`vendor/bin/phpunit -c /compat/phpunit.xml` を流す。データベースは `heimdb_compat`（`WP_TESTS_DB_NAME`）、パスワードは `WP_TESTS_DB_PASSWORD`（既定は root）。本物の MySQL には、なければデータベースを作る。
-- `cmd/compatdiff` は、違う値と、片方にしかない記録を一覧にし、あれば終了コード 1 を返す。意図した違いと、知っていてまだ直していない違いは、`known-differences.txt` に理由と一緒に書く。直って違わなくなったら知らせるので、その行を消す。
+- `scripts/compat/run.sh <port> <out.json>` runs `vendor/bin/phpunit -c /compat/phpunit.xml` in a PHPUnit container (the same image as `scripts/wpphp`) with wordpress-develop (`WP_DEVELOP_DIR`, default `../wordpress-develop` next to this repository) mounted at `/app` and this directory mounted at `/compat`. The database is `heimdb_compat` (`WP_TESTS_DB_NAME`), and the password is `WP_TESTS_DB_PASSWORD` (default root). On real MySQL, the database is created if it does not exist.
+- `cmd/compatdiff` lists values that differ and records found on only one side, and returns exit code 1 if there are any. Intended differences, and known differences not fixed yet, go in `known-differences.txt` with a reason. When one is fixed and no longer differs, the tool says so; then delete that line.
 
-## 接続の確かめ
+## Connection check
 
-最初に、接続の文字セットと照合順序が WordPress と同じ（`utf8mb4`、`utf8mb4_unicode_520_ci`）か、`sql_mode` に wpdb が外すもの（strict など）が残っていないかを確かめ、違えば止める（終了コード 2）。クライアントの文字セットが既定のまま（latin1 など）だと、値が壊れて入り、違いを取り違える。`sql_mode` そのものは記録する（wpdb はサーバの `sql_mode` から外すだけなので、サーバの既定の違いが出る）。
+First, the suite checks that the connection's character set and collation are the same as WordPress's (`utf8mb4`, `utf8mb4_unicode_520_ci`) and that `sql_mode` has none of the modes wpdb removes (strict and others) left, and stops if not (exit code 2). If the client character set is left at its default (latin1 and so on), values are stored corrupted and differences are misread. `sql_mode` itself is recorded (wpdb only removes modes from the server's `sql_mode`, so differences in the server's default show up).
 
-## ベースラインを取り直す
+## Retaking the baseline
 
 ```sh
 docker run -d --name realmysql -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=wordpress -p 3307:3306 mysql:8.0
@@ -29,15 +29,15 @@ scripts/compat/run.sh 3307 /tmp/mysql-b.json
 cmp /tmp/mysql-a.json /tmp/mysql-b.json && cp /tmp/mysql-a.json compat/baseline/mysql-8.0.json
 ```
 
-2 回流して同じになることを確かめてから置き換える（同順位の並びなど、流すたびに変わる値を記録しない）。今の記録は MySQL 8.0.46。
+Replace it only after confirming that two runs give the same result (so that values that change from run to run, such as the order of rows that compare equal, are not recorded). The current record is from MySQL 8.0.46.
 
-## テストを足す
+## Adding tests
 
-`tests/` に `Compat_TestCase` を継いだクラスを置く。`Compat::observe_sql(label, sql)` は文を流して結果、エラー、行の数、警告を記録し、`Compat::observe(label, value)` は任意の値を記録する。キーは「クラス::テスト::label」。
+Put a class that extends `Compat_TestCase` in `tests/`. `Compat::observe_sql(label, sql)` runs a statement and records the result, error, row count and warnings, and `Compat::observe(label, value)` records any value. The key is "class::test::label".
 
-- WordPress のテストは、テストごとにトランザクションで包み、終わると戻す。`CREATE TABLE` は一時テーブルに書き換えられるので、表は `set_up_before_class` で作り、`tear_down_after_class` で消す。
-- 流す順や時刻で変わる値（ID、`NOW()`）を記録しない。ID は差で、記事は日付を決めて作り、並びは同順位にならないように決める。
+- WordPress tests wrap each test in a transaction and roll it back at the end. `CREATE TABLE` is rewritten to a temporary table, so create tables in `set_up_before_class` and drop them in `tear_down_after_class`.
+- Do not record values that change with the run order or the time (IDs, `NOW()`). Record IDs as differences, create posts with fixed dates, and set the order so that no rows compare equal.
 
-## ライセンス
+## License
 
-WordPress のテストの仕組みの上に作るので、このディレクトリは GPL-2.0-or-later（[LICENSE](LICENSE)）。HeimDB の Go のモジュールにも Docker のイメージにも入らない。`cmd/compatdiff` は HeimDB と同じ Apache License 2.0。
+This directory is built on the WordPress test framework, so it is GPL-2.0-or-later ([LICENSE](LICENSE)). It is not part of the HeimDB Go module or the Docker image. `cmd/compatdiff` is Apache License 2.0, like HeimDB.

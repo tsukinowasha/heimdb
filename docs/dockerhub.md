@@ -1,9 +1,9 @@
 <!--
-Docker Hub の tsukinowa/heimdb の説明文（日本語版は dockerhub.ja.md）。Docker Hub の画面（Repository の General）に貼る。
-- Short description（100 文字まで）: 下の 1 行
-- Repository overview: 「---」より下の全部
-Docker Hub の利用者が GitHub に行かなくても、この説明だけで使えるようにしてある。ソースは https://github.com/tsukinowasha/heimdb 。compose.yaml の内容を変えたら、ここも合わせる。
-Docker Hub の説明は 25,000 バイトまで。タグの節は最新のバージョンだけを詳しく書き、古いバージョンは上げるときに気を付けることだけを残す。
+The description of tsukinowa/heimdb on Docker Hub. Paste it into the Docker Hub screen (Repository, General).
+- Short description (up to 100 characters): the one line below
+- Repository overview: everything below "---"
+It is written so that Docker Hub users can use the image from this description alone, without going to GitHub. The source is https://github.com/tsukinowasha/heimdb . When compose.yaml changes, update this too.
+The Docker Hub description is limited to 25,000 bytes. The tags section describes only the latest version in detail; for older versions, keep only what to watch for when upgrading.
 -->
 
 Short description:
@@ -18,16 +18,21 @@ A branchable, time-travelling MySQL-compatible database for WordPress. Developme
 
 A database for WordPress with branches and time travel. It speaks the MySQL protocol, and WordPress, wp-cli and mysqldump see it as MySQL 8.0, so you only change the database host.
 
-- **Time travel**: read the data as of any past time, and restore a site to that time (a restore can be undone too).
-- **Branches**: create a staging copy of production instantly without copying data, review the diff, and merge it back. Comments that arrived on production in the meantime are kept.
+- **Time travel**: read the data as of any past time with `AS OF`, and restore a site to that time (a restore can be undone too).
+- **Branches**: create a staging copy of production instantly without copying data, review the diff, and merge it back. Comments and users that arrived on production in the meantime are kept, and the site URL is not overwritten.
+- **Drop-in for MySQL**: move a site in with mysqldump and the `mysql` command, and back out the same way.
+- **One site per process**: a container serves one WordPress database (`-db`) and its branches (`wordpress@staging`).
+- **Memory limit**: by default 80% of the container's limit. A statement that would pass it stops with error 1041 and is rolled back; the process keeps running.
+- **Managed with SQL**: `CALL heimdb_*` procedures from any MySQL client.
+- **Prometheus metrics** at `/metrics`, online and [age](https://age-encryption.org/)-encrypted backups, synchronous read-only replicas, TLS, a slow query log, and a change watch that logs takeover-like changes (a new administrator, `siteurl`, activated plugins).
 
 > **Development preview.** The data format is version 8 since 0.2.41. A newer version converts older data when it starts; an older version refuses newer data. When a version changes the format so that older versions cannot open the data, its minor version goes up (0.3.x to 0.4.0). Pin a version and keep backups.
 
-HeimDB is built only for WordPress. Views, triggers, stored procedures and full-text search are not supported and return explicit errors. So is SQL that reads or writes files on the server (`LOAD_FILE()`, `SELECT ... INTO OUTFILE`, `LOAD DATA`).
+HeimDB is built only for WordPress. Views, triggers, stored procedures, full-text search and character sets other than utf8mb4 are not supported and return explicit errors. So is SQL that reads or writes files on the server (`LOAD_FILE()`, `SELECT ... INTO OUTFILE`, `LOAD DATA`).
 
 ## Tags
 
-- `0.3.0`, `latest`: linux/amd64, linux/arm64. The first release with public source code ([github.com/tsukinowasha/heimdb](https://github.com/tsukinowasha/heimdb)). The code is the same as 0.2.45, with the same data format (version 8) and replication records, so upgrading from 0.2.41 or newer needs nothing special. From 0.3.0, the minor version goes up when the data format changes so that older versions cannot open upgraded data (0.3.x to 0.4.0), and other releases raise the patch version. 0.2.45: two connections now run statements in parallel instead of taking turns on one thread (on 4 vCPUs, 2 connections serve 1.79 times the pages of 1, up from 1.58; 4 and more are unchanged). 0.2.44: the binary keeps its symbol table (about 5 MB larger), so `govulncheck -mode binary` on the image reports only what HeimDB calls. 0.2.43: built with Go 1.27.4 for GO-2026-6859 (net/http: an HTTP/1 server could crash; HeimDB serves HTTP only on the metrics endpoint, off by default). 0.2.42: after starting, the primary rebuilds main's indexes made by older versions (0.2.38 and older, or 0.2.40 and older for SET and BIT) in the background, one at a time, so they stop reading every row without a `CALL heimdb_rebuild_indexes()` (turn it off with `-rebuild-indexes=false` or `HEIMDB_REBUILD_INDEXES=false`). Creating a branch waits for the parent's writing transactions. Faster: the pages' DB times are 4 to 11% shorter than 0.2.35's, from sending result rows without per-statement goroutines and reusing decoded rows in full scans. The data format is still version 8 and the records sent to replicas are unchanged, the same as 0.2.41.
+- `0.3.0`, `latest`: linux/amd64, linux/arm64. The first release with public source code ([github.com/tsukinowasha/heimdb](https://github.com/tsukinowasha/heimdb)). The code is the same as 0.2.45, with the same data format (version 8) and replication records, so upgrading from 0.2.41 or newer needs nothing special. From 0.3.0, the minor version goes up when the data format changes so that older versions cannot open upgraded data (0.3.x to 0.4.0), and other releases raise the patch version.
 
 Older tags can still be pulled. Versions that need care when upgrading (see Usage and Configuration for features):
 
@@ -344,10 +349,11 @@ docker run -d -p 3306:3306 -v heimdb-data:/data -v heimdb-backups:/backups \
 | `-shutdown-timeout` | `30s` | How long to wait for running statements on stop |
 | `-branch-procedures` | `false` | Lets a user with only a branch's database call diff, resolve, changes and restore on the branch it is connected to, given `GRANT EXECUTE` (pass `''` as the branch; also `HEIMDB_BRANCH_PROCEDURES=1`) |
 | `-memory-limit` | 80% of the container limit | Memory limit (like `4G`; or set `HEIMDB_MEMORY_LIMIT`; `0` disables). Near it, a statement fails with error 1041 and its transaction is rolled back, instead of the process running out of memory |
+| `-rebuild-indexes` | `true` | After start, rebuild in the background main's indexes made without entries by 0.2.40 or earlier (or set `HEIMDB_REBUILD_INDEXES=false`). Since 0.2.42 |
 | `-tls-cert`, `-tls-key` | | Enable TLS with these files (mount them readable by UID 65532) |
 | `-metrics-addr` | | Serve Prometheus metrics at `/metrics` on this address (like `0.0.0.0:9104`; no authentication, so do not publish the port; read it from the same Docker network). Since 0.2.21 |
 
-Read-only replicas and the remaining flags are documented in the source repository, which is not public yet.
+Read-only replicas and the remaining flags are documented in [`docs/operations.md`](https://github.com/tsukinowasha/heimdb/blob/main/docs/operations.md).
 
 - Stop with `docker stop` (SIGTERM). Give it more time than `-shutdown-timeout` (`docker stop -t 60`, or `stop_grace_period` in Compose).
 - To restore from a backup, start HeimDB with the backup directory as its data directory.
