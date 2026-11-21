@@ -1,90 +1,90 @@
-# 運用
+# Operations
 
-起動のフラグ、Docker、レプリカ、通信の暗号化（TLS）、指標（Prometheus）の詳しい説明。基本の使い方は [README](../README.md)、`heimdb_*` の手続きは [`procedures.md`](procedures.md)。
+Details on the flags, Docker, replicas, TLS and metrics (Prometheus). For the basics, see the [README](../README.md); for the `heimdb_*` procedures, see [`procedures.md`](procedures.md).
 
-## 起動のフラグ
+## Flags
 
-| フラグ | 既定 | 意味 |
+| Flag | Default | Meaning |
 |---|---|---|
-| `-addr` | `0.0.0.0:3306` | 待ち受けるアドレス |
-| `-data` | `data` | データのディレクトリ |
-| `-db` | `wordpress` | 本番（main ブランチ）のデータベース名 |
-| `-root-password` | | 初回に作る `root@'%'` のパスワード |
-| `-site-user` | `wordpress` | WordPress がつなぐユーザーの名前 |
-| `-site-password` | | WordPress がつなぐユーザーのパスワード（または環境変数 `HEIMDB_SITE_PASSWORD`）。あれば、そのユーザーを `-db` のデータベースだけの権限で作る（まだいなければ。いれば変えない） |
-| `-retention` | `720h`（30 日） | `AS OF` と復元のために古いバージョンを残す期間（0 なら消さない） |
-| `-gc-interval` | `1h` | 古いバージョンを消す間隔 |
-| `-backup-dir` | | `CALL heimdb_backup()` の書き出し先（空なら無効） |
-| `-backup-key` | | `名前=パス`。`CALL heimdb_backup('<退避の名前>', '<名前>')` で、パスのファイルの age の受取人（`age1...`、1 行に 1 つ）に暗号化した退避を書き出す。ファイルは退避のたびに読む（繰り返して複数の鍵。`-backup-dir` が要る。下の「暗号化した退避」） |
-| `-reset-passwords` | `false` | 起動時に、`root@'%'` のパスワードを `-root-password` に、いる `-site-user` のパスワードを `-site-password` にする（ほかのユーザーは残す。または環境変数 `HEIMDB_RESET_PASSWORDS=1`。退避から復元した store を開くとき。下の「暗号化した退避」） |
-| `-reset-users` | `false` | 起動時に、`root@'%'` と、`-site-password` があればサイトのユーザー（権限は残してパスワードを上書きし、いなければ作る）のほかのユーザーをすべて消し、`root@'%'` のパスワードを上書きする（または環境変数 `HEIMDB_RESET_USERS=1`） |
-| `-shutdown-timeout` | `30s` | SIGTERM で実行中の文を待つ上限（過ぎたらデータを閉じずに終える） |
-| `-slow-query` | `0` | この時間を超えた文をログに出す（0 なら出さない）。起動時の値で、止めずに `SET GLOBAL long_query_time` と `slow_query_log` で変えられる（下の「遅い文のログ」） |
-| `-slow-query-redact` | `false` | 遅い文のログの文の値を `?` に畳む |
-| `-cache-size` | 上限の 8 分の 1（16〜128 MiB） | ブロックキャッシュの大きさ（`innodb_buffer_pool_size` に相当。バイト）。指定がなければ、メモリの上限の 8 分の 1 を 16 MiB から 128 MiB の間に収めたもの（上限がなければ 128 MiB） |
-| `-memory-limit` | コンテナの上限の 8 割 | プロセスのメモリの上限（`4G`、`512M` など。または環境変数 `HEIMDB_MEMORY_LIMIT`）。近づくと、文がエラー 1041 で止まり、そのトランザクションが取り消される（プロセスは落ちない）。指定がなければ、コンテナのメモリの上限（cgroup）の 8 割。`0` なら上限なし（下の「メモリの上限」） |
-| `-lock-wait-timeout` | | 書き込みのロックを待つ時間（`innodb_lock_wait_timeout` に相当） |
-| `-idle-lock-timeout` | `30s` | トランザクションの中で何もしないまま、書き込みのロックをこれより長く持つ接続を切る（0 なら切らない。下の「書き込みが詰まったとき」） |
-| `-tls-cert`、`-tls-key` | | TLS の証明書と鍵（PEM）。MySQL の接続で TLS を受け付け、レプリカへの送り出しを HTTPS にする |
-| `-require-tls` | `false` | TLS でない MySQL の接続を拒否する（`-tls-cert` が要る） |
-| `-replication-addr` | | レプリカに記録を送る HTTP（`-tls-cert` があれば HTTPS）のアドレス（空なら送らない） |
-| `-replication-token` | | 本番とレプリカの合言葉（または環境変数 `HEIMDB_REPLICATION_TOKEN`） |
-| `-replication-log-retention` | `24h` | レプリカのためにコミットの記録を残す期間（0 なら残さない） |
-| `-replication-sync-timeout` | `10s` | コミットを返す前に、レプリカが適用したという知らせを待つ上限（過ぎたら非同期に切り替える。0 なら待たない） |
-| `-replicate-from` | | この本番（`host:port`、`https://host:port`）の読み取り専用のレプリカとして動く |
-| `-replication-ca` | | 本番の証明書を確かめる CA（PEM。指定すると `-replicate-from` は https になる。なければ OS が信頼するもの） |
-| `-replica-name` | ホスト名 | 本番の `heimdb_status` に出すレプリカの名前 |
-| `-metrics-addr` | | Prometheus の形式の指標を `http://<アドレス>/metrics` で返す（空なら開かない。認証がないので外に開けない。下の「指標」） |
-| `-debug` | `false` | すべての文をログに出す |
-| `-no-auth` | `false` | 認証なしで誰でも接続できる（開発用） |
-| `-rebuild-indexes` | `true` | 起動の後に、本番（main）の、古い HeimDB（0.2.38 以前、`SET` と `BIT` は 0.2.40 以前）で作ったエントリのないインデックスを、裏で 1 つずつ作り直す（または環境変数 `HEIMDB_REBUILD_INDEXES`。フラグを書いたときは、フラグが優先する）。止めるのは `-rebuild-indexes=false`。レプリカでは動かない。下の「古いインデックスの作り直し」 |
-| `-branch-procedures` | `false` | ブランチだけの権限のユーザーが、自分のブランチの差分、解決、変更の一覧、復元を呼べる（または環境変数 `HEIMDB_BRANCH_PROCEDURES=1`。フラグを書いたときは、フラグが優先する）。差分は親で変わった値も返すので、ブランチをテナントの分離に使うなら付けない（[`procedures.md`](procedures.md) の「ブランチのユーザーが呼べる手続き」） |
+| `-addr` | `0.0.0.0:3306` | Address to listen on |
+| `-data` | `data` | Data directory |
+| `-db` | `wordpress` | Database name of production (the main branch) |
+| `-root-password` | | Password of `root@'%'`, created on first start |
+| `-site-user` | `wordpress` | Name of the user WordPress connects as |
+| `-site-password` | | Password of the user WordPress connects as (or the environment variable `HEIMDB_SITE_PASSWORD`). If set, HeimDB creates that user with privileges on the `-db` database only (if it does not exist yet; an existing user is not changed) |
+| `-retention` | `720h` (30 days) | How long old versions are kept for `AS OF` and restore (0 keeps them forever) |
+| `-gc-interval` | `1h` | Interval for deleting old versions |
+| `-backup-dir` | | Where `CALL heimdb_backup()` writes (empty disables it) |
+| `-backup-key` | | `name=path`. `CALL heimdb_backup('<backup name>', '<name>')` writes an encrypted backup to the age recipients (`age1...`, one per line) in the file at that path. The file is read on every backup (repeat the flag for several keys; requires `-backup-dir`; see "Encrypted backups" below) |
+| `-reset-passwords` | `false` | On start, set the password of `root@'%'` to `-root-password` and, if the `-site-user` exists, its password to `-site-password` (other users are kept; or the environment variable `HEIMDB_RESET_PASSWORDS=1`). For opening a store restored from a backup; see "Encrypted backups" below |
+| `-reset-users` | `false` | On start, delete every user other than `root@'%'` and, if `-site-password` is set, the site user (its privileges are kept and its password overwritten; it is created if missing), and overwrite the password of `root@'%'` (or the environment variable `HEIMDB_RESET_USERS=1`) |
+| `-shutdown-timeout` | `30s` | On SIGTERM, how long to wait for running statements (after that, HeimDB exits without closing the data) |
+| `-slow-query` | `0` | Log statements that take longer than this (0 disables it). This is the value at start; it can be changed without a restart with `SET GLOBAL long_query_time` and `slow_query_log` (see "Slow query log" below) |
+| `-slow-query-redact` | `false` | Fold the values in statements in the slow query log into `?` |
+| `-cache-size` | 1/8 of the limit (16 to 128 MiB) | Size of the block cache (like `innodb_buffer_pool_size`; bytes). If not set, 1/8 of the memory limit, kept between 16 MiB and 128 MiB (128 MiB if there is no limit) |
+| `-memory-limit` | 80% of the container's limit | Memory limit of the process (`4G`, `512M` and so on; or the environment variable `HEIMDB_MEMORY_LIMIT`). Near it, a statement stops with error 1041 and its transaction is rolled back (the process does not crash). If not set, 80% of the container's memory limit (cgroup). `0` means no limit (see "Memory limit" below) |
+| `-lock-wait-timeout` | | How long to wait for the write lock (like `innodb_lock_wait_timeout`) |
+| `-idle-lock-timeout` | `30s` | Close a connection that holds the write lock longer than this while idle in a transaction (0 never closes it; see "When writes are stuck" below) |
+| `-tls-cert`, `-tls-key` | | TLS certificate and key (PEM). HeimDB accepts TLS on MySQL connections and sends to replicas over HTTPS |
+| `-require-tls` | `false` | Reject MySQL connections that do not use TLS (requires `-tls-cert`) |
+| `-replication-addr` | | HTTP (HTTPS with `-tls-cert`) address for sending the log to replicas (empty sends nothing) |
+| `-replication-token` | | Shared secret between production and replicas (or the environment variable `HEIMDB_REPLICATION_TOKEN`) |
+| `-replication-log-retention` | `24h` | How long the commit log is kept for replicas (0 keeps nothing) |
+| `-replication-sync-timeout` | `10s` | Before returning a commit, how long to wait for a replica to report that it applied it (after that, HeimDB switches to asynchronous; 0 does not wait) |
+| `-replicate-from` | | Run as a read-only replica of this production (`host:port`, `https://host:port`) |
+| `-replication-ca` | | CA (PEM) for checking production's certificate (with it, `-replicate-from` uses https; without it, the CAs the OS trusts) |
+| `-replica-name` | Host name | Name of the replica shown in production's `heimdb_status` |
+| `-metrics-addr` | | Serve metrics in the Prometheus format at `http://<address>/metrics` (empty does not open it. There is no authentication, so do not expose it; see "Metrics" below) |
+| `-debug` | `false` | Log every statement |
+| `-no-auth` | `false` | Anyone can connect without authentication (for development) |
+| `-rebuild-indexes` | `true` | After start, rebuild in the background, one at a time, the indexes on production (main) that have no entries because they were made by an old HeimDB (0.2.38 or earlier; 0.2.40 or earlier for `SET` and `BIT`) (or the environment variable `HEIMDB_REBUILD_INDEXES`; if the flag is given, the flag wins). Turn it off with `-rebuild-indexes=false`. Does not run on replicas. See "Rebuilding old indexes" below |
+| `-branch-procedures` | `false` | Users with privileges on a branch only can call the diff, resolve, change list and restore of their own branch (or the environment variable `HEIMDB_BRANCH_PROCEDURES=1`; if the flag is given, the flag wins). The diff also returns values changed on the parent, so do not set this if you use branches to separate tenants ("Procedures branch users can call" in [`procedures.md`](procedures.md)) |
 
-- 初回の起動で、`-root-password`（または環境変数 `HEIMDB_ROOT_PASSWORD`）のパスワードで `root@'%'`（すべての権限）を作る。ユーザーがいなくてどちらも指定しなければ起動しない。
-- HeimDB は UTC で動く（RDS などの MySQL の既定と同じ）。
-- 止めるときは SIGTERM。実行中の文が終わるのを `-shutdown-timeout` まで待ってから、データを閉じる。
+- On first start, HeimDB creates `root@'%'` (all privileges) with the password from `-root-password` (or the environment variable `HEIMDB_ROOT_PASSWORD`). If there are no users and neither is given, HeimDB does not start.
+- HeimDB runs in UTC (the same as the default of MySQL on RDS and similar services).
+- To stop it, send SIGTERM. HeimDB waits up to `-shutdown-timeout` for running statements to finish, then closes the data.
 
 ## Docker
 
-イメージは Docker Hub の [`tsukinowa/heimdb`](https://hub.docker.com/r/tsukinowa/heimdb)（linux/amd64、linux/arm64）。データは `/data`、ポートは 3306 で、`docker run` の後ろに足したフラグはそのまま HeimDB に渡る。依存のライセンスの表示はイメージの `/licenses` にある。
+The image is [`tsukinowa/heimdb`](https://hub.docker.com/r/tsukinowa/heimdb) on Docker Hub (linux/amd64, linux/arm64). Data is in `/data`, the port is 3306, and flags added after `docker run` are passed to HeimDB as they are. The license notices of the dependencies are in `/licenses` in the image.
 
 ```sh
 docker run -d --name heimdb -p 3306:3306 -v heimdb-data:/data \
   -e HEIMDB_ROOT_PASSWORD='secret' -e HEIMDB_SITE_PASSWORD='site-secret' tsukinowa/heimdb:0.2.14 -slow-query 1s
 ```
 
-HeimDB は nonroot（UID 65532）で動き、起動時に所有者を変えない（公式の MySQL のイメージと違う）。名前付きのボリュームはそのまま使えるが、ホストのディレクトリをマウントするときは、先に `chown -R 65532:65532 <ディレクトリ>` しておく（しないと `open store: open /data/LOCK: permission denied` ですぐ終わる）。`-backup-dir` も同じ。
+HeimDB runs as nonroot (UID 65532) and does not change ownership on start (unlike the official MySQL image). Named volumes work as they are, but when you mount a host directory, run `chown -R 65532:65532 <directory>` first (otherwise HeimDB exits right away with `open store: open /data/LOCK: permission denied`). The same applies to `-backup-dir`.
 
-### WordPress と一緒に動かす
+### Running with WordPress
 
-リポジトリの直下の [`compose.yaml`](../compose.yaml) で、HeimDB と WordPress をまとめて起動できる。HeimDB のポートはホストに開けない（WordPress と wp-cli のコンテナからだけ使う）。
+[`compose.yaml`](../compose.yaml) at the top of the repository starts HeimDB and WordPress together. HeimDB's port is not opened to the host (only the WordPress and wp-cli containers use it).
 
 ```sh
-export HEIMDB_ROOT_PASSWORD='secret' HEIMDB_SITE_PASSWORD='site-secret'  # または .env に書く。ないと起動しない
-docker compose up -d                       # WordPress は http://localhost:8080（WP_PORT で変えられる）
+export HEIMDB_ROOT_PASSWORD='secret' HEIMDB_SITE_PASSWORD='site-secret'  # or write them in .env; it does not start without them
+docker compose up -d                       # WordPress at http://localhost:8080 (change with WP_PORT)
 docker compose run --rm cli wp core install --url=http://localhost:8080 --title=Site \
   --admin_user=admin --admin_password='...' --admin_email=you@example.com
 ```
 
-WordPress は、本番のデータベースだけの権限のユーザー `wordpress` でつなぐ（HeimDB が `HEIMDB_SITE_PASSWORD` で作る）。root は wp-cli（`cli`）だけが使う（`CALL heimdb_*` と、ユーザーの作成のため）。
+WordPress connects as the user `wordpress`, which has privileges on the production database only (HeimDB creates it from `HEIMDB_SITE_PASSWORD`). Only wp-cli (`cli`) uses root (for `CALL heimdb_*` and for creating users).
 
-ステージング（ブランチ `wordpress@staging` につなぐ 2 つ目の WordPress。http://localhost:8081、`STAGING_PORT` で変えられる）は、そのブランチだけの権限のユーザー `staging` でつなぐ（ステージングが乗っ取られても本番に届かない）。ブランチとユーザーを作ってから起動する。`STAGING_DB_PASSWORD` がないと、ステージングは起動しない。
+Staging (a second WordPress connected to the branch `wordpress@staging`; http://localhost:8081, change with `STAGING_PORT`) connects as the user `staging`, which has privileges on that branch only (if staging is taken over, the attacker cannot reach production). Create the branch and the user before starting it. Without `STAGING_DB_PASSWORD`, staging does not start.
 
 ```sh
 export STAGING_DB_PASSWORD='staging-secret'
 docker compose run --rm cli wp db query "CALL heimdb_branch_create('staging')"
 docker compose run --rm cli wp db query "CREATE USER 'staging'@'%' IDENTIFIED BY '$STAGING_DB_PASSWORD'; GRANT ALL ON \`wordpress@staging\`.* TO 'staging'@'%'"
 docker compose --profile staging up -d staging
-# ステージングで編集した後、差分を見て本番にマージする
+# After editing on staging, review the diff and merge into production
 docker compose run --rm cli wp db query "CALL heimdb_branch_diff('staging')"
 docker compose run --rm cli wp db query "CALL heimdb_branch_merge('staging')"
 ```
 
-- ステージングの URL は `WP_HOME` と `WP_SITEURL` で切り替えている。
-- ファイル（言語、プラグイン、テーマ、アップロード）は DB の外にあるので、ステージングは本番と別のボリュームを使う（ステージングでプラグインを更新しても本番のファイルは変わらない）。ステージングを最初に起動するとき、`staging-files` が本番のファイルをそのボリュームに写す。DB のブランチと同じく、ファイルも分岐の時点の写しから始まる（写さないと、ステージングは英語になり、管理画面を開くとファイルのないプラグインが無効に、テーマが標準のものに替わって、それが本番にマージされる）。
-- **ファイルはマージされない**。ステージングで入れたり更新したりしたプラグイン、テーマ、言語は、マージの前に本番にも同じものを入れる（`wp plugin install` など）。ステージングを作った後に本番で入れたものは、ステージングには入らない（作り直す）。
+- The staging URL is switched with `WP_HOME` and `WP_SITEURL`.
+- Files (languages, plugins, themes, uploads) live outside the DB, so staging uses a separate volume from production (updating a plugin on staging does not change production's files). The first time staging starts, `staging-files` copies production's files into that volume. Like the DB branch, the files start from a copy taken at the time of branching (without the copy, staging would be in English, and opening the admin screen would deactivate the plugins whose files are missing and switch the theme to the default one, and that would be merged into production).
+- **Files are not merged**. Before merging, install on production the same plugins, themes and languages you installed or updated on staging (`wp plugin install` and so on). Anything installed on production after staging was created does not appear on staging (recreate staging).
 
-ステージングを作り直す（本番の今の DB とファイルから始め直す。ユーザー `staging` はそのまま使える）:
+To recreate staging (start again from production's current DB and files; the user `staging` keeps working):
 
 ```sh
 docker compose --profile staging rm -sf staging staging-files
@@ -94,185 +94,185 @@ docker compose run --rm cli wp db query "CALL heimdb_branch_create('staging')"
 docker compose --profile staging up -d staging
 ```
 
-- ブロックテーマは、トップページを最初に表示したときにナビゲーション（`wp_navigation` の投稿）を作る。ブランチを切った後に本番とステージングの両方で初めて表示すると、両側に同じ名前のナビゲーションができ、マージが競合で止まる。`heimdb_branch_diff('staging', 'wp_posts')` で競合の行を見て、`CALL heimdb_branch_resolve('staging', 'wp_posts', 'ID=…', 'parent')`（本番の方を残す）で解決してからマージする（解決の指定は [`procedures.md`](procedures.md) の「heimdb_branch_resolve」）。
+- A block theme creates the navigation (a `wp_navigation` post) the first time the front page is shown. If the front page is shown for the first time on both production and staging after branching, both sides get a navigation with the same name, and the merge stops on a conflict. Look at the conflicting row with `heimdb_branch_diff('staging', 'wp_posts')`, resolve it with `CALL heimdb_branch_resolve('staging', 'wp_posts', 'ID=…', 'parent')` (keeps production's), then merge (for how to specify the resolution, see "heimdb_branch_resolve" in [`procedures.md`](procedures.md)).
 
-### 運用の注意
+### Operating notes
 
-- **バージョンを決めて使う**。`latest` ではなく `0.2.14` のようなバージョンを指定し、上げるときは下の「HeimDB のバージョンを上げる」の手順による。
-- 止めるときは `docker stop`（SIGTERM）。実行中の文を `-shutdown-timeout`（既定 30 秒）まで待つので、`docker stop -t` や `stop_grace_period` はそれより長くする（短いと強制終了になる）。
-- `CALL heimdb_backup()` を使うなら、書き出し先をボリュームにして `-backup-dir` で渡す（例: `-v heimdb-backups:/backups` と `-backup-dir /backups`）。
-- `heimdb_backup` のバックアップは、データベースを丸ごと写すので、取った時点で GC が消していない古いバージョン（既定の `-retention` なら約 30 日分）、ブランチ、ユーザーと権限を含む。そのディレクトリで起動すれば、`AS OF`、`heimdb_restore`、過去の時点からのブランチの作成が、取った時と同じ範囲で使える（mysqldump のバックアップは今の行だけで、履歴を持たない）。ただし GC は今の時刻から `-retention` を数えるので、`-retention` より古いバックアップを起動すると、最初の GC（`-gc-interval`、既定 1 時間）で最後の状態より前のバージョンが消える（最後の状態は残る）。古いバックアップの履歴を見るなら、`-retention 0`（消さない）で起動する。
-- 退避を別の場所（ほかのプロジェクト、検証の環境）へ写すなら、鍵を指定して暗号化する（下の「暗号化した退避」）。平文の退避は、表の行も WAL（ログ）の直近の書き込みも、そのまま読める。
-- **表の手入れは要らない**（0.2.22 から受け付ける）。`OPTIMIZE TABLE`、`CHECK TABLE`、`REPAIR TABLE`、`ANALYZE TABLE` は、何もせずに `OK`（`REPAIR` は InnoDB と同じ「対応しない」の `note`）を返す。古いバージョンは GC が消し、ディスクは Pebble が自分で詰め、壊れは Pebble が読むときにチェックサムで確かめる。WP-Optimize や Advanced Database Cleaner の最適化、`wp-admin/maint/repair.php`、`wp db optimize` はエラーにならないが、何も変わらない。wp-cli の `wp db check` / `optimize` / `repair` は MariaDB の `mariadb-check` を使い、既定で TLS を求めるので、HeimDB を `-tls-cert` なしで動かしているなら `--skip-ssl` を付ける（`wp db check --skip-ssl`）。
-- ログに `HeimDB: recovered from a panic in a statement`（スタック付き）が出たら、HeimDB の不具合。その文はエラー 1105（`HeimDB: internal error: ...`）で失敗し、その文の書き込みは取り消され、サーバはそのまま動く。接続も続くが、結果の行を送り始めた後（多くの行を返す `SELECT` の途中）なら、ほかのエラーと同じく接続が切れる。取り消せないもの: 複数の操作の `ALTER TABLE` で先に終わった操作、自動コミットの文がコミットを終えた後の panic。スタックと、そのころの文（スロークエリのログなど）を添えて知らせる。
-- **メモリの目安**（GCE の n2-standard-4、ホスティングの `wp_postmeta` と同じ形の 310 万行、0.2.11。`docs/bench.md` の「段階 58」と「段階 59」）。常駐（開いて全件を読んだ後の RSS）は約 500 MiB で、うち生きているヒープが約 200 MiB（ブロックキャッシュ 128 MiB と、照合順序の表など約 40 MiB を含む）。常駐は表の行数にほぼよらない。行数とともに増えるのは次のもの（最大の RSS）。上限があれば、超える前にエラー 1041 で止まる。
+- **Pin a version**. Specify a version such as `0.2.14` rather than `latest`, and follow "Upgrading HeimDB" below when you upgrade.
+- Stop with `docker stop` (SIGTERM). HeimDB waits for running statements up to `-shutdown-timeout` (30 seconds by default), so make `docker stop -t` or `stop_grace_period` longer than that (if shorter, the process is killed).
+- To use `CALL heimdb_backup()`, put the destination on a volume and pass it with `-backup-dir` (for example `-v heimdb-backups:/backups` and `-backup-dir /backups`).
+- A `heimdb_backup` backup copies the whole database, so it contains the old versions that GC had not deleted when it was taken (about 30 days with the default `-retention`), the branches, and the users and privileges. If you start HeimDB on that directory, `AS OF`, `heimdb_restore` and creating a branch from a past time work over the same range as when the backup was taken (a mysqldump backup has only the current rows and no history). However, GC counts `-retention` from the current time, so if you start a backup older than `-retention`, the first GC (`-gc-interval`, 1 hour by default) deletes the versions before the last state (the last state is kept). To look at the history of an old backup, start it with `-retention 0` (deletes nothing).
+- When you copy a backup to another place (another project, a test environment), encrypt it with a key (see "Encrypted backups" below). In a plaintext backup, both the table rows and the recent writes in the WAL (log) can be read as they are.
+- **Tables need no maintenance** (accepted since 0.2.22). `OPTIMIZE TABLE`, `CHECK TABLE`, `REPAIR TABLE` and `ANALYZE TABLE` do nothing and return `OK` (`REPAIR` returns the same "not supported" `note` as InnoDB). GC deletes old versions, Pebble compacts the disk by itself, and Pebble checks for corruption with checksums when it reads. The optimization of WP-Optimize and Advanced Database Cleaner, `wp-admin/maint/repair.php` and `wp db optimize` do not fail, but change nothing. wp-cli's `wp db check` / `optimize` / `repair` use MariaDB's `mariadb-check`, which requires TLS by default, so if HeimDB runs without `-tls-cert`, add `--skip-ssl` (`wp db check --skip-ssl`).
+- If the log shows `HeimDB: recovered from a panic in a statement` (with a stack trace), it is a bug in HeimDB. The statement fails with error 1105 (`HeimDB: internal error: ...`), its writes are rolled back, and the server keeps running. The connection also stays open, but if HeimDB had already started sending result rows (in the middle of a `SELECT` that returns many rows), the connection is closed, as with other errors. What cannot be rolled back: operations of a multi-operation `ALTER TABLE` that had already finished, and a panic after an autocommit statement finished its commit. Report it with the stack trace and the statements from around that time (from the slow query log and so on).
+- **Memory guidance** (GCE n2-standard-4, 3.1 million rows shaped like `wp_postmeta`, 0.2.11; "Memory" in [`bench.md`](bench.md)). Resident memory (RSS after opening and reading every row) is about 500 MiB, of which the live heap is about 200 MiB (including the 128 MiB block cache and about 40 MiB for things such as the collation tables). Resident memory hardly depends on the number of rows in the tables. What grows with the number of rows is the following (peak RSS). With a limit, these stop with error 1041 before going over it.
 
-  | 文 | 310 万行、上限なし | 上限 3,276 MiB |
+  | Statement | 3.1 million rows, no limit | Limit 3,276 MiB |
   |---|---|---|
-  | `ALTER TABLE ... ADD COLUMN`（0.2.8 から行数によらない） | 621 MiB | 通る |
-  | インデックスを使えない `ORDER BY ... LIMIT` | 976 MiB | 通る |
-  | 値がすべて違う列の `GROUP BY` | 1,755 MiB | 通る |
-  | 表全体の `UPDATE` | 2,625 MiB | 通る |
-  | 表全体の `DELETE` | 4,640 MiB | 1041 |
-  | 1 つのトランザクションでの 310 万行の取り込み（`mariadb-dump` の既定） | 5,643 MiB | 1041（`COMMIT` で） |
-  | 全行を変えたブランチのマージ | 4,439 MiB（55 秒） | 1041 |
-  | 列を足したブランチのマージ | 5,477 MiB（81 秒） | 1041 |
-  | 全行を変えた後の復元 | 10,540 MiB（154 秒） | 1041 |
+  | `ALTER TABLE ... ADD COLUMN` (independent of row count since 0.2.8) | 621 MiB | Succeeds |
+  | `ORDER BY ... LIMIT` that cannot use an index | 976 MiB | Succeeds |
+  | `GROUP BY` on a column whose values are all different | 1,755 MiB | Succeeds |
+  | `UPDATE` of the whole table | 2,625 MiB | Succeeds |
+  | `DELETE` of the whole table | 4,640 MiB | 1041 |
+  | Loading 3.1 million rows in one transaction (the `mariadb-dump` default) | 5,643 MiB | 1041 (at `COMMIT`) |
+  | Merging a branch that changed every row | 4,439 MiB (55 seconds) | 1041 |
+  | Merging a branch that added a column | 5,477 MiB (81 seconds) | 1041 |
+  | Restoring after every row was changed | 10,540 MiB (154 seconds) | 1041 |
 
-  0.2.10 までは、`UPDATE` が 4,042 MiB、`DELETE` が 9,344 MiB、取り込みが 11,192 MiB、マージが 7,871〜11,869 MiB（列を足したものは 881 秒）、復元が 12 GiB を超えた。0.2.7 までは `ALTER TABLE` と `CREATE INDEX` も行数に比例し、311 万行の `ADD COLUMN` で 7.8 GiB を使った。0.2.8 までは読み出し（インデックスを使えない `SELECT`、`COUNT(*)`、範囲の検索）も比例した。
+  Up to 0.2.10, `UPDATE` used 4,042 MiB, `DELETE` 9,344 MiB, loading 11,192 MiB, merges 7,871 to 11,869 MiB (881 seconds for the one that added a column), and restore more than 12 GiB. Up to 0.2.7, `ALTER TABLE` and `CREATE INDEX` were also proportional to the number of rows, and `ADD COLUMN` on 3.11 million rows used 7.8 GiB. Up to 0.2.8, reads (a `SELECT` that cannot use an index, `COUNT(*)`, range searches) were also proportional.
 
-  書き込みの多い文が増えるのは、コミットしていない書き込みと、コミットの間の写しのため。コミットしていない書き込みは、`wp_postmeta` の形で 1 行あたり約 0.5 KB（行とインデックスのエントリ。生きているヒープ）。コミットの間は、その上にコミットのバッチ（レプリカに送る記録を含めて中身の 2 倍）と、Pebble の書き出しの記録（WAL）の作業の分を一時的に使い、合わせてコミットしていない書き込みの約 4 倍になる。上限 3,276 MiB では、`wp_postmeta` の形で 1 つのトランザクションに入るのは約 150 万行まで（GCE で、150 万行は入り、200 万行は `COMMIT` で 1041 になった）。マージと復元は自分のトランザクションに書くので同じく増え、上限 L の中で 1 回に変えられる量は、書き込みの大きさで L の 3 分の 1 程度（上限 3,276 MiB なら、310 万行の全行を戻す復元は 1041 になる。表や時刻を分けて戻す）。止まれば何も変えない。表を指定した復元で組の表の片方だけを戻すときは、戻さない表の変わった行の主キーも読む（`docs/procedures.md` の `heimdb_restore`）。
-- **上限を付けて動かす**。上限がない（`-memory-limit 0`）と、Go の GC は生きているヒープの 2 倍までメモリを使ってから回収するので、大きな文の後に RSS が生きているヒープの 2 倍近くまで伸びる（310 万行の復元で、生きているヒープ 6.7 GiB の後に cgroup の 12 GiB を超えて落ちた）。上限があれば、GC は上限に近づく前に回り、文は 1041 で止まる。
-- **メモリの上限**（0.2.9 から）。上の残りでメモリを使い切ってプロセスが落ちないよう、`-memory-limit` に近づいたら、そのとき行を読み書きしている文をエラー 1041（`HeimDB: out of memory: ...`）で止め、そのトランザクションを取り消す（明示的なトランザクションも、文だけでなくトランザクションごと取り消す）。止めるのは、生きているヒープが上限の 75% を超えたとき。メモリはプロセス全体で数えるので、止まる文が多く使っている当の文とは限らない（同時に動いている別の文が止まることもある。大きな変更を持ったまま何もしていないトランザクションがあると、それが終わるまでほかの文が止まり続ける）。プロセスの使うメモリ（RSS）は、ヒープの外の分とバッチが一度に伸びる分だけ、上限を 1〜2 割超えることがある。上限を指定しなければコンテナの上限の 8 割を使うのはこのため。コンテナの上限は自分の cgroup の `memory.max` だけを読む（入れ子で親だけに上限があるときは上限なしになるので、`-memory-limit` を指定する）。コンテナの外で動かすなら、`-memory-limit` を指定する（1 つの VM に複数のサイトを置くなら、合計が VM のメモリに収まるように）。
-- **上限に数える常駐の分**（0.2.11 から）。生きているヒープには、起動直後の分（約 40 MiB。大半は照合順序の表）と、ブロックキャッシュ（公式のイメージは cgo なしで建てるので、Pebble はキャッシュを Go のヒープに取る）が入る。キャッシュは読めば満ち、GC でも減らない。0.2.10 までは、上限の 75% がこの 2 つより小さいと、キャッシュが満ちた後はどの文も 1041 になり、起動し直しても直らなかった（既定のキャッシュ 128 MiB で、上限 256 MiB 以下）。0.2.11 から、`-cache-size` を指定しなければキャッシュを上限の 8 分の 1 にし、起動直後の分 + キャッシュ + 文の余裕（32 MiB）が上限の 75% を超える設定では、要る上限をエラーに出して起動しない。表の行数には、常駐はほぼよらない。監視は `CALL heimdb_status()` の `memory_live_bytes` と `memory_abort_bytes` を比べる（`heimdb_status()` は行を読まないので、文が止まる状態でも通る）。
-- **ダンプの取り込み**。HeimDB はコミットしていない書き込みをメモリに持つ（`wp_postmeta` の形で 1 行あたり約 0.5 KB、コミットの間はその約 4 倍）ので、大きな表を 1 つのトランザクションで入れると、メモリが行数に比例する。`mariadb-dump` は既定で表ごとに `SET autocommit=0` と `COMMIT` で囲む（`--no-autocommit` が既定で有効）ので、`--skip-no-autocommit` を付けて取る（ホスティング側の報告: 311 万行の `wp_postmeta` が、0.2.9 の既定では 7.7 GiB で落ち、付けると 193 秒で入った。0.2.11 では既定のままで 5.6 GiB、上限 3,276 MiB なら `COMMIT` で 1041）。MySQL の `mysqldump` は既定では囲まない（`--no-autocommit` を付けない）。上限があれば、落ちずにエラー 1041 で止まる。
-- **1 つのトランザクションの大きさの上限**（0.2.11 から）。コミットしていない書き込みが 1,536 MiB を超えると、その文をエラー 1197（`HeimDB: the transaction writes more than 1536 MiB ...`）で取り消す（トランザクションのそれまでの書き込みは残り、`COMMIT` か `ROLLBACK` を選べる）。Pebble は 4 GiB を超えるバッチを書けず、コミットのバッチは中身の 2 倍になるため。マージと復元の上限は 1,900 MiB で、超えると 1197 で何も変えずに止まる（復元は表を分けて戻す）。メモリの上限が小さければ、この大きさより前に 1041 で止まる。
-- TLS の証明書や鍵は、ファイルをマウントして `-tls-cert`、`-tls-key` で渡す。プロセスは nonroot（UID 65532）で動くので、そのユーザーが読める権限にする。
-- イメージを作り直すときは、リポジトリの直下で `docker buildx build --platform linux/amd64,linux/arm64 --build-arg VERSION=0.2.14 -t tsukinowa/heimdb:0.2.14 --push .`。
+  Write-heavy statements grow because of uncommitted writes and the copies made during commit. Uncommitted writes take about 0.5 KB per row in the shape of `wp_postmeta` (the row and its index entries; live heap). During commit, on top of that, HeimDB temporarily uses the commit batch (twice its contents, including the log sent to replicas) and the work for Pebble's write-ahead log (WAL), about 4 times the uncommitted writes in total. With a limit of 3,276 MiB, one transaction can hold up to about 1.5 million rows in the shape of `wp_postmeta` (on GCE, 1.5 million rows went in, and 2 million rows hit 1041 at `COMMIT`). Merges and restores write into their own transaction, so they grow the same way: within a limit L, the amount you can change at once is about a third of L in write size (with a limit of 3,276 MiB, a restore that reverts all 3.1 million rows hits 1041; restore tables or time ranges separately). If it stops, nothing is changed. When a restore that names tables reverts only one table of a pair, it also reads the primary keys of the changed rows in the table that is not reverted (`heimdb_restore` in `docs/procedures.md`).
+- **Run with a limit**. Without a limit (`-memory-limit 0`), Go's GC lets memory grow to twice the live heap before collecting, so after a large statement RSS grows to nearly twice the live heap (a restore of 3.1 million rows, after a live heap of 6.7 GiB, went over the cgroup's 12 GiB and crashed). With a limit, GC runs before memory nears the limit, and statements stop with 1041.
+- **Memory limit** (since 0.2.9). So that the remaining cases above do not use up memory and crash the process, near `-memory-limit` HeimDB stops the statements that are reading or writing rows at that moment with error 1041 (`HeimDB: out of memory: ...`) and rolls back their transactions (for an explicit transaction, the whole transaction is rolled back, not only the statement). It stops them when the live heap goes over 75% of the limit. Memory is counted for the whole process, so the statement that stops is not necessarily the one using the most memory (another statement running at the same time can stop. If an idle transaction holds a large change, other statements keep stopping until it ends). The memory the process uses (RSS) can exceed the limit by 10 to 20% because of memory outside the heap and batches that grow all at once. This is why the default is 80% of the container's limit. For the container's limit, HeimDB reads only its own cgroup's `memory.max` (with nested cgroups where only a parent has a limit, there is no limit, so set `-memory-limit`). When running outside a container, set `-memory-limit` (if you put several sites on one VM, make the total fit in the VM's memory).
+- **Resident memory counted against the limit** (since 0.2.11). The live heap includes the memory used right after start (about 40 MiB, mostly the collation tables) and the block cache (the official image is built without cgo, so Pebble allocates the cache on the Go heap). The cache fills as data is read, and GC does not shrink it. Up to 0.2.10, if 75% of the limit was smaller than these two, every statement hit 1041 once the cache filled, and restarting did not help (with the default 128 MiB cache, limits of 256 MiB or less). Since 0.2.11, if `-cache-size` is not set, the cache is 1/8 of the limit, and with settings where the memory right after start + the cache + headroom for statements (32 MiB) exceeds 75% of the limit, HeimDB reports the limit it needs in an error and does not start. Resident memory hardly depends on the number of rows in the tables. To monitor, compare `memory_live_bytes` and `memory_abort_bytes` in `CALL heimdb_status()` (`heimdb_status()` reads no rows, so it works even while statements are being stopped).
+- **Loading dumps**. HeimDB holds uncommitted writes in memory (about 0.5 KB per row in the shape of `wp_postmeta`, about 4 times that during commit), so loading a large table in one transaction uses memory in proportion to the number of rows. `mariadb-dump` by default wraps each table in `SET autocommit=0` and `COMMIT` (`--no-autocommit` is on by default), so take the dump with `--skip-no-autocommit` (reported by the hosting side: 3.11 million rows of `wp_postmeta` crashed at 7.7 GiB with the 0.2.9 defaults, and went in in 193 seconds with the option. With 0.2.11, the defaults use 5.6 GiB, and with a limit of 3,276 MiB it hits 1041 at `COMMIT`). MySQL's `mysqldump` does not wrap by default (it does not add `--no-autocommit`). With a limit, HeimDB stops with error 1041 instead of crashing.
+- **Size limit of one transaction** (since 0.2.11). When uncommitted writes exceed 1,536 MiB, the statement is rolled back with error 1197 (`HeimDB: the transaction writes more than 1536 MiB ...`) (the transaction's earlier writes remain, and you can choose `COMMIT` or `ROLLBACK`). This is because Pebble cannot write a batch over 4 GiB, and the commit batch is twice its contents. For merges and restores the limit is 1,900 MiB; over it, they stop with 1197 without changing anything (restore tables separately). If the memory limit is small, 1041 comes before this size.
+- Pass the TLS certificate and key by mounting the files and using `-tls-cert` and `-tls-key`. The process runs as nonroot (UID 65532), so give that user read permission.
+- To rebuild the image, run `docker buildx build --platform linux/amd64,linux/arm64 --build-arg VERSION=0.2.14 -t tsukinowa/heimdb:0.2.14 --push .` at the top of the repository.
 
-## HeimDB のバージョンを上げる
+## Upgrading HeimDB
 
-バージョンの付け方: ソースを公開した 0.3.0（コードは 0.2.45 と同じ）から、データ形式を変えて古いバージョンでは開けなくなるとき（後方互換をなくすとき）にマイナーバージョンを上げ（0.3.x から 0.4.0）、ほかはパッチのバージョンを上げる。データ形式を変えたバージョンも、古いデータは起動時に移す。
+Versioning: from 0.3.0, the release that published the source (the code is the same as 0.2.45), the minor version goes up (0.3.x to 0.4.0) when the data format changes so that older versions can no longer open it (when backward compatibility is dropped); other releases raise the patch version. Even a version that changes the data format converts old data on start.
 
-データ形式は 0.2.41 からバージョン 8（FLOAT(M,D)、DOUBLE(M,D) と UNSIGNED の型と、SET と BIT の列のインデックスのエントリのため）、0.2.39 と 0.2.40 はバージョン 7（DECIMAL、FLOAT、DOUBLE、ENUM の列のインデックスのエントリのため）、0.2.33 から 0.2.38 はバージョン 6（親の変更をブランチに取り込んだ記録のため）、0.2.20 から 0.2.32 はバージョン 5（主キーのない表のため）、0.2.19 はバージョン 4（文字列、バイト列、日付、ENUM を含む主キーのため）、0.2.11 から 0.2.18 はバージョン 3（大きなコミットの記録を 1 MiB ずつに分けて書くため）、0.1.6 から 0.2.10 はバージョン 2（1 列の文字列の主キーのため）、0.1.0 から 0.1.5 はバージョン 1。新しいバージョンは古いバージョンのデータをそのまま読み、起動時にバージョンの番号だけを書き換える（変換はないので、すぐ終わる）。古い HeimDB は、新しいバージョンのデータの起動を拒否する（読み違えない）。形式を変えるときは、新しい HeimDB が起動時に古いバージョンのデータを移し、リリースの説明にそう書く。
+The data format is version 8 from 0.2.41 (for FLOAT(M,D), DOUBLE(M,D) and UNSIGNED types, and index entries for SET and BIT columns), version 7 in 0.2.39 and 0.2.40 (for index entries for DECIMAL, FLOAT, DOUBLE and ENUM columns), version 6 from 0.2.33 to 0.2.38 (for the record of syncing the parent's changes into a branch), version 5 from 0.2.20 to 0.2.32 (for tables without a primary key), version 4 in 0.2.19 (for primary keys containing strings, byte strings, dates and ENUM), version 3 from 0.2.11 to 0.2.18 (for writing the log of a large commit in 1 MiB pieces), version 2 from 0.1.6 to 0.2.10 (for single-column string primary keys), and version 1 from 0.1.0 to 0.1.5. A newer version reads data of an older version as it is, and on start only rewrites the version number (there is no conversion, so it finishes immediately). An older HeimDB refuses to start on data of a newer version (so it does not misread it). When the format changes, the new HeimDB converts data of the older version on start, and the release notes say so.
 
-レプリカがないとき:
+Without a replica:
 
-1. `CALL heimdb_backup('before-upgrade')` を取る（`-backup-dir` の下）。
-2. HeimDB を止め（SIGTERM。`docker stop`）、新しいバージョンで同じ `-data` を指定して起動する。
-3. 戻すときは、古いバージョンで、手順 1 のバックアップのディレクトリを `-data` にして起動する（データ形式が変わるバージョンでは、上げた後のデータを古いバージョンは開けない）。
+1. Take `CALL heimdb_backup('before-upgrade')` (under `-backup-dir`).
+2. Stop HeimDB (SIGTERM; `docker stop`) and start the new version with the same `-data`.
+3. To go back, start the old version with the backup directory from step 1 as `-data` (for a version that changes the data format, the old version cannot open the upgraded data).
 
-同期のレプリカがあるとき:
+With a synchronous replica:
 
-- データ形式が同じバージョンどうし（普通の更新）: レプリカを止めて新しいバージョンで起動し、追いつく（`replication_behind` が 0s、本番の `replication_sync` が `sync`）のを待ってから、本番を同じように上げる。本番が止まっている間、WordPress は書き込めない（本番を上げずにレプリカへ切り替えるなら、「レプリカ」の昇格の手順による）。 0.2.7 以前のレプリカに 0.2.8 以降の本番をつながない（0.2.8 から、大きな表の `ALTER TABLE` と `CREATE INDEX` を何回かに分けてコミットし、途中のデータを GC から守る印を付ける。古いレプリカは印を知らず、途中で自分の GC が書きかけを消すと、本番と食い違う）。
-- 0.2.11 はデータ形式のバージョン 3 だが、レプリカに運ぶ記録の形（本番とレプリカが確かめ合うバージョン）はバージョン 2 のまま変わらない。0.2.10 以前とつながるので、普通の更新と同じく、レプリカを先に上げる。上げた後のレプリカのデータはバージョン 3 なので、0.2.10 以前に戻すときは本番のバックアップから作り直す。
-- 0.2.19 はデータ形式のバージョン 4 だが、0.2.11 と同じく、レプリカに運ぶ記録の形はバージョン 2 のまま変わらない。レプリカを先に上げる。上げた後のレプリカのデータはバージョン 4 なので、0.2.18 以前に戻すときは本番のバックアップから作り直す。0.2.19 の本番は、0.2.18 以前のレプリカを記録の水準（下の項目）で拒否する（0.2.18 以前のレプリカは、0.2.19 から作れるようになった主キーの表（WooCommerce の `wc_product_attributes_lookup`、Wordfence の `wfls_role_counts` など）を開けない）。
-- 0.2.20 はデータ形式のバージョン 5 だが、0.2.19 と同じく、レプリカに運ぶ記録の形はバージョン 2 のまま変わらない。レプリカを先に上げる。上げた後のレプリカのデータはバージョン 5 なので、0.2.19 以前に戻すときは本番のバックアップから作り直す。0.2.20 の本番は、0.2.19 以前のレプリカを記録の水準（下の項目）で拒否する（0.2.19 以前のレプリカは、0.2.20 から作れるようになった主キーのない表（WP Cerber、Loginizer のログの表など）を開けない）。
-- 0.2.33 はデータ形式のバージョン 6 だが、0.2.20 と同じく、レプリカに運ぶ記録の形はバージョン 2 のまま変わらない。レプリカを先に上げる。上げた後のレプリカのデータはバージョン 6 なので、0.2.32 以前に戻すときは本番のバックアップから作り直す。本番は、0.2.32 以前のレプリカを記録の水準で拒否する（0.2.32 以前のレプリカは、親の変更をブランチに取り込んだ記録（`heimdb_branch_sync`）を知らず、本番に昇格するとマージの基準を読み違える）。
-- 0.2.39 はデータ形式のバージョン 7 だが、0.2.33 と同じく、レプリカに運ぶ記録の形はバージョン 2 のまま変わらない。レプリカを先に上げる。上げた後のレプリカのデータはバージョン 7 なので、0.2.38 以前に戻すときは本番のバックアップから作り直す。本番は、0.2.38 以前のレプリカを記録の水準で拒否する（0.2.38 以前のレプリカは、DECIMAL、FLOAT、DOUBLE、ENUM の列を含むインデックスのキーの水準を知らず、本番に昇格した後の書き込みでそのエントリを保守しない）。上げた後も、前からある DECIMAL などのインデックスは前と同じく全件を読む。0.2.42 からは、本番が起動の後に main のものを裏で作り直す（下の「古いインデックスの作り直し」）。0.2.41 以前のままエントリを作るには、本番で `CALL heimdb_rebuild_indexes()` を呼ぶ（docs/procedures.md）。
-- 0.2.41 はデータ形式のバージョン 8 だが、0.2.39 と同じく、レプリカに運ぶ記録の形はバージョン 2 のまま変わらない。レプリカを先に上げる。上げた後のレプリカのデータはバージョン 8 なので、0.2.40 以前に戻すときは本番のバックアップから作り直す。本番は、0.2.40 以前のレプリカを記録の水準で拒否する（0.2.39 と 0.2.40 のレプリカは、FLOAT(M,D) と DOUBLE(M,D) の型を桁のない型と読み、本番に昇格した後の書き込みで丸めず、SET と BIT の列を含むインデックスのエントリを保守しない）。上げた後も、前からある表の FLOAT と DOUBLE の列は桁のない型のまま（前に `FLOAT(10,7)` と作った列も `float`）で、前からある SET と BIT の列のインデックスは前と同じく全件を読む。0.2.42 からは、本番が起動の後に main のものを裏で作り直す（下の「古いインデックスの作り直し」）。0.2.41 のままエントリを作るには、本番で `CALL heimdb_rebuild_indexes()` を呼ぶ（docs/procedures.md）。
-- 0.2.11 から、本番は、記録の水準を示さないレプリカ（0.2.10 以前。0.2.7 以前と見分けられない）と水準の足りないレプリカを拒否する（`HeimDB: the replica is too old for this primary` を、本番の `replica <名前>` の行と、レプリカのログと `replication_last_error` に出し、レプリカは記録を適用せずに止まる）。上の「レプリカを先に」の順なら困らない。本番を先に上げたら、レプリカも上げれば続きから追いつく。
-- 記録の中身の形（レプリカに運ぶ記録の形のバージョン）の変わるバージョン: **本番を先に**上げる（レプリカを先に上げると、新しいバージョンのレプリカは自分のデータを新しい形式にしてしまい、古い本番とつながらず、古いバージョンにも戻せない）。本番とレプリカは形式のバージョンを確かめ合い、違えば、レプリカは記録を 1 件も適用せずに止まる（`HeimDB: data format version differs (primary N, replica M)` を、ログと `heimdb_status` の `replication_last_error` に出す。本番の `replica <名前>` の行にも出る）ので、本番を上げてからレプリカを上げるまでの間、レプリカは追いつかない。0.1.5 以前の HeimDB はバージョンを示さず、バージョン 1 として扱う。
-  - 0.1.5 以前から 0.1.6 以降（バージョン 1 から 2）: 形式の中身の変換はないので、本番を上げた後、レプリカも止めて新しいバージョンで起動すれば、そのまま続きから追いつく（作り直さなくてよい）。
-  - 中身を変換するバージョン（将来）: 本番を上げた後、レプリカを本番の新しいバックアップから作り直す（リリースの説明に書く）。
+- Between versions with the same data format (a normal update): stop the replica, start it with the new version, wait for it to catch up (`replication_behind` is 0s and production's `replication_sync` is `sync`), then upgrade production the same way. While production is stopped, WordPress cannot write (to switch to the replica instead of upgrading production, follow the promotion steps in "Replicas"). Do not connect a replica of 0.2.7 or earlier to production of 0.2.8 or later (since 0.2.8, `ALTER TABLE` and `CREATE INDEX` on a large table are committed in several parts, with a mark that protects the data in progress from GC. An old replica does not know the mark, and if its own GC deletes the partly written data, it diverges from production).
+- 0.2.11 uses data format version 3, but the format of the log sent to replicas (the version production and replica check with each other) stays at version 2. It connects with 0.2.10 and earlier, so, as with a normal update, upgrade the replica first. The upgraded replica's data is version 3, so to go back to 0.2.10 or earlier, rebuild it from a production backup.
+- 0.2.19 uses data format version 4, but, as with 0.2.11, the format of the log sent to replicas stays at version 2. Upgrade the replica first. The upgraded replica's data is version 4, so to go back to 0.2.18 or earlier, rebuild it from a production backup. Production on 0.2.19 rejects replicas of 0.2.18 or earlier by the replication log level (next items) (replicas of 0.2.18 or earlier cannot open tables with the primary keys that can be created since 0.2.19, such as WooCommerce's `wc_product_attributes_lookup` and Wordfence's `wfls_role_counts`).
+- 0.2.20 uses data format version 5, but, as with 0.2.19, the format of the log sent to replicas stays at version 2. Upgrade the replica first. The upgraded replica's data is version 5, so to go back to 0.2.19 or earlier, rebuild it from a production backup. Production on 0.2.20 rejects replicas of 0.2.19 or earlier by the replication log level (next items) (replicas of 0.2.19 or earlier cannot open tables without a primary key, which can be created since 0.2.20, such as the log tables of WP Cerber and Loginizer).
+- 0.2.33 uses data format version 6, but, as with 0.2.20, the format of the log sent to replicas stays at version 2. Upgrade the replica first. The upgraded replica's data is version 6, so to go back to 0.2.32 or earlier, rebuild it from a production backup. Production rejects replicas of 0.2.32 or earlier by the replication log level (replicas of 0.2.32 or earlier do not know the record of syncing the parent's changes into a branch (`heimdb_branch_sync`), and would misread the merge base after being promoted to production).
+- 0.2.39 uses data format version 7, but, as with 0.2.33, the format of the log sent to replicas stays at version 2. Upgrade the replica first. The upgraded replica's data is version 7, so to go back to 0.2.38 or earlier, rebuild it from a production backup. Production rejects replicas of 0.2.38 or earlier by the replication log level (replicas of 0.2.38 or earlier do not know the key level of indexes containing DECIMAL, FLOAT, DOUBLE and ENUM columns, and would not maintain those entries on writes after being promoted to production). After the upgrade, existing indexes on DECIMAL and similar columns still read every row, as before. Since 0.2.42, production rebuilds the ones on main in the background after start (see "Rebuilding old indexes" below). To create the entries while staying on 0.2.41 or earlier, call `CALL heimdb_rebuild_indexes()` on production (docs/procedures.md).
+- 0.2.41 uses data format version 8, but, as with 0.2.39, the format of the log sent to replicas stays at version 2. Upgrade the replica first. The upgraded replica's data is version 8, so to go back to 0.2.40 or earlier, rebuild it from a production backup. Production rejects replicas of 0.2.40 or earlier by the replication log level (replicas of 0.2.39 and 0.2.40 read the FLOAT(M,D) and DOUBLE(M,D) types as types without digits, would not round on writes after being promoted to production, and would not maintain index entries containing SET and BIT columns). After the upgrade, FLOAT and DOUBLE columns of existing tables stay as types without digits (a column created earlier as `FLOAT(10,7)` is still `float`), and existing indexes on SET and BIT columns still read every row, as before. Since 0.2.42, production rebuilds the ones on main in the background after start (see "Rebuilding old indexes" below). To create the entries while staying on 0.2.41, call `CALL heimdb_rebuild_indexes()` on production (docs/procedures.md).
+- Since 0.2.11, production rejects replicas that do not report a replication log level (0.2.10 or earlier, which cannot be told apart from 0.2.7 or earlier) and replicas whose level is too low (`HeimDB: the replica is too old for this primary` appears in production's `replica <name>` row, the replica's log and `replication_last_error`, and the replica stops without applying the log). Following the "replica first" order above avoids this. If you upgraded production first, upgrade the replica too and it catches up from where it left off.
+- Versions that change the format of the log's contents (the format version of the log sent to replicas): upgrade **production first** (if you upgrade the replica first, the replica of the new version converts its own data to the new format, cannot connect to the old production, and cannot go back to the old version either). Production and replica check the format version with each other, and if it differs, the replica stops without applying a single log entry (`HeimDB: data format version differs (primary N, replica M)` appears in the log and in `replication_last_error` of `heimdb_status`, and also in production's `replica <name>` row), so between upgrading production and upgrading the replica, the replica does not catch up. HeimDB 0.1.5 and earlier does not report a version and is treated as version 1.
+  - From 0.1.5 or earlier to 0.1.6 or later (version 1 to 2): there is no conversion of the contents, so after upgrading production, stop the replica and start it with the new version, and it catches up from where it left off (no need to rebuild it).
+  - Versions that convert the contents (in the future): after upgrading production, rebuild the replica from a new production backup (the release notes will say so).
 
-## 脆弱性の確かめ方
+## Checking for vulnerabilities
 
-`.github/workflows/vuln.yml`（段階 49 と 127）が、main への push、PR、毎週月曜に、既知の脆弱性を調べる。手動でも流せる（`gh workflow run vuln`）。
+`.github/workflows/vuln.yml` (stages 49 and 127) checks for known vulnerabilities on every push to main, on PRs and every Monday. It can also be run by hand (`gh workflow run vuln`).
 
-- `govulncheck`: Go の最新の安定バージョンで、HeimDB のコードが実際に呼ぶ関数の脆弱性を調べる。
-- `toolchain`: go.mod の `toolchain` のバージョン（イメージを作る Go と同じ）で調べる。標準ライブラリの脆弱性は使う Go のバージョンで決まるので、Go の修正バージョンが出たらここで落ちる。go.mod の `toolchain` と `Dockerfile` の `golang:` のバージョンを上げてリリースする（Dependabot は go.mod の `toolchain` を上げない）。
-- `image`（毎週と手動だけ）: 公開している `tsukinowa/heimdb:latest` の amd64 のバイナリを取り出し、`govulncheck -mode binary` で調べる。出したイメージが古い Go や古い依存で作られていれば落ちる。新しいバージョンを出して直す。`Dockerfile` は記号表を残してビルドする（`-s` を付けると、govulncheck が呼ばない関数の脆弱性まで出す）。
-- `advisories`: `internal/sqlengine` にフォークした go-mysql-server と vitess は、govulncheck にも Dependabot にも見えない（モジュールのパスが HeimDB のもの）。GitHub の Go の advisory を 2 つのモジュールで引き、`.github/known-advisories.txt` にないものがあれば落ちる。落ちたら、advisory の直した PR を読み、フォークの同じ経路に当たるかを確かめる。当たるなら、上流の修正を取り込む段階として直し（`docs/engine.md` の変更の一覧に記録）、リリースする。当たらない（v0.20.0 にない経路、WordPress が通らず HeimDB が拒否する経路など）なら、理由を書いて `known-advisories.txt` に足す。
+- `govulncheck`: with the latest stable Go, checks for vulnerabilities in the functions HeimDB's code actually calls.
+- `toolchain`: checks with the `toolchain` version in go.mod (the same Go that builds the image). Vulnerabilities in the standard library depend on the Go version used, so this fails when a Go fix release comes out. Raise the `toolchain` version in go.mod and the `golang:` version in `Dockerfile`, and release (Dependabot does not raise the `toolchain` in go.mod).
+- `image` (weekly and by hand only): extracts the amd64 binary from the published `tsukinowa/heimdb:latest` and checks it with `govulncheck -mode binary`. It fails if the published image was built with an old Go or old dependencies. Fix it by releasing a new version. `Dockerfile` builds with the symbol table kept (with `-s`, govulncheck also reports vulnerabilities in functions that are never called).
+- `advisories`: the go-mysql-server and vitess forked into `internal/sqlengine` are invisible to govulncheck and Dependabot (their module path is HeimDB's). This job looks up GitHub's Go advisories for the two modules and fails if there is one not in `.github/known-advisories.txt`. When it fails, read the PR that fixed the advisory and check whether it applies to the same path in the fork. If it does, fix it as a stage that brings in the upstream fix (recorded in the list of changes in `docs/engine.md`) and release. If it does not (a path not in v0.20.0, a path WordPress does not use and HeimDB rejects, and so on), add it to `known-advisories.txt` with the reason.
 
-手元では `go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...` で同じものを調べられる（手元の Go のバージョンで）。
+Locally, `go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...` runs the same check (with your local Go version).
 
-## 危ない変更の見張り
+## Change watch
 
-WordPress が乗っ取られるときに変わる行が変わると、HeimDB はログに警告を出す（止めはしない）。
+When rows that change in a WordPress takeover change, HeimDB logs a warning (it does not block the change).
 
 ```
 level=warning msg="HeimDB: watch: wordpress@172.18.0.4 on wordpress: option default_role: \"subscriber\" -> \"administrator\""
 level=warning msg="HeimDB: watch: wordpress@172.18.0.4 on wordpress: administrator role given: user ID 7 (wp_capabilities)"
 ```
 
-| 見張るもの | ログに出す中身 |
+| What is watched | What is logged |
 | --- | --- |
-| オプションの `siteurl`、`home`、`admin_email`、`users_can_register`、`default_role`、`template`、`stylesheet` | 前と後の値（長ければ切る） |
-| オプションの `active_plugins` | 有効にしたプラグインと、無効にしたプラグイン |
-| オプションの `<接頭辞>user_roles`（役割の定義） | 変わったことだけ |
-| ユーザーの追加と削除 | ログイン名と ID |
-| パスワードの変更 | ログイン名と ID（ハッシュは出さない） |
-| メールアドレスの変更 | 前と後のアドレス |
-| ユーザーに administrator の役割が付いた（`<接頭辞>capabilities`） | ユーザー ID |
-| マルチサイトの特権管理者（`site_admins`） | 前と後の一覧 |
-| マルチサイトのネットワークでのプラグインの有効化（`active_sitewide_plugins`） | 有効にしたプラグインと、無効にしたプラグイン |
+| The options `siteurl`, `home`, `admin_email`, `users_can_register`, `default_role`, `template`, `stylesheet` | The values before and after (truncated if long) |
+| The option `active_plugins` | Plugins activated and plugins deactivated |
+| The option `<prefix>user_roles` (role definitions) | Only that it changed |
+| Users added and deleted | Login name and ID |
+| Password changes | Login name and ID (the hash is not logged) |
+| Email address changes | The addresses before and after |
+| A user given the administrator role (`<prefix>capabilities`) | User ID |
+| Multisite super admins (`site_admins`) | The lists before and after |
+| Network-wide plugin activation on multisite (`active_sitewide_plugins`) | Plugins activated and plugins deactivated |
 
-- 行頭の `wordpress@172.18.0.4` は変えたユーザー、`on` の後はデータベース（ブランチなら `wordpress@staging`）。マージで入った変更には `(merge of branch staging)` が付く。
-- テーブルは名前の終わりと列で見分けるので、接頭辞が `wp_` でなくても、マルチサイトの `wp_2_options` でも効く。
-- コミットした変更だけを出す（ロールバックや失敗した文の変更は出ない）。WordPress のインストール、管理画面での設定の変更、wp-cli での変更も出る。
-- `CALL heimdb_status()` の `watch_changes`（起動からの件数）、`watch_last_change`、`watch_last_change_at` でも見られる（起動し直すと 0 に戻る）。
-- 復元（`heimdb_restore`）で戻した行と、レプリカでは出さない。`siteurl`、`home`、ユーザーはマージの規則で本番に入らないので、マージでも出ない。テーブルごとの操作（`TRUNCATE`、`DROP TABLE`、`RENAME TABLE`）も見張らない。
-- 普段の運用でも出るもの: WordPress のインストール、ユーザーの登録を開いたサイトやネットショップでの客の登録（`user added`）、WordPress 6.8 以降に上げた後の各ユーザーの最初のログイン（パスワードのハッシュを作り直すので `password changed`）、`wp search-replace` や `wp db import`（まとめて出る）。
+- `wordpress@172.18.0.4` at the start is the user who made the change; after `on` is the database (`wordpress@staging` for a branch). Changes that came in through a merge get `(merge of branch staging)`.
+- Tables are recognized by the end of their name and their columns, so it works even if the prefix is not `wp_`, and also for multisite's `wp_2_options`.
+- Only committed changes are logged (changes from rollbacks and failed statements are not). WordPress installation, settings changes in the admin screen and changes made with wp-cli are logged too.
+- They can also be seen in `watch_changes` (count since start), `watch_last_change` and `watch_last_change_at` of `CALL heimdb_status()` (they go back to 0 on restart).
+- Rows reverted by a restore (`heimdb_restore`) are not logged, and nothing is logged on replicas. `siteurl`, `home` and users are not brought into production by the merge rules, so merges do not log them either. Table-level operations (`TRUNCATE`, `DROP TABLE`, `RENAME TABLE`) are not watched.
+- Things that also appear in normal operation: WordPress installation, customer sign-ups on sites with registration open and on online shops (`user added`), each user's first login after upgrading to WordPress 6.8 or later (the password hash is rehashed, so `password changed`), and `wp search-replace` or `wp db import` (logged in bulk).
 
-### 心当たりのない行があったら
+### If you see a line you don't recognize
 
-1. その少し前の時刻から後に変わった行を見る: `CALL heimdb_changes('main', '2026-10-12 03:00:00')`。`detail` に見張りの説明が付いた行と、同じ頃に変わった行（記事、プラグインのテーブル）を確かめる。
-2. 戻す内容を見る: `CALL heimdb_restore_preview('main', '2026-10-12 03:00:00')`。既定ではユーザーを戻さないので、後から足された管理者などは `not restored` の行に出る。
-3. 戻す: `CALL heimdb_restore('main', '2026-10-12 03:00:00')`（ユーザーも戻すなら `'*'`。その時刻の後に登録したユーザーやコメントも消える）。結果の最後の行の呼び出しで、復元を取り消せる。表を指定して戻すときは、記事と `wp_postmeta`、`wp_term_relationships` のように、行とメタの表を一緒に指定する（片方だけなら、結果の `detail` に両方を戻す呼び出しが出る。`docs/procedures.md` の `heimdb_restore`）。
-4. WordPress の側でも、管理者のパスワードの変更、知らないプラグインのファイルの削除などをする（データベースの外のファイルは戻らない）。
+1. Look at the rows changed since a little before that time: `CALL heimdb_changes('main', '2026-10-12 03:00:00')`. Check the rows whose `detail` has a watch description, and the rows changed around the same time (posts, plugin tables).
+2. Look at what would be reverted: `CALL heimdb_restore_preview('main', '2026-10-12 03:00:00')`. By default users are not reverted, so administrators added later and similar appear in the `not restored` rows.
+3. Revert: `CALL heimdb_restore('main', '2026-10-12 03:00:00')` (`'*'` to revert users too; users and comments registered after that time are also removed). The call in the last row of the result undoes the restore. When you restore by naming tables, name the row tables and their meta tables together, such as posts with `wp_postmeta` and `wp_term_relationships` (if you name only one, the result's `detail` shows a call that reverts both; `heimdb_restore` in `docs/procedures.md`).
+4. On the WordPress side too, change the administrators' passwords, delete the files of unknown plugins and so on (files outside the database are not reverted).
 
-## 暗号化した退避
+## Encrypted backups
 
-退避を、本番とは別の権限の環境（検証の環境など）で開くための仕組み（0.2.28 から）。退避には、すべてのブランチと履歴のほか、DB のユーザーとパスワードのハッシュ（`mysql_native_password`。総当たりに弱い）も入る。
+A way to open a backup in an environment with different privileges from production (a test environment and so on) (since 0.2.28). A backup contains all branches and history, and also the DB users and their password hashes (`mysql_native_password`, which is weak against brute force).
 
-**鍵**: [age](https://age-encryption.org/) の鍵の組を、退避を開く側で作る（`age-keygen -o verify.key`）。秘密鍵のファイルは開く側だけが持ち、公開鍵（`age1...` の 1 行）だけを本番に渡す。本番の HeimDB に置くのは公開鍵だけなので、本番のマシンが乗っ取られても、過去の退避は解けない。1 つのファイルに公開鍵を複数行書けば、どの秘密鍵でも解ける退避になる。
+**Keys**: create an [age](https://age-encryption.org/) key pair on the side that opens the backup (`age-keygen -o verify.key`). Only the opening side has the private key file; give production only the public key (one line, `age1...`). Production's HeimDB holds only the public key, so even if the production machine is taken over, past backups cannot be decrypted. If you write several public keys on separate lines in one file, the backup can be decrypted with any of the private keys.
 
 ```sh
 ./heimdb -data ./data -backup-dir ./backups -backup-key verify=/run/secrets/verify-recipients
 ```
 
 ```sql
-CALL heimdb_backup('', 'verify');   -- 名前は時刻（20261030T082028.000000Z.tar.gz.age）
+CALL heimdb_backup('', 'verify');   -- the name is the time (20261030T082028.000000Z.tar.gz.age)
 ```
 
-- 退避は、store の全体（WAL を含む）を tar.gz にして暗号化した 1 つのファイル `<名前>.tar.gz.age`（0600）。書き出し中は `<名前>.tar.gz.age.partial` に書き、終えてから名前を変える。暗号化する前の写し（`.<名前>.ckpt`）は、失敗や `KILL QUERY` でも消す。起動時には、前の起動が残した書きかけのものを消す。
-- 公開鍵のファイルは退避のたびに読むので、差し替えに起動し直しは要らない。退避のたびに、鍵の名前と受取人をログに出す（`HeimDB: heimdb_backup <名前>: encrypted with key verify to age1...`）。前に読んだときと中身が変わっていれば、変わる前と後を並べて警告する（`HeimDB: recipients of backup key verify changed since ...`）。差し替えの予定がないのにこれが出たら、ファイルが書き換えられた合図。
-- SQL の文に出るのは鍵の名前だけ。受け付ける受取人は age の X25519 の公開鍵だけ（パスフレーズと SSH の鍵は受け付けない。サーバに秘密を置かないため）。
-- 鍵を指定しない `heimdb_backup` は、今までどおり、そのまま開けるディレクトリを作る。
+- The backup is a single file `<name>.tar.gz.age` (0600): the whole store (including the WAL) as a tar.gz, encrypted. While writing, it goes to `<name>.tar.gz.age.partial`, and is renamed when done. The copy before encryption (`.<name>.ckpt`) is removed even on failure or `KILL QUERY`. On start, HeimDB removes partly written files left by the previous run.
+- The public key file is read on every backup, so replacing it needs no restart. On every backup, the key name and recipients are logged (`HeimDB: heimdb_backup <name>: encrypted with key verify to age1...`). If the contents changed since the last read, a warning shows the before and after side by side (`HeimDB: recipients of backup key verify changed since ...`). If this appears when no replacement was planned, it is a sign the file was rewritten.
+- Only the key name appears in SQL statements. The only recipients accepted are age X25519 public keys (passphrases and SSH keys are not accepted, so that no secret is kept on the server).
+- `heimdb_backup` without a key creates a directory that can be opened as it is, as before.
 
-**開く**: サーバを起動せずに、空のデータのディレクトリに展開してから起動する。
+**Opening**: without starting the server, extract into an empty data directory, then start.
 
 ```sh
 heimdb -data ./restored restore-backup -in 20261030T082028.000000Z.tar.gz.age -identity verify.key
-# Docker: ENTRYPOINT が -data /data を渡すので、その後ろに続ける
+# Docker: the ENTRYPOINT passes -data /data, so continue after it
 docker run --rm -v verify-data:/data -v /path/to/backups:/backups:ro -v /path/to/verify.key:/run/secrets/verify.key:ro \
-  tsukinowa/heimdb:<バージョン> restore-backup -in /backups/20261030T082028.000000Z.tar.gz.age -identity /run/secrets/verify.key
+  tsukinowa/heimdb:<version> restore-backup -in /backups/20261030T082028.000000Z.tar.gz.age -identity /run/secrets/verify.key
 ```
 
-- いったんデータのディレクトリの中の仮のディレクトリに展開し、最後まで復号できたことと store のファイルがあることを確かめてから移す。鍵が違う、鍵がない、ファイルが壊れているか途中で切れている、データのディレクトリが空でないときは、何も残さずに 0 以外の終了コードで終わる。
-- 形式は標準の age なので、`age -d -i verify.key <ファイル> | tar -xz -C <ディレクトリ>` でも開ける（失敗したときに途中まで展開したものが残るので、`restore-backup` のほうが確実）。
-- 展開した store には本番のユーザーがいるので、起動時に `-reset-passwords`（`root@'%'` と `-site-user` のパスワードを、`-root-password` と `-site-password` で上書きする。ほかのユーザーと権限は残す）か `-reset-users`（`root@'%'` と、`-site-password` があればサイトのユーザーのほかは、すべてのユーザーとロールを消す。`root@'%'` とサイトのユーザーのパスワードは上書きし、サイトのユーザーの権限は残す。いなければ作る）を付ける。`-reset-passwords` は `'%'` でないホストの root やサイトのユーザー（`root@'localhost'` など）を本番のパスワードのまま残すので、あればログに警告が出る（接続元によってはそちらに当たる。消すか `-reset-users` を使う）。サイトのパスワードを指定しなければ、サイトのユーザーには何もしない。どちらも、ユーザーのいない store では作るだけで、値がすでに同じなら書き込まない（付けたままでも、起動のたびに書き換えない）。ログには起動のたびに 1 行出る。レプリカと `-no-auth` では使えない。本番で使うと、`ALTER USER` と同じくレプリカにも写る。WordPress のユーザー（`wp_users`）には触れない。
-- 動いている store 自体（データのディレクトリ）は暗号化しない。置き場所のディスクの暗号化で守る。
+- It first extracts into a temporary directory inside the data directory, and moves the files only after checking that decryption completed to the end and that the store files are there. If the key is wrong or missing, the file is corrupt or cut off, or the data directory is not empty, it leaves nothing behind and exits with a non-zero code.
+- The format is standard age, so `age -d -i verify.key <file> | tar -xz -C <directory>` also opens it (on failure, the partly extracted files remain, so `restore-backup` is safer).
+- The extracted store has production's users, so start it with `-reset-passwords` (overwrites the passwords of `root@'%'` and `-site-user` with `-root-password` and `-site-password`; other users and privileges are kept) or `-reset-users` (deletes all users and roles other than `root@'%'` and, if `-site-password` is set, the site user; overwrites the passwords of `root@'%'` and the site user, keeps the site user's privileges, and creates them if missing). `-reset-passwords` leaves root and site users on hosts other than `'%'` (such as `root@'localhost'`) with production's passwords, so if there are any, a warning is logged (depending on where a client connects from, it may match those users; delete them or use `-reset-users`). If no site password is given, nothing is done to the site user. In a store without users, both only create users, and if the values are already the same they write nothing (leaving the flag on does not rewrite them on every start). One line is logged on every start. They cannot be used on replicas or with `-no-auth`. Used on production, they are copied to replicas, like `ALTER USER`. They do not touch WordPress users (`wp_users`).
+- The running store itself (the data directory) is not encrypted. Protect it with encryption of the disk it is on.
 
-## レプリカ
+## Replicas
 
-本番のコミットを順に受け取って適用する、読み取り専用のレプリカを置ける（ブランチ、`AS OF` の履歴、ユーザーと権限も同じになる）。マシンが壊れたときは、レプリカを昇格させて続ける。切り替えは手動。
+You can run read-only replicas that receive production's commits in order and apply them (branches, `AS OF` history, and users and privileges are the same too). If a machine fails, promote a replica and continue. Failover is manual.
 
 ```sh
-# 本番: レプリカに記録を送る（HTTP。暗号化するなら下の「通信の暗号化（TLS）」）
+# Production: send the log to replicas (HTTP; to encrypt it, see "TLS" below)
 export HEIMDB_REPLICATION_TOKEN='long-random-secret'
 ./heimdb -data ./data -backup-dir ./backups -replication-addr 10.0.0.1:3310
-# 本番でバックアップを取り（CALL heimdb_backup('replica')）、そのディレクトリをレプリカのマシンに写す
-# （暗号化した退避なら、レプリカのマシンで restore-backup で展開する。上の「暗号化した退避」）
-./heimdb -data ./backups/replica -replicate-from 10.0.0.1:3310    # レプリカ
+# Take a backup on production (CALL heimdb_backup('replica')) and copy that directory to the replica machine
+# (for an encrypted backup, extract it with restore-backup on the replica machine; see "Encrypted backups" above)
+./heimdb -data ./backups/replica -replicate-from 10.0.0.1:3310    # replica
 ```
 
-- レプリカは、バックアップの時点から本番の記録で追いつく。止めて起動し直すと、続きから受け取る。書き込みはエラーになる。
-- 本番は記録を `-replication-log-retention`（既定 24 時間）だけ残す。バックアップからレプリカを起動するまでの間や、レプリカが止まっていた間がそれより長いと追いつけないので、バックアップから作り直す（レプリカはそのエラーをログと `heimdb_status` に出して止まる）。
-- 古いバージョンを消す GC は複製しない。レプリカも自分の `-retention` と自分の時計で GC する（本番の GC が、レプリカで読んでいる最中のバージョンを消さないように）。レプリカの `AS OF` と、昇格した後に復元できる範囲は、レプリカの `-retention` で決まるので、レプリカにも本番と同じ値（またはそれより長く）を付ける。`-replication-log-retention` はレプリカが追いつくための記録を残す期間で、この範囲とは関係ない。
-- どこまで追いついているかは、レプリカの `CALL heimdb_status()` の `replication_position` と `replication_behind`（本番の最後のコミットとの差）、本番の `replica <名前>` の行で見る。
-- 同期（MySQL の準同期レプリケーションと同じ）: 本番はコミットをディスクに書いた後、レプリカがそれを適用してディスクに確定させたという知らせを受けてから OK を返す（それまでほかの接続からも見えない）。`-replication-sync-timeout`（既定 10 秒）を過ぎても知らせがなければ、OK を返して非同期に切り替え、レプリカが追いつくと同期に戻る（どちらもログに出る）。起動したときは非同期で、レプリカが追いつくと同期になる。今の状態は本番の `heimdb_status` の `replication_sync`（`sync`、`async`、`off`）で見る。書き込みのたびにレプリカとの往復とディスクの確定を待つので、コミットは遅くなる（同じマシンのレプリカで 1 回あたり約 5 ms、コメントの追加が 1.7 倍ほど。[`bench.md`](bench.md)）。同期が要らなければ `-replication-sync-timeout 0` にする。レプリカの適用がいつも待ち時間より遅いと、追いついて同期に戻るたびに、次の書き込みが待ち時間だけ止まって非同期に切り替わる（MySQL と同じ）。そのときはレプリカのマシンを見直すか、同期をやめる。
+- The replica catches up from the time of the backup using production's log. If stopped and restarted, it continues from where it left off. Writes return an error.
+- Production keeps the log for `-replication-log-retention` (24 hours by default). If the time between the backup and starting the replica, or the time the replica was stopped, is longer than that, the replica cannot catch up, so rebuild it from a backup (the replica reports the error in its log and `heimdb_status` and stops).
+- GC, which deletes old versions, is not replicated. A replica runs GC with its own `-retention` and its own clock (so that production's GC does not delete versions a replica is in the middle of reading). The replica's `AS OF` and the range you can restore after promotion depend on the replica's `-retention`, so give the replica the same value as production (or longer). `-replication-log-retention` is how long the log for a replica to catch up is kept, and has nothing to do with this range.
+- To see how far a replica has caught up, look at `replication_position` and `replication_behind` (the gap from production's last commit) in the replica's `CALL heimdb_status()`, and the `replica <name>` row on production.
+- Synchronous (like MySQL's semi-synchronous replication): after writing a commit to disk, production returns OK only after it receives a report that a replica applied it and made it durable on disk (until then, other connections cannot see it either). If no report comes within `-replication-sync-timeout` (10 seconds by default), production returns OK and switches to asynchronous, and switches back to synchronous when the replica catches up (both are logged). On start it is asynchronous, and becomes synchronous when the replica catches up. The current state is `replication_sync` (`sync`, `async`, `off`) in production's `heimdb_status`. Every write waits for a round trip to the replica and for the disk to be durable, so commits get slower (about 5 ms each with a replica on the same machine; adding a comment takes about 1.7 times as long). If you do not need synchronous replication, set `-replication-sync-timeout 0`. If the replica always applies slower than the timeout, each time it catches up and switches back to synchronous, the next write stalls for the timeout and switches to asynchronous (same as MySQL). In that case, review the replica's machine or stop using synchronous replication.
 
-昇格（本番を切り替えるとき、本番が壊れたとき）:
+Promotion (when switching production, or when production fails):
 
-1. 本番を止める（壊れて止まっていればそのまま）。
-2. OK を返したコミットがすべてレプリカにあるかを確かめる。
-   - 本番を止められたとき: 本番のログの最後の `replication:` の行が `last commit ... was acknowledged by replica <名前>` なら、最後のコミットまでそのレプリカにある。止めるときは、レプリカの知らせが進んでいる間は待ち時間を過ぎても待つ。`was NOT acknowledged` なら、本番を起動し直してレプリカを追いつかせ（`replication_behind` が 0s）、もう一度止める。ログに `last commit` の行がない（実行中の文が終わらずに `statements still running` で終えた）ときは、次の「マシンが壊れたとき」で判断する。
-   - 本番のマシンが壊れたとき: レプリカの `heimdb_status` の `replication_primary_sync`（最後に受け取った応答のときの本番の同期の状態）が `sync` で、本番が止まった時刻が `replication_last_contact` の時刻から `-replication-sync-timeout` よりも十分前（マシンの時計のずれの分、数秒の余裕を見る）なら、OK を返したコミットはすべてレプリカにある（本番が非同期に切り替わるには、知らせのない時間が待ち時間だけ続く必要がある。`replication_last_contact` は、本番がそれより後に待ち始めたコミットしか知らせを待っていないと言える時刻で、受け取った時刻より少し前になる）。`async` なら、非同期の間のコミットは届いていないことがある。
-   - レプリカが複数台なら、`replication_position` がいちばん進んだレプリカを昇格させ、上の判断もそのレプリカで行う（本番はどれか 1 台の知らせで OK を返すので、遅れたレプリカも本番を `sync` と見ていることがある）。
-3. レプリカを止め、`-replicate-from` を外して同じデータで起動し直す。これが新しい本番になる（自分も記録を持つので、そのまま次のレプリカの元になる）。履歴（`AS OF` と復元の範囲）はそのまま残る。古い HeimDB で作ったエントリのないインデックスが残っていれば、本番として起動した後に裏で作り直す（下の「古いインデックスの作り直し」）。`-retention` は外さない（付け忘れると既定の 30 日になる）。昇格の後のコミット時刻は、それまでの最後のコミットより必ず後になる（新しいマシンの時計が遅れていても逆戻りしない）。
-4. WordPress の `DB_HOST` を新しい本番に向ける。古い本番は、レプリカとしてつなぎ直さず、新しい本番のバックアップから作り直す（知らせを待っていたコミットを自分だけが持っていることがある。つなぐと、位置が新しい本番の記録にないので止まる）。
+1. Stop production (if it failed and stopped, leave it).
+2. Check that every commit that was returned OK is on the replica.
+   - When production could be stopped: if the last `replication:` line in production's log is `last commit ... was acknowledged by replica <name>`, that replica has everything up to the last commit. When stopping, production keeps waiting past the timeout while the replica's reports are advancing. If it is `was NOT acknowledged`, restart production, let the replica catch up (`replication_behind` is 0s), and stop it again. If the log has no `last commit` line (it exited with `statements still running` because running statements did not finish), decide as in the next case, "when the production machine fails".
+   - When the production machine fails: if `replication_primary_sync` in the replica's `heimdb_status` (production's sync state at the last response received) is `sync`, and production stopped well before the time in `replication_last_contact` plus `-replication-sync-timeout` (allow a few seconds of margin for clock skew between machines), every commit that was returned OK is on the replica (for production to switch to asynchronous, a period with no reports must last as long as the timeout. `replication_last_contact` is a time before which, it can be said, production was waiting for reports only for commits it started waiting on after that time; it is a little earlier than the time of receipt). If it is `async`, commits made while asynchronous may not have arrived.
+   - With several replicas, promote the replica whose `replication_position` is furthest ahead, and make the decision above on that replica (production returns OK on a report from any one replica, so a lagging replica may also see production as `sync`).
+3. Stop the replica, remove `-replicate-from`, and restart it on the same data. It becomes the new production (it keeps its own log too, so it can serve as the source for the next replica as it is). The history (the range of `AS OF` and restore) is kept as it is. If indexes without entries made by an old HeimDB remain, they are rebuilt in the background after it starts as production (see "Rebuilding old indexes" below). Do not remove `-retention` (if you forget it, it becomes the default 30 days). Commit times after promotion are always later than the last commit before it (they do not go backwards even if the new machine's clock is behind).
+4. Point WordPress's `DB_HOST` at the new production. Do not reconnect the old production as a replica; rebuild it from a backup of the new production (it may have commits that only it has, which were waiting for reports. If connected, it stops because its position is not in the new production's log).
 
-壊れた本番を、切り替えずに本番のまま起動し直してもよい。知らせを待っていたコミット（OK は返していない）は、起動し直すと見えるようになり、レプリカにも送られる（MySQL と同じ）。
+You may also restart a failed production as production, without switching. Commits that were waiting for reports (OK had not been returned) become visible after the restart and are also sent to the replica (same as MySQL).
 
-## 通信の暗号化（TLS）
+## TLS
 
-`-tls-cert` と `-tls-key` を指定すると、MySQL の接続で TLS を受け付け（クライアントが望んだとき）、レプリカへの送り出し（`-replication-addr`）を HTTPS にする。`-require-tls` を足すと、TLS でない接続をパスワードを確かめる前に拒否する（エラー 3159）。TLS 1.2 以上。証明書を替えるときは起動し直す。
+With `-tls-cert` and `-tls-key`, HeimDB accepts TLS on MySQL connections (when the client asks for it) and sends to replicas (`-replication-addr`) over HTTPS. Adding `-require-tls` rejects connections without TLS before checking the password (error 3159). TLS 1.2 or later. To replace the certificate, restart.
 
-`-tls-cert` なしで動かすときは、クライアントに TLS を求めさせない。TLS を必須にしたクライアント（Node.js の mysql2 の `ssl`、mysql クライアントの `--ssl-mode=REQUIRED` など）はつながらない（mysql2 は `Server does not support secure connection`、mysql クライアントは `SSL connection error: SSL is required but the server doesn't support it`）。
+When running without `-tls-cert`, do not make clients require TLS. Clients that require TLS (`ssl` in Node.js mysql2, `--ssl-mode=REQUIRED` in the mysql client and so on) cannot connect (mysql2 reports `Server does not support secure connection`, and the mysql client `SSL connection error: SSL is required but the server doesn't support it`).
 
-自前の CA で証明書を作る例（ECDSA P-256。RSA より接続の握手が速い）。`subjectAltName` には、クライアントとレプリカが接続に使う名前と IP をすべて入れる。
+An example of making a certificate with your own CA (ECDSA P-256; the handshake is faster than with RSA). Put in `subjectAltName` every name and IP that clients and replicas use to connect.
 
 ```sh
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 3650 \
@@ -285,111 +285,110 @@ openssl x509 -req -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -d
 ./heimdb -data ./data -tls-cert server.pem -tls-key server-key.pem -require-tls
 ```
 
-- WordPress: `wp-config.php` に `define( 'MYSQL_CLIENT_FLAGS', MYSQLI_CLIENT_SSL );` を足す（`-require-tls` でこれがないと「データベース接続確立エラー」）。WordPress は CA を渡す手段がないので、**暗号化はするが HeimDB の証明書を確かめない**（PHP の mysqlnd は CA を渡さないと確かめない）。盗聴は防げるが、なりすましの中継は防げないので、WordPress と HeimDB はプライベートなネットワークか VPN の中に置く。
-- mysql コマンドと mysqldump（MySQL 8）: 既定（`--ssl-mode=PREFERRED`）で暗号化する。証明書を確かめるなら `--ssl-mode=VERIFY_IDENTITY --ssl-ca=ca.pem`。
-- レプリカ: `-replicate-from https://10.0.0.1:3310 -replication-ca ca.pem`（`-replication-ca` があれば `https://` は省ける）。証明書を確かめられないときは、エラーをログと `heimdb_status` の `replication_last_error` に出してやり直し続ける。合言葉も暗号化される。
-- 状態: `heimdb_status` の `tls`（`off`、`on`、`required`）、`tls_cert_not_after`（証明書の期限）、`connection_tls`（その接続が TLS か）。期限の前に証明書を作り直して起動し直す。
-- 接続 1 回の時間は約 1 ms から約 2.5 ms になるが、ページの表示の時間は揺れの範囲で変わらない（[`bench.md`](bench.md)）。
+- WordPress: add `define( 'MYSQL_CLIENT_FLAGS', MYSQLI_CLIENT_SSL );` to `wp-config.php` (with `-require-tls` and without this, WordPress shows "Error establishing a database connection"). WordPress has no way to pass a CA, so **the connection is encrypted but HeimDB's certificate is not verified** (PHP's mysqlnd does not verify without a CA). This prevents eavesdropping but not a man-in-the-middle impersonating the server, so keep WordPress and HeimDB inside a private network or a VPN.
+- The mysql command and mysqldump (MySQL 8): encrypt by default (`--ssl-mode=PREFERRED`). To verify the certificate, use `--ssl-mode=VERIFY_IDENTITY --ssl-ca=ca.pem`.
+- Replicas: `-replicate-from https://10.0.0.1:3310 -replication-ca ca.pem` (with `-replication-ca`, `https://` can be omitted). If the certificate cannot be verified, the replica reports the error in its log and in `replication_last_error` of `heimdb_status`, and keeps retrying. The shared secret is encrypted too.
+- Status: `tls` (`off`, `on`, `required`), `tls_cert_not_after` (the certificate's expiry) and `connection_tls` (whether this connection uses TLS) in `heimdb_status`. Before the expiry, make a new certificate and restart.
+- One connection takes about 2.5 ms instead of about 1 ms, but page load times do not change beyond the noise.
 
-## 書き込みが詰まったとき
+## When writes are stuck
 
-書き込むトランザクションはブランチごとに 1 つで、書き込みのロックを `COMMIT` か `ROLLBACK` まで持つ。ほかの書き込みは `-lock-wait-timeout`（既定 50 秒）待ってエラー 1205 になる。ロックを持ったまま止まった接続があると、書き込みが詰まり続ける（トランザクションの中で何もしなくなった接続、トランザクションの中で終わらない文）。
+Each branch has one writing transaction at a time, and it holds the write lock until `COMMIT` or `ROLLBACK`. Other writes wait for `-lock-wait-timeout` (50 seconds by default) and then fail with error 1205. If a connection stops while holding the lock, writes stay stuck (a connection that went idle inside a transaction, or a statement inside a transaction that does not finish).
 
-- **HeimDB が自分で外す**: トランザクションの中で何もしないまま、ロックを `-idle-lock-timeout`（既定 30 秒）より長く持つ接続は切る。切った接続のトランザクションはロールバックされ、ロックが外れ、待っていた書き込みが続く。ログに `HeimDB: closing a connection idle in a transaction with the write lock ...` と、接続 ID、ユーザー、持っていた時間、最後の文が出る。管理者の接続も切る（対話的に `BEGIN` したまま放置しない）。文を実行中の接続は切らない（`main` の実行時間の上限で止める。`heimdb_branch_limit`）。
-- **持ち主を見る**: 指標（DB の権限が要らない）の `heimdb_branch_write_lock_holder{branch}`（持ち主の接続 ID。マージや復元など内部の操作なら 0）、`heimdb_branch_write_lock_held_seconds`（持っている時間）、`heimdb_branch_write_lock_idle_seconds`（持ち主が何もしていない時間。実行中なら 0）、`heimdb_branch_write_lock_waiters`（待っている文の数）。書き込みが 1205 になると、ログに `HeimDB: lock wait timeout; the write lock of branch main is held by connection 8613 (wordpress) for 5m3s, running a statement, last statement: ...` が出る（10 秒に 1 回まで）。管理者は `CALL heimdb_status()` の `write_lock <ブランチ>` でも見られる。
-- **自分で切る**: サイトのユーザーのままで、`SHOW PROCESSLIST`（または `SELECT * FROM information_schema.processlist`）に自分のユーザーの接続が出る（PROCESS 権限は要らない。MySQL と同じ）。持ち主の ID を `KILL <ID>` で切ると、その接続のトランザクションはロールバックされ、ロックが外れる。文だけを止めるなら `KILL QUERY <ID>`（明示的なトランザクションの中の文なら、ロックは残る）。ほかのユーザーの接続は切れない（1095）。ロックを待っている文も `KILL QUERY` で止まる。
-- **起動し直すのは最後**: 起動し直すと、持ち主の手がかり（接続、最後の文）が消える。
+- **HeimDB releases it by itself**: a connection that holds the lock longer than `-idle-lock-timeout` (30 seconds by default) while idle in a transaction is closed. The closed connection's transaction is rolled back, the lock is released, and the waiting writes continue. The log shows `HeimDB: closing a connection idle in a transaction with the write lock ...` with the connection ID, user, how long it held the lock, and the last statement. Administrator connections are closed too (do not leave an interactive `BEGIN` open). Connections running a statement are not closed (stop those with the execution time limit of `main`; `heimdb_branch_limit`).
+- **Find the holder**: in the metrics (which need no DB privileges), `heimdb_branch_write_lock_holder{branch}` (the holder's connection ID; 0 for internal operations such as merge and restore), `heimdb_branch_write_lock_held_seconds` (how long it has been held), `heimdb_branch_write_lock_idle_seconds` (how long the holder has been idle; 0 while running), and `heimdb_branch_write_lock_waiters` (the number of waiting statements). When a write fails with 1205, the log shows `HeimDB: lock wait timeout; the write lock of branch main is held by connection 8613 (wordpress) for 5m3s, running a statement, last statement: ...` (at most once every 10 seconds). Administrators can also see it in the `write_lock <branch>` row of `CALL heimdb_status()`.
+- **Close it yourself**: as the site user, `SHOW PROCESSLIST` (or `SELECT * FROM information_schema.processlist`) shows the connections of your own user (no PROCESS privilege needed; same as MySQL). Closing the holder's ID with `KILL <ID>` rolls back that connection's transaction and releases the lock. To stop only the statement, use `KILL QUERY <ID>` (for a statement inside an explicit transaction, the lock stays). You cannot close other users' connections (1095). Statements waiting for the lock can also be stopped with `KILL QUERY`.
+- **Restart only as a last resort**: a restart loses the clues about the holder (the connection, the last statement).
 
-## 遅い文のログ
+## Slow query log
 
-`-slow-query 1s` のように指定すると、それ以上かかった文を警告のログに出す。
+With `-slow-query 1s` and the like, statements that took at least that long are logged as warnings.
 
 ```
 level=warning msg="slow query: SELECT ..." connectionID=12 database=wordpress duration=1.234s indexes=wp_postmeta.meta_key,wp_posts.PRIMARY lock_wait=0s rows_examined=20412 user=wordpress
 ```
 
-- `duration` は文を受け取ってから結果を書き終わるまで。時間は 1 µs 刻みで、`312µs`、`1.234ms`、`1.5s` のように出す（`µ` は U+00B5。0.2.26 までは 1 ms 刻みだった）。`rows_examined` は文が読んだ本体の行とインデックスのエントリの数（インデックスから本体の行を引くと両方を数える）。`indexes` は読んだインデックス（`表.インデックス`。主キーは `PRIMARY`）。待った時間は、待ったときだけ出す: `lock_wait`（書き込みのロック）、`replica_wait`（同期のレプリカの知らせ）、`stats_wait`（表の統計を作るのを待った時間。起動し直した後の表ごとの最初の文）。
-- 閾値は、管理者が止めずに変えられる: `SET GLOBAL long_query_time = 0.5`（秒、小数可）、`SET GLOBAL slow_query_log = OFF`（`ON` で戻す）。`-slow-query` は起動したときの値で、起動し直すと戻る。接続ごとの `SET SESSION long_query_time` は読まない（サイトの PHP が自分の接続でログをあふれさせないように）。今の値は `CALL heimdb_status()` の `slow_query`。
-- ログには訪問者が入れた字（検索語、フォームの値）が入りうる。`-slow-query-redact` を付けると、文の値を `?` に畳んで出す（文は小文字で書き直す。解析できない文は先頭の 2 語だけ）。ユーザーの管理の文（`CREATE USER` など）は、付けなくても本文を隠す。
-- 読まない変数: `wait_timeout`、`interactive_timeout`（何もしない接続は切らない。上の `-idle-lock-timeout`）、`innodb_lock_wait_timeout`、`lock_wait_timeout`（`-lock-wait-timeout`）、`net_read_timeout`、`net_write_timeout`、接続ごとの `long_query_time` は、`SET` を受け付けるが読まない。接続ごとに `SET` すると、変数ごとに 1 回、ログに `HeimDB: SET <変数> is accepted but has no effect` が出る。
-- 文の実行時間の上限: 接続ごとの `SET SESSION max_execution_time = 5000`（ミリ秒）か、管理者の `SET GLOBAL max_execution_time`（その後につないだ接続の既定）で、MySQL と同じく `SELECT` の文（`WITH ... SELECT`、かっこで始まる `UNION` を含む）を止め、エラー 3024 を返す。`INSERT ... SELECT`、`UPDATE`、`SET`、`DO` の中の `SELECT` には効かない。ブランチの上限（`heimdb_branch_limit`）があれば短い方に従い、`SET` で外すことはできない。クライアントが切れたときの文は、Linux では TCP の接続が閉じれば数秒で止まる（PHP が接続を持ったまま待っていると止まらない）。
+- `duration` is from receiving the statement until the result has been written. Times are in steps of 1 µs, shown as `312µs`, `1.234ms`, `1.5s` and so on (`µ` is U+00B5; up to 0.2.26 the step was 1 ms). `rows_examined` is the number of table rows and index entries the statement read (looking up a table row from an index counts both). `indexes` is the indexes that were read (`table.index`; the primary key is `PRIMARY`). Wait times appear only when there was a wait: `lock_wait` (the write lock), `replica_wait` (the report from a synchronous replica), `stats_wait` (waiting for table statistics to be built; the first statement on each table after a restart).
+- Administrators can change the threshold without a restart: `SET GLOBAL long_query_time = 0.5` (seconds, decimals allowed), `SET GLOBAL slow_query_log = OFF` (`ON` to turn it back on). `-slow-query` is the value at start, and a restart goes back to it. Per-connection `SET SESSION long_query_time` is ignored (so that the site's PHP cannot flood the log from its own connection). The current value is `slow_query` in `CALL heimdb_status()`.
+- The log can contain text entered by visitors (search terms, form values). With `-slow-query-redact`, values in statements are folded into `?` (the statement is rewritten in lowercase; for a statement that cannot be parsed, only the first two words). User management statements (`CREATE USER` and so on) have their text hidden even without the flag.
+- Ignored variables: `wait_timeout`, `interactive_timeout` (idle connections are not closed; see `-idle-lock-timeout` above), `innodb_lock_wait_timeout`, `lock_wait_timeout` (`-lock-wait-timeout`), `net_read_timeout`, `net_write_timeout` and per-connection `long_query_time` accept `SET` but are not read. A per-connection `SET` logs `HeimDB: SET <variable> is accepted but has no effect` once per variable.
+- Execution time limit for statements: per-connection `SET SESSION max_execution_time = 5000` (milliseconds), or the administrator's `SET GLOBAL max_execution_time` (the default for connections made after it), stops `SELECT` statements (including `WITH ... SELECT` and a `UNION` that starts with a parenthesis) as MySQL does, and returns error 3024. It does not apply to a `SELECT` inside `INSERT ... SELECT`, `UPDATE`, `SET` or `DO`. If there is a branch limit (`heimdb_branch_limit`), the shorter one applies, and it cannot be removed with `SET`. A statement whose client disconnected stops within a few seconds on Linux once the TCP connection is closed (if PHP keeps the connection open while waiting, it does not stop).
 
-## 起動し直した直後
+## Right after a restart
 
-HeimDB は文の計画に使う統計（表の行数と、インデックスごとの値の分布）をメモリにだけ持つ。起動すると、接続を受け付けながら、main のすべての表の統計を裏で作る。作り終える前にその表を使う文は、作り終えるのを待つ（表を全部読む分。記事 20 万件、`wp_postmeta` 320 万行で、起動から約 1 秒、文は最大 0.4 秒ほど遅れる。[`bench.md`](bench.md) の段階 106）。待った時間は `heimdb_stats_wait_seconds_total` と遅い文のログの `stats_wait` に出る。
+HeimDB keeps the statistics used for query plans (the number of rows in each table and the distribution of values in each index) only in memory. On start, it builds the statistics of every table on main in the background while accepting connections. A statement that uses a table before its statistics are built waits for them (the time to read the whole table. With 200,000 posts and 3.2 million rows of `wp_postmeta`, building takes about 1 second from start, and statements are delayed by at most about 0.4 seconds). The time waited appears in `heimdb_stats_wait_seconds_total` and in `stats_wait` in the slow query log.
 
-外からの要求を流す前に待つなら、次のどちらかを見る。
-- 指標の `heimdb_stats_ready` が 1 になるまで（DB の権限が要らない）。
-- `CALL heimdb_status()` の `stats` が `ready` になるまで。`stats_ready_at`（作り終えた時刻）、`stats_build_duration`（かかった時間）、`stats_tables`（`18 built, 0 failed` のように、作った表と失敗した表の数）も出る。失敗した表があっても `ready` になる（その表は、使う最初の文が統計を作る）。表の一覧を読めなかったときは `failed` になり、`stats_error` に理由が出る（そのときは各表の最初の文が統計を作る）。
+To wait before sending outside traffic, watch one of these:
+- Until the metric `heimdb_stats_ready` becomes 1 (needs no DB privileges).
+- Until `stats` in `CALL heimdb_status()` becomes `ready`. `stats_ready_at` (when building finished), `stats_build_duration` (how long it took) and `stats_tables` (the numbers of tables built and failed, like `18 built, 0 failed`) are shown too. It becomes `ready` even if some tables failed (for those tables, the first statement that uses them builds the statistics). If the list of tables could not be read, it becomes `failed` and `stats_error` shows the reason (in that case, the first statement on each table builds the statistics).
 
-`ready` は起動したときの 1 回が終わったことを表す。その後の書き込みや `ALTER TABLE` で統計を作り直しても `building` には戻らない。ブランチの表は温めない（ブランチごとに、表を使う最初の文が作る）。レプリカでも作るが、追いついたかとは別なので、レプリカは `replication_behind` と合わせて見る。
+`ready` means that the one run at start has finished. Rebuilding statistics afterwards because of writes or `ALTER TABLE` does not bring it back to `building`. Branch tables are not warmed up (for each branch, the first statement that uses a table builds its statistics). Replicas build them too, but this is separate from whether the replica has caught up, so on a replica, watch it together with `replication_behind`.
 
-## 古いインデックスの作り直し
+## Rebuilding old indexes
 
-0.2.38 以前の HeimDB で作った `DECIMAL`、`FLOAT`、`DOUBLE`、`ENUM` の列を含むインデックスと、0.2.40 以前で作った `SET` と `BIT` の列を含むインデックスは、エントリを持たず、引くたびに表の全件を読む（WooCommerce の `wc_product_meta_lookup` の `min_max_price` と `stock_quantity` など）。0.2.42 から、本番は起動して接続を受け付け始めた後に、main のそういうインデックスを裏で作り直す（`CALL heimdb_rebuild_indexes()` と同じ書き込み。`-rebuild-indexes=false` で止める）。
+Indexes containing `DECIMAL`, `FLOAT`, `DOUBLE` or `ENUM` columns made by HeimDB 0.2.38 or earlier, and indexes containing `SET` or `BIT` columns made by 0.2.40 or earlier, have no entries, and every lookup reads all rows of the table (such as `min_max_price` and `stock_quantity` of WooCommerce's `wc_product_meta_lookup`). Since 0.2.42, production rebuilds such indexes on main in the background after it starts and begins accepting connections (the same writes as `CALL heimdb_rebuild_indexes()`; turn it off with `-rebuild-indexes=false`).
 
-- 1 つずつ作り直す。1 つの間は main への書き込みを待たせ（読むのは止めない）、インデックスとインデックスの間でロックを放す。10 万行の表で 0.1〜0.4 秒、100 万行で、一意でないインデックスが 1〜2 秒、一意のインデックスが 4〜5 秒ほど（macOS で測った値。段階 121）。その間の書き込みは、作り終えるまで待つ（100 万行の一意のインデックスの間で最大 3 秒）。待たされた書き込みは `-lock-wait-timeout`（既定 50 秒）まで待つ。
-- 書き込みのロックは 5 秒だけ待つ。長いトランザクションがロックを持っていて取れなければ、そのインデックスを飛ばし、次の起動でやり直す。
-- 見積もった行の数が、一意でないインデックスで 500 万行、一意のインデックスで 100 万行を超えるものは、書き込みを長く待たせるので飛ばす。空いている時間に `CALL heimdb_rebuild_indexes()` で作り直す。
-- 一意のインデックスで行の値が重複していれば（0.2.38 以前の `CREATE UNIQUE INDEX` は重複を確かめなかった）、そのインデックスを飛ばし、残りを続ける。重複を直してから `CALL heimdb_rebuild_indexes()` を呼ぶ。
-- 飛ばしたものは、表とインデックスの名前と理由を警告でログに出す。始めに作り直す数、インデックスごとに名前と行の見積もりとかかった時間、終わりにまとめを出す。
-- 書き込みのロックの持ち主は `rebuild indexes` と出る（`heimdb_status` の `write_lock main`、指標の `heimdb_branch_write_lock_holder` は 0）。
-- 様子は `CALL heimdb_status()` の `index_rebuild`（`off`、`running`、`done`）、`index_rebuild_done_at`、`index_rebuild_duration`、`index_rebuild_indexes`（`6 rebuilt, 1 skipped` のように、最後の 1 回で作り直した数と飛ばした数）、`index_rebuild_error`（最後に飛ばした理由）と、指標の `heimdb_index_rebuild_ready`、`heimdb_index_rebuild_seconds`、`heimdb_index_rebuild_skipped` で見る。
-- 止めると（SIGTERM）、作りかけのインデックスはそこでやめ、作りかけのエントリは消える（消し切れなかった分も、次の起動で消える）。次の起動で残りを作り直す。
-- `CALL heimdb_restore()` で main を戻した後にも、もう一度動く（戻した表の定義に古いインデックスがあれば作り直す）。
-- 作り直しの途中に取ったバックアップを戻すと、そこまでのインデックスは古いまま戻り、次の起動で作り直す。
-- ブランチは作り直さない（ホスティングのブランチは短く生きるので）。ブランチのデータベースにつないで `CALL heimdb_rebuild_indexes()` を呼ぶ。起動時の警告にはブランチの名前も出る。
-- レプリカでは動かない。本番が作ったエントリは記録でレプリカに届く。レプリカを昇格すると、本番として起動したときに作り直す。
+- Indexes are rebuilt one at a time. During each one, writes to main wait (reads are not blocked), and the lock is released between indexes. A table of 100,000 rows takes 0.1 to 0.4 seconds; 1 million rows take about 1 to 2 seconds for a non-unique index and 4 to 5 seconds for a unique index (measured on macOS; stage 121). Writes during that time wait until it finishes (at most 3 seconds during a unique index on 1 million rows). Waiting writes wait up to `-lock-wait-timeout` (50 seconds by default).
+- It waits only 5 seconds for the write lock. If a long transaction holds the lock and it cannot be taken, that index is skipped and retried on the next start.
+- Indexes whose estimated row count exceeds 5 million rows for a non-unique index or 1 million rows for a unique index are skipped, because they would make writes wait too long. Rebuild them with `CALL heimdb_rebuild_indexes()` at a quiet time.
+- If rows have duplicate values for a unique index (`CREATE UNIQUE INDEX` in 0.2.38 or earlier did not check for duplicates), that index is skipped and the rest continue. Fix the duplicates, then call `CALL heimdb_rebuild_indexes()`.
+- Skipped indexes are logged as warnings with the table name, index name and reason. At the beginning, the number of indexes to rebuild is logged; for each index, its name, estimated rows and time taken; and at the end, a summary.
+- The holder of the write lock is shown as `rebuild indexes` (`write_lock main` in `heimdb_status`; the metric `heimdb_branch_write_lock_holder` is 0).
+- Watch progress with `index_rebuild` (`off`, `running`, `done`), `index_rebuild_done_at`, `index_rebuild_duration`, `index_rebuild_indexes` (the numbers rebuilt and skipped in the last run, like `6 rebuilt, 1 skipped`) and `index_rebuild_error` (the reason for the last skip) in `CALL heimdb_status()`, and the metrics `heimdb_index_rebuild_ready`, `heimdb_index_rebuild_seconds` and `heimdb_index_rebuild_skipped`.
+- When stopped (SIGTERM), the index in progress is abandoned and its partial entries are removed (any left over are removed on the next start). The remaining indexes are rebuilt on the next start.
+- It runs again after main is reverted with `CALL heimdb_restore()` (if the reverted table definitions have old indexes, they are rebuilt).
+- If you restore a backup taken in the middle of a rebuild, the indexes up to that point come back old and are rebuilt on the next start.
+- Branches are not rebuilt (branches on the hosting service are short-lived). Connect to the branch's database and call `CALL heimdb_rebuild_indexes()`. The warning at start also shows branch names.
+- It does not run on replicas. The entries production creates reach replicas through the log. When a replica is promoted, it rebuilds them when it starts as production.
 
-## 指標（Prometheus）
+## Metrics (Prometheus)
 
-`-metrics-addr 127.0.0.1:9104` のように指定すると、`GET /metrics` で Prometheus のテキスト形式の指標を返す。Prometheus、Grafana Cloud（Alloy）、Google Cloud Managed Service for Prometheus（Ops Agent）、New Relic（インフラのエージェントの nri-prometheus か OpenTelemetry Collector）、Datadog など、Prometheus の形式を読めるものなら取り込める。本番でもレプリカでも開ける。
+With `-metrics-addr 127.0.0.1:9104` and the like, `GET /metrics` returns metrics in the Prometheus text format. Anything that reads the Prometheus format can collect them: Prometheus, Grafana Cloud (Alloy), Google Cloud Managed Service for Prometheus (Ops Agent), New Relic (nri-prometheus of the infrastructure agent, or the OpenTelemetry Collector), Datadog and so on. It can be opened on both production and replicas.
 
-- **認証がない。** 取り込み役は同じホストか同じネットワークの中から読む。`127.0.0.1` か内側のアドレスで開き、ファイアウォールで外に開けない。Docker では `-metrics-addr 0.0.0.0:9104` にして、ポートをホストに公開せず（`ports` に書かない）、同じネットワークの取り込み役から `db:9104` で読む。
-- 出すのは数と大きさだけで、文の中身、ユーザー名、データベース名、表の名前は出さない。ブランチ名（`branch`）とレプリカの名前（`replica`、`-replica-name`）は出す。
-- 読むたびに今の値を集める（重い処理はない）。30 秒か 1 分ごとに読めば足りる。
+- **There is no authentication.** The collector reads from the same host or from inside the same network. Open it on `127.0.0.1` or an internal address, and do not expose it through the firewall. In Docker, use `-metrics-addr 0.0.0.0:9104`, do not publish the port to the host (do not write it in `ports`), and read it at `db:9104` from a collector on the same network.
+- Only counts and sizes are exposed; statement contents, user names, database names and table names are not. Branch names (`branch`) and replica names (`replica`, `-replica-name`) are.
+- Current values are collected on every read (nothing heavy). Reading every 30 seconds or every minute is enough.
 
-| 指標 | 型 | 意味 |
+| Metric | Type | Meaning |
 |---|---|---|
-| `heimdb_build_info{version}` | gauge | HeimDB のバージョン（値は 1） |
-| `heimdb_start_time_seconds` | gauge | 起動した時刻（Unix 時刻） |
-| `heimdb_replica` | gauge | レプリカなら 1、本番なら 0 |
-| `heimdb_connections`、`heimdb_connections_total` | gauge、counter | 開いている接続の数、起動からの接続の数 |
-| `heimdb_running_statements` | gauge | 実行中の文の数 |
-| `heimdb_statements_total{type}` | counter | 終わった文の数。`type` は文の先頭の語で `select`、`insert`、`update`、`delete`、`replace`、`call`、`ddl`、`transaction`、`set`、`show`、`other`（構文のエラーの文も `other`） |
-| `heimdb_statement_errors_total{code}` | counter | エラーで終わった文の数。`code` は接続先に返した MySQL のエラー番号（1205 はロックの待ち、1041 はメモリ、1146 はない表、1213 はデッドロック、3024 は実行時間の上限。構文のエラーは 1105）。1041、1205、1213、3024 は起きる前から 0 で出す。準備（`COM_STMT_PREPARE`）は数えず実行だけを数えるので、準備の段階のエラーも数えない（WordPress はサーバ側の準備を使わない） |
-| `heimdb_statement_duration_seconds` | histogram | 文の実行と結果の送信にかかった時間 |
-| `heimdb_slow_statements_total` | counter | 遅い文のログに出した文の数（下の「遅い文のログ」。出していなければ 0） |
-| `heimdb_branch_write_lock_holder{branch}`、`heimdb_branch_write_lock_held_seconds{branch}`、`heimdb_branch_write_lock_idle_seconds{branch}` | gauge | 書き込みのロックの持ち主の接続 ID（内部の操作なら 0）、持っている時間、持ち主が何もしていない時間（実行中なら 0）。持ち主のいるブランチだけ出る（上の「書き込みが詰まったとき」） |
-| `heimdb_connection_write_lock_held_seconds{branch}` | gauge | 接続がブランチの書き込みのロックを持っている時間（マージや復元など内部の操作は含まない）。すべてのブランチについて、接続が持っていなければ 0 で、いつも出る（一時テーブルのロックは、その接続しか待たないので出さない）。2 つの指標を突き合わせられない監視（Cloud Monitoring など）でも、「接続が長く持っている」の警報に使える。検証環境のブランチを同じプロセスに持つなら、`{branch="main"}` で本番だけを見られる（0.2.25 ではブランチのラベルがなく、全ブランチのいちばん長い時間だった） |
-| `heimdb_branch_write_lock_waiters{branch}` | gauge | 書き込みのロックを待っている文の数（待っているブランチだけ） |
-| `heimdb_longest_statement_seconds` | gauge | いちばん長く走っている文の時間 |
-| `heimdb_idle_lock_disconnects_total` | counter | `-idle-lock-timeout` で切った接続の数 |
-| `heimdb_lock_wait_seconds_total`、`heimdb_replica_wait_seconds_total`、`heimdb_stats_wait_seconds_total` | counter | 文が待った時間の合計。書き込みのロック、同期のレプリカの知らせ、表の統計を作るのを待った時間（起動し直した後の表ごとの最初の文） |
-| `heimdb_stats_ready`、`heimdb_stats_build_seconds` | gauge | 起動した後に main の表の統計を作り終えたら 1（それまでは 0。失敗した表があっても 1）、作るのにかかった秒数（作り終えるまで出ない）。上の「起動し直した直後」 |
-| `heimdb_index_rebuild_ready`、`heimdb_index_rebuild_seconds`、`heimdb_index_rebuild_skipped` | gauge | 起動の後に main の古いインデックスを作り直し終えたら 1（作っている間と、`-rebuild-indexes=false` とレプリカでは 0）、かかった秒数（終えるまで出ない）、飛ばした数。上の「古いインデックスの作り直し」 |
-| `heimdb_memory_limit_bytes`、`heimdb_memory_abort_bytes`、`heimdb_memory_live_bytes` | gauge | メモリの上限、文を止める境目、生きているヒープ（上の「運用の注意」のメモリの上限。上限がなければ 0） |
-| `heimdb_memory_aborted_statements_total` | counter | メモリの上限で止めた文の数 |
-| `heimdb_engine_caches` | gauge | SQL のエンジンが持っている文の途中結果（GROUP BY、DISTINCT、並べ替え、サブクエリ）のキャッシュの数。文が動いていなければ 0。文がないときにも 0 に戻らず増え続けるなら、片付けの漏れ（段階 108、109） |
-| `heimdb_cache_size_bytes`、`heimdb_cache_used_bytes` | gauge | ブロックキャッシュの大きさと使っている分 |
-| `go_goroutines` | gauge | goroutine の数 |
-| `heimdb_disk_bytes` | gauge | データのディスク使用量 |
-| `heimdb_branches`、`heimdb_branch_size_bytes{branch}` | gauge | ブランチの数（main を含む）、ブランチごとの大きさ（推定。`heimdb_branch_list` の `size_bytes`） |
-| `heimdb_last_commit_timestamp_seconds` | gauge | 最後のコミットの時刻 |
-| `heimdb_open_transactions`、`heimdb_oldest_snapshot_age_seconds` | gauge | 開いたトランザクションの数、最も古いスナップショットの古さ（GC の境界を止めている。なければ 0）。読むだけのトランザクションも含む（`mysqldump --single-transaction` の論理ダンプは、その間ずっと増える）。書き込みが詰まっているかは、下の書き込みのロックの指標で見る |
-| `heimdb_pinned_times` | gauge | 使用中の時刻（`AS OF`、復元、過去の時点からのブランチ作成）の数 |
-| `heimdb_gc_boundary_age_seconds` | gauge | GC の境界の古さ（まだ消していなければ出ない） |
-| `heimdb_gc_last_run_timestamp_seconds`、`heimdb_gc_last_duration_seconds`、`heimdb_gc_last_failed` | gauge | 最後の GC の時刻、かかった時間、失敗したら 1（起動してから GC が動いていなければ出ない） |
-| `heimdb_replication_sync`、`heimdb_replication_async_switches_total` | gauge、counter | 本番: 同期なら 1、非同期に切り替わった回数 |
-| `heimdb_replica_behind_seconds{replica}`、`heimdb_replica_last_seen_seconds{replica}` | gauge | 本番: レプリカごとの遅れと最後の連絡からの時間 |
-| `heimdb_replication_behind_seconds`、`heimdb_replication_last_contact_seconds`、`heimdb_replication_failing` | gauge | レプリカ: 本番からの遅れ、最後の連絡からの時間、最後の要求が失敗したか止まったら 1 |
-| `heimdb_tls_cert_expiry_timestamp_seconds` | gauge | TLS の証明書の期限（`-tls-cert` のとき） |
-| `heimdb_watch_changes_total` | counter | 危ない変更の見張りが見つけた変更の数 |
+| `heimdb_build_info{version}` | gauge | HeimDB version (value is 1) |
+| `heimdb_start_time_seconds` | gauge | Start time (Unix time) |
+| `heimdb_replica` | gauge | 1 on a replica, 0 on production |
+| `heimdb_connections`, `heimdb_connections_total` | gauge, counter | Open connections; connections since start |
+| `heimdb_running_statements` | gauge | Running statements |
+| `heimdb_statements_total{type}` | counter | Finished statements. `type` is the first word of the statement: `select`, `insert`, `update`, `delete`, `replace`, `call`, `ddl`, `transaction`, `set`, `show`, `other` (statements with syntax errors are `other` too) |
+| `heimdb_statement_errors_total{code}` | counter | Statements that ended in an error. `code` is the MySQL error number returned to the client (1205 lock wait, 1041 memory, 1146 table does not exist, 1213 deadlock, 3024 execution time limit; syntax errors are 1105). 1041, 1205, 1213 and 3024 are exposed as 0 before they first occur. Only executions are counted, not prepares (`COM_STMT_PREPARE`), so errors at the prepare stage are not counted either (WordPress does not use server-side prepares) |
+| `heimdb_statement_duration_seconds` | histogram | Time to execute the statement and send its result |
+| `heimdb_slow_statements_total` | counter | Statements written to the slow query log (see "Slow query log" above; 0 if it is off) |
+| `heimdb_branch_write_lock_holder{branch}`, `heimdb_branch_write_lock_held_seconds{branch}`, `heimdb_branch_write_lock_idle_seconds{branch}` | gauge | Connection ID of the write lock holder (0 for internal operations), how long it has been held, how long the holder has been idle (0 while running). Only for branches with a holder (see "When writes are stuck" above) |
+| `heimdb_connection_write_lock_held_seconds{branch}` | gauge | How long a connection has held the branch's write lock (internal operations such as merge and restore are not included). Always exposed for every branch, 0 if no connection holds it (temporary table locks are not exposed, since only that connection waits for them). Can be used for a "a connection holds it too long" alert in monitoring that cannot join two metrics (Cloud Monitoring and so on). If the same process also has branches for test environments, `{branch="main"}` shows production only (in 0.2.25 there was no branch label, and it was the longest time across all branches) |
+| `heimdb_branch_write_lock_waiters{branch}` | gauge | Statements waiting for the write lock (only for branches with waiters) |
+| `heimdb_longest_statement_seconds` | gauge | Duration of the longest running statement |
+| `heimdb_idle_lock_disconnects_total` | counter | Connections closed by `-idle-lock-timeout` |
+| `heimdb_lock_wait_seconds_total`, `heimdb_replica_wait_seconds_total`, `heimdb_stats_wait_seconds_total` | counter | Total time statements waited: for the write lock, for reports from a synchronous replica, and for table statistics to be built (the first statement on each table after a restart) |
+| `heimdb_stats_ready`, `heimdb_stats_build_seconds` | gauge | 1 once the statistics of main's tables have been built after start (0 until then; 1 even if some tables failed); seconds it took (not exposed until finished). See "Right after a restart" above |
+| `heimdb_index_rebuild_ready`, `heimdb_index_rebuild_seconds`, `heimdb_index_rebuild_skipped` | gauge | 1 once the old indexes on main have been rebuilt after start (0 while rebuilding, with `-rebuild-indexes=false`, and on replicas); seconds it took (not exposed until finished); number skipped. See "Rebuilding old indexes" above |
+| `heimdb_memory_limit_bytes`, `heimdb_memory_abort_bytes`, `heimdb_memory_live_bytes` | gauge | Memory limit, the threshold at which statements are stopped, live heap (see the memory limit in "Operating notes" above; 0 if there is no limit) |
+| `heimdb_memory_aborted_statements_total` | counter | Statements stopped by the memory limit |
+| `heimdb_engine_caches` | gauge | Number of caches of intermediate statement results (GROUP BY, DISTINCT, sorting, subqueries) held by the SQL engine. 0 when no statement is running. If it does not go back to 0 when there are no statements and keeps growing, cleanup is leaking (stages 108 and 109) |
+| `heimdb_cache_size_bytes`, `heimdb_cache_used_bytes` | gauge | Size of the block cache and the part in use |
+| `go_goroutines` | gauge | Number of goroutines |
+| `heimdb_disk_bytes` | gauge | Disk usage of the data |
+| `heimdb_branches`, `heimdb_branch_size_bytes{branch}` | gauge | Number of branches (including main); size of each branch (estimate; `size_bytes` of `heimdb_branch_list`) |
+| `heimdb_last_commit_timestamp_seconds` | gauge | Time of the last commit |
+| `heimdb_open_transactions`, `heimdb_oldest_snapshot_age_seconds` | gauge | Open transactions; age of the oldest snapshot (it holds back the GC boundary; 0 if none). Read-only transactions are included (a logical dump with `mysqldump --single-transaction` keeps it growing for the whole dump). To see whether writes are stuck, use the write lock metrics |
+| `heimdb_pinned_times` | gauge | Number of times in use (`AS OF`, restore, creating a branch from a past time) |
+| `heimdb_gc_boundary_age_seconds` | gauge | Age of the GC boundary (not exposed if nothing has been deleted yet) |
+| `heimdb_gc_last_run_timestamp_seconds`, `heimdb_gc_last_duration_seconds`, `heimdb_gc_last_failed` | gauge | Time of the last GC, how long it took, 1 if it failed (not exposed if GC has not run since start) |
+| `heimdb_replication_sync`, `heimdb_replication_async_switches_total` | gauge, counter | Production: 1 if synchronous; number of switches to asynchronous |
+| `heimdb_replica_behind_seconds{replica}`, `heimdb_replica_last_seen_seconds{replica}` | gauge | Production: each replica's lag and time since its last contact |
+| `heimdb_replication_behind_seconds`, `heimdb_replication_last_contact_seconds`, `heimdb_replication_failing` | gauge | Replica: lag behind production, time since the last contact, 1 if the last request failed or stalled |
+| `heimdb_tls_cert_expiry_timestamp_seconds` | gauge | Expiry of the TLS certificate (with `-tls-cert`) |
+| `heimdb_watch_changes_total` | counter | Changes found by the change watch |
 
-設定の例は [`scripts/metrics`](../scripts/metrics) にある。
+Example configurations are in [`scripts/metrics`](../scripts/metrics).
 
-- **Prometheus:** [`prometheus.yml`](../scripts/metrics/prometheus.yml)（`db:9104` を読む）と、知らせる規則の例 [`rules.yml`](../scripts/metrics/rules.yml)。規則は、指標が読めない、メモリの境目に近い・文が止められた、ロックの待ちの失敗、古いスナップショット、GC の失敗、レプリカの遅れ・連絡がない・受け取れない、証明書の期限、危ない変更。本番はつないできたレプリカを起動し直すまで覚えているので、レプリカを減らすと、その名前の `HeimDBReplicaGone` は本番を起動し直すまで続く（Alertmanager で黙らせる）。Alertmanager や Grafana から知らせる。監視は HeimDB と別の VM に置く（同じ VM だと、VM ごと止まったときに知らせも止まる）。
-- **手元で見る（Prometheus と Grafana）:** [`compose.yml`](../scripts/metrics/compose.yml)。`-metrics-addr 127.0.0.1:9104` で動かした手元の HeimDB を読み（Docker Desktop の `host.docker.internal` 経由）、`rules.yml` の規則と、ダッシュボードの例 [`grafana-dashboard.json`](../scripts/metrics/grafana-dashboard.json)（クエリの数と時間、エラー、接続、メモリ、ディスク、スナップショット、知らせ）を読み込む。`docker compose -f scripts/metrics/compose.yml up -d` で、Grafana は http://127.0.0.1:3000 （ログインなし）、Prometheus は http://127.0.0.1:9090 。ポートは 127.0.0.1 だけで開く。試すためのもので、Grafana はログインなしで管理者になる。
-- **New Relic（OpenTelemetry Collector）:** [`otel-collector.yml`](../scripts/metrics/otel-collector.yml)。Collector（`otel/opentelemetry-collector-contrib`）が HeimDB を読み、OTLP で New Relic に送る。ライセンスキーは環境変数 `NEW_RELIC_LICENSE_KEY` で渡す。
-- **New Relic（インフラのエージェント）:** VM にエージェントを入れているなら、Prometheus の連携（nri-prometheus）の対象に `http://127.0.0.1:9104/metrics` を足す（設定の書き方は New Relic の文書を見る）。
-
+- **Prometheus:** [`prometheus.yml`](../scripts/metrics/prometheus.yml) (reads `db:9104`) and example alerting rules in [`rules.yml`](../scripts/metrics/rules.yml). The rules cover: metrics cannot be read, memory near the threshold or statements being stopped, lock wait failures, old snapshots, GC failures, replica lag / no contact / cannot receive, certificate expiry, and risky changes. Production remembers the replicas that connected to it until it is restarted, so if you remove a replica, `HeimDBReplicaGone` for that name keeps firing until production is restarted (silence it in Alertmanager). Send the alerts from Alertmanager or Grafana. Put the monitoring on a different VM from HeimDB (on the same VM, if the whole VM stops, the alerts stop too).
+- **Viewing locally (Prometheus and Grafana):** [`compose.yml`](../scripts/metrics/compose.yml). It reads a local HeimDB run with `-metrics-addr 127.0.0.1:9104` (through Docker Desktop's `host.docker.internal`), and loads the rules in `rules.yml` and an example dashboard, [`grafana-dashboard.json`](../scripts/metrics/grafana-dashboard.json) (query counts and times, errors, connections, memory, disk, snapshots, alerts). With `docker compose -f scripts/metrics/compose.yml up -d`, Grafana is at http://127.0.0.1:3000 (no login) and Prometheus at http://127.0.0.1:9090 . The ports are opened on 127.0.0.1 only. It is for trying things out, and Grafana makes you an administrator without login.
+- **New Relic (OpenTelemetry Collector):** [`otel-collector.yml`](../scripts/metrics/otel-collector.yml). The Collector (`otel/opentelemetry-collector-contrib`) reads HeimDB and sends to New Relic over OTLP. Pass the license key in the environment variable `NEW_RELIC_LICENSE_KEY`.
+- **New Relic (infrastructure agent):** if the agent is installed on the VM, add `http://127.0.0.1:9104/metrics` to the targets of the Prometheus integration (nri-prometheus) (see New Relic's documentation for the configuration format).

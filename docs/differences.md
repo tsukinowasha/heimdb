@@ -1,724 +1,724 @@
-# MySQL との既知の違い
+# Known differences from MySQL
 
-HeimDB と本物の MySQL 8.0 の違いをまとめる。WordPress での互換性の確かめの結果、WordPress 専用として割り切っている違い、細かな違いで記録だけにしたものの順に書く。
+This file lists the differences between HeimDB and real MySQL 8.0. It covers, in order: the results of the WordPress compatibility tests, the differences accepted because HeimDB is WordPress-only, and small differences that are only recorded.
 
-## 互換性の確かめの結果
+## Compatibility test results
 
-wordpress-develop の PHPUnit の全テスト（26,475 件）を本物の MySQL 8.0 と比べ、本物で成功して HeimDB で失敗するものは 35 件。内訳は、utf8mb4 以外の文字セットの表 32 件、空間インデックス 1 件、ストアドプロシージャ 1 件、REST API の同じ日時の記事の並び 1 件（MySQL も決まった規則がない）で、どれも意図した差。接続の切断と panic は 0。手順は [`plan.md`](plan.md) の「検証方法」。
+We compared the full wordpress-develop PHPUnit suite (26,475 tests) against real MySQL 8.0. 35 tests pass on real MySQL and fail on HeimDB. They break down as: 32 for tables in character sets other than utf8mb4, 1 for spatial indexes, 1 for stored procedures, and 1 for the order of REST API posts with the same date (MySQL has no fixed rule for it either). All of them are intended differences. There were 0 dropped connections and 0 panics. The procedure is in "Validation method" in [`plan.md`](plan.md).
 
-WordPress の接続（wpdb）で MySQL との小さな違い（警告、エラーの字、double の字の形、照合順序）を見るテスト集（[`compat/`](../compat/README.md)、82 の記録）では、本物の MySQL 8.0 と違うのは 4 で、どれも [`compat/known-differences.txt`](../compat/known-differences.txt) に理由を書いた。
+A test suite ([`compat/`](../compat/README.md), 82 records) checks small differences from MySQL (warnings, error texts, the text form of doubles, collations) through the WordPress connection (wpdb). 4 of them differ from real MySQL 8.0, and [`compat/known-differences.txt`](../compat/known-differences.txt) gives the reason for each.
 
-プラグインごとに使えるかは [`plugins.md`](plugins.md)（wordpress.org の人気の上位 100 を含む 157 本。使えないものはなく、WooCommerce は注文の全文検索だけが使えない）。
+Which plugins work is in [`plugins.md`](plugins.md) (157 plugins, including the top 100 most popular on wordpress.org. None fail; in WooCommerce only the full-text search of orders does not work).
 
-## WordPress 専用として割り切っている違い
+## Differences accepted because HeimDB is WordPress-only
 
-WordPress 専用として割り切っている。次のものは明示的なエラーを返す（接続は切らない）か、記録だけにしている。
+HeimDB is WordPress-only, and accepts the following. They return an explicit error (the connection is not closed), or are only recorded.
 
-- ビュー、トリガー、ストアドプロシージャ、イベント
-- 主キーのない表は作れる（段階 72 から）。すべての列が `NOT NULL` の一意インデックスがあれば、MySQL と同じくその列で並べ、なければ足した順に並べる。`AUTO_INCREMENT` の列があり主キーのない表と、`__heimdb_row_` で始まる名前の列はエラー。`_rowid` と `sql_generate_invisible_primary_key` は対応しない。ブランチの両側で表を全部消して入れ直すと、マージで行が重複する
-- 主キーの列は、整数、`CHAR` / `VARCHAR`、`BINARY` / `VARBINARY`、`DATE` / `DATETIME` / `TIMESTAMP`、`ENUM` の組み合わせ（0.2.19 から。0.2.18 以前は整数の列か、1 列の `CHAR` / `VARCHAR`）。`TEXT`、`BLOB`、`DECIMAL` などと前方の長さ付きはエラー。文字列の主キーは照合順序で比べる（`_ci` なら大小だけ違う値は重複）が、PAD SPACE の照合順序（`utf8mb4_unicode_520_ci`、`utf8mb4_general_ci`）でも末尾の空白を区別する（MySQL は `'a'` と `'a '` を同じとみなす。二次インデックスと同じ差）
-- サーバのファイルを読み書きする `LOAD_FILE()`、`SELECT ... INTO OUTFILE` / `DUMPFILE`、`LOAD DATA`（SQL インジェクションでサーバのファイルを読まれないよう、常にエラー）
-- `SHOW PROCESSLIST` は管理者（PROCESS 権限）だけ（MySQL は自分の接続を見せる）。`information_schema.processlist` は MySQL と同じく、権限がなければ自分のユーザーの接続だけ
-- `OPTIMIZE TABLE`、`CHECK TABLE`、`REPAIR TABLE`、`ANALYZE TABLE` は何もせずに結果を返す（段階 74 から。古いバージョンは GC が消し、壊れの確かめは Pebble のチェックサムに任せる）。`OPTIMIZE` は `status` の `OK` だけ（InnoDB の `note` の行を返さない）。ない表はエラー 1146（MySQL は `Error` と `Operation failed` の行）
-- 文字コードは utf8mb4 だけ。utf8mb3（`utf8`）と ascii の表と列は、同じ名前の utf8mb4 の照合順序（`utf8mb3_general_ci` と `ascii_general_ci` は `utf8mb4_general_ci`）として保存し、警告を出す（`SHOW CREATE TABLE` とダンプには utf8mb4 と出る。ascii の列に ASCII 以外の文字を入れると、MySQL は WordPress の sql_mode（strict なし）では `?` にし、既定の strict ではエラー 1366 にするが、HeimDB はそのまま保存する）。latin1 などはエラー。`ALTER TABLE ... CONVERT TO CHARACTER SET` は、テーブルの既定の照合順序だけを変え、列の照合順序を変えない。接続のときにクライアントが utf8mb3 の照合順序（ID 33 など）を伝えると、MySQL は `utf8mb3_general_ci` にするが、HeimDB は `utf8mb4_general_ci` にする（latin1 は既定の照合順序。WordPress は接続の後に `SET NAMES utf8mb4` を送る）
-- 全文検索（`MATCH ... AGAINST`）。FULLTEXT インデックスは定義だけを扱う（dbDelta のため）。検索は外部のサービスに任せる（[`plan.md`](plan.md) の「検索は DB の外に任せる」）
-- WordPress が使わない SQL と、汎用 MySQL としての完全な互換性
-- `SHOW INDEX ... WHERE` は `Key_name` と `Column_name` の値を大小文字を区別して比べる（MySQL は区別しない）。`DO` は、バイナリプロトコルの準備（COM_STMT_PREPARE）では構文エラーになり、`DO 1 FROM t` のように MySQL では構文エラーの書き方も通す（[`plan.md`](plan.md) の段階 69）
-- キーワードのすぐ後の空の文字列（`SELECT''`、`SELECT""`）は構文のエラー（MySQL は空の文字列を返す。vitess の構文解析器が panic するのを HeimDB が止めている。[`plan.md`](plan.md) の段階 105）
-- 照合順序の PAD SPACE（末尾の空白の比較。`'1 ' = '1'` は偽）など、go-mysql-server 由来の細かな差。わかっている差は下の「記録だけにした違い」、各段階の記録の「記録だけ」と、互換のテスト集の [`compat/known-differences.txt`](../compat/known-differences.txt) にある
+- Views, triggers, stored procedures, events
+- Tables without a primary key can be created (since stage 72). If the table has a unique index whose columns are all `NOT NULL`, rows are ordered by those columns, as in MySQL; otherwise they are ordered by insertion. A table with an `AUTO_INCREMENT` column and no primary key, and columns whose names start with `__heimdb_row_`, are errors. `_rowid` and `sql_generate_invisible_primary_key` are not supported. If both sides of a branch delete all rows of a table and insert them again, the merge duplicates the rows
+- Primary key columns can be any combination of integers, `CHAR` / `VARCHAR`, `BINARY` / `VARBINARY`, `DATE` / `DATETIME` / `TIMESTAMP`, and `ENUM` (since 0.2.19; up to 0.2.18, integer columns or a single `CHAR` / `VARCHAR` column). `TEXT`, `BLOB`, `DECIMAL` and so on, and prefix lengths, are errors. String primary keys are compared by collation (with `_ci`, values that differ only in case are duplicates), but trailing spaces are significant even with PAD SPACE collations (`utf8mb4_unicode_520_ci`, `utf8mb4_general_ci`) (MySQL treats `'a'` and `'a '` as equal; the same difference as for secondary indexes)
+- `LOAD_FILE()`, `SELECT ... INTO OUTFILE` / `DUMPFILE`, and `LOAD DATA`, which read and write files on the server (always an error, so that SQL injection cannot read files on the server)
+- `SHOW PROCESSLIST` is for administrators (PROCESS privilege) only (MySQL shows your own connections). `information_schema.processlist` shows only your own user's connections without the privilege, as in MySQL
+- `OPTIMIZE TABLE`, `CHECK TABLE`, `REPAIR TABLE`, and `ANALYZE TABLE` do nothing and return a result (since stage 74; GC deletes old versions, and corruption checks are left to Pebble's checksums). `OPTIMIZE` returns only `OK` in `status` (not InnoDB's `note` rows). A missing table is error 1146 (MySQL returns rows with `Error` and `Operation failed`)
+- The only character set is utf8mb4. utf8mb3 (`utf8`) and ascii tables and columns are stored as the utf8mb4 collation of the same name (`utf8mb3_general_ci` and `ascii_general_ci` become `utf8mb4_general_ci`), with a warning (`SHOW CREATE TABLE` and dumps show utf8mb4. When non-ASCII characters are inserted into an ascii column, MySQL turns them into `?` under the WordPress sql_mode (no strict) and returns error 1366 under the default strict mode, but HeimDB stores them as they are). latin1 and others are errors. `ALTER TABLE ... CONVERT TO CHARACTER SET` changes only the table's default collation, not the column collations. When a client sends a utf8mb3 collation (ID 33 and others) at connect time, MySQL uses `utf8mb3_general_ci`, but HeimDB uses `utf8mb4_general_ci` (for latin1, the default collation. WordPress sends `SET NAMES utf8mb4` after connecting)
+- Full-text search (`MATCH ... AGAINST`). FULLTEXT indexes are handled as definitions only (for dbDelta). Search is left to an external service ("Search is left to something outside the database" under "WordPress-specific problems" in [`plan.md`](plan.md))
+- SQL that WordPress does not use, and full compatibility as a general-purpose MySQL
+- `SHOW INDEX ... WHERE` compares the values of `Key_name` and `Column_name` case-sensitively (MySQL does not). `DO` is a syntax error when prepared over the binary protocol (COM_STMT_PREPARE), and forms that are syntax errors in MySQL, such as `DO 1 FROM t`, are accepted (stage 69 in [`plan.md`](plan.md))
+- An empty string right after a keyword (`SELECT''`, `SELECT""`) is a syntax error (MySQL returns an empty string. HeimDB stops the vitess parser from panicking. Stage 105 in [`plan.md`](plan.md))
+- Small differences that come from go-mysql-server, such as PAD SPACE in collations (comparison of trailing spaces; `'1 ' = '1'` is false). The known ones are in "Recorded differences" below, and in [`compat/known-differences.txt`](../compat/known-differences.txt) of the compatibility test suite
 
-## 記録だけにした違い
+## Recorded differences
 
-HeimDB と本物の MySQL 8.0 の違いのうち、段階 110〜124 で記録だけにしたもの、受け入れたもの（「記録だけ」「受け入れた違い」、見つかった前からの違いで直さなかったもの）を、分野ごとにまとめる。後の段階で直したものは入れていない。
+This section collects, by topic, the differences between HeimDB and real MySQL 8.0 that were only recorded or accepted in stages 110 to 124 ("record only", "accepted differences", and pre-existing differences that were found and not fixed). Differences fixed in later stages are not included.
 
-- 各項目は、記録したときの文のまま（MySQL の結果と HeimDB の結果、再現の文は記録にあるときだけ書く）。ここに書いた後で MySQL で確かめ直してはいない。後の段階で候補として取り上げるときに、本物の MySQL で確かめ直す。
-- 「WordPress」は、WordPress 本体か WooCommerce の経路で当たるか（はい、いいえ、プラグインだけ）。記録の文から判断した。記録に書いていないものは、WordPress 本体と WooCommerce がその形の文を出すかで判断し、補足に「（推定）」と書いた。
-- 段階の中で直すのは、その段階の変更による回帰と、前からの違いのうち WordPress 本体か WooCommerce の経路で結果が誤るものだけにする（[`CLAUDE.md`](../CLAUDE.md)）。ほかの違いはここに足し、次の段階の候補にする。直したら、その項目を消す。
-- 詳しい経緯は、各段階の記録（[`stages/`](stages/)）と、エンジンの変更の一覧（[`engine.md`](engine.md#変更の一覧)）にある。段階 110 で見送った上流の PR は [`engine-upstream.md`](engine-upstream.md)。段階 109 より前の「記録だけ」は、まだここに集めていない（各段階の記録にある）。
+- Each item keeps the wording from when it was recorded (the MySQL result, the HeimDB result, and a repro statement only where the record has one). The items were not checked again on MySQL after being written here. When an item is taken up as a candidate in a later stage, it is checked again on real MySQL.
+- "WordPress" says whether the item is hit on the WordPress core or WooCommerce paths (yes, no, plugins only). This was judged from the record. Where the record does not say, it was judged by whether WordPress core and WooCommerce issue statements of that form, and the note says "(inferred)".
+- Within a stage, we fix only regressions caused by that stage's changes, and pre-existing differences that give wrong results on WordPress core or WooCommerce paths ([`CLAUDE.md`](../CLAUDE.md)). Other differences are added here as candidates for the next stage. When one is fixed, its item is removed.
+- A summary of each stage is in "Development steps" in [`plan.md`](plan.md), and the engine changes are in the change list ([`engine.md`](engine.md#change-list)). Upstream PRs skipped in stage 110 are in [`engine-upstream.md`](engine-upstream.md). The "record only" items from before stage 109 are not collected here yet (they were in the stage records of the pre-publication history).
 
-| 分野 | 件数 | WordPress で当たる（はい / プラグインだけ） |
+| Topic | Items | Hit on WordPress (yes / plugins only) |
 | --- | --- | --- |
-| [日時](#日時) | 45 | 0 / 1 |
-| [数](#数) | 45 | 0 / 3 |
-| [文字列と照合順序](#文字列と照合順序) | 15 | 0 / 0 |
-| [ENUM と SET](#enum-と-set) | 13 | 0 / 0 |
-| [集計とウィンドウ関数](#集計とウィンドウ関数) | 11 | 0 / 0 |
-| [SQL の形](#sql-の形) | 29 | 0 / 0 |
-| [誤りの番号と警告](#誤りの番号と警告) | 26 | 0 / 0 |
-| [そのほか](#そのほか) | 7 | 1 / 1 |
+| [Dates and times](#dates-and-times) | 45 | 0 / 1 |
+| [Numbers](#numbers) | 45 | 0 / 3 |
+| [Strings and collations](#strings-and-collations) | 15 | 0 / 0 |
+| [ENUM and SET](#enum-and-set) | 13 | 0 / 0 |
+| [Aggregates and window functions](#aggregates-and-window-functions) | 11 | 0 / 0 |
+| [SQL syntax](#sql-syntax) | 29 | 0 / 0 |
+| [Error numbers and warnings](#error-numbers-and-warnings) | 26 | 0 / 0 |
+| [Other](#other) | 7 | 1 / 1 |
 
-## 日時
+## Dates and times
 
-- **TIMESTAMPDIFF の MICROSECOND、SECOND、DAY が大きな差であふれる**（段階 110。WordPress: いいえ）
-  - MySQL: 315537897599000000。HeimDB: 9223372036854775
-  - 再現: `TIMESTAMPDIFF(MICROSECOND, '0001-01-01 00:00:00', '9999-12-31 23:59:59')`
-  - 補足: 上流の #3410（段階 110 で見送った。WordPress が出さない文）。SECOND と DAY で '1000-01-01' からの差も（HeimDB 9223372036、106751、MySQL 32377449600、374739）。段階 114 の TIMESTAMPDIFF の直しは YEAR、QUARTER、MONTH だけ
-- **区切りのない短い日付の文字列を日付として読めない**（段階 110。WordPress: いいえ）
-  - MySQL: cast('200101' as date) は 2020-01-01。HeimDB: NULL
-  - 再現: `cast('200101' as date)`
-  - 補足: 上流の #3901（段階 110 で見送った。WordPress が出さない文）。cast('00200101.0203' as date) は NULL と 0020-01-01、cast('20101' as datetime(6)) は NULL と 2020-10-01 00:00:00.000000。段階 116 は数の YYYYMMDD を直したが、文字列の短い形の記録は見つからない。直っているかは確かめていない
-- **時刻の区切りが記号の日時の文字列**（段階 110。WordPress: いいえ）
-  - MySQL: CAST('2025/03/31 12.34.56' AS DATETIME) は 2025-03-31 12:34:56（警告 4095）。HeimDB: NULL
-  - 再現: `CAST('2025/03/31 12.34.56' AS DATETIME)`
-  - 補足: 上流の #4012（段階 110 で見送った。WordPress が出さない文）。同じ PR の後ろに余計な文字のある形（'...56xyz'）は段階 114（#3276、#3280）で直った。日付の区切りも段階 114 で直したが、時刻の中の '.' の区切りが直ったかは記録からは分からない
-- **本物の '0000-01-01' をゼロの日付として扱う**（段階 113。WordPress: いいえ）
-  - MySQL: YEARWEEK('0000-01-01') は 1。HeimDB: NULL
-  - 再現: `YEARWEEK('0000-01-01')`
-  - 補足: 受け入れた違い。ゼロの日付と '0000-01-01' が同じ内部の値なので、月 0、曜日 NULL などになる（表示は前からゼロの日付）。WordPress は 0000-01-01 を使わない
-- **時刻だけ 0 でないゼロの日付の STR_TO_DATE が NULL**（段階 113。WordPress: いいえ）
-  - MySQL: ゼロの日付と時刻。HeimDB: NULL
-  - 再現: `STR_TO_DATE('0000-00-00 01:02:03', ...)`
-  - 補足: 受け入れた違い。後の段階で直した記録は見つからない
-- **ゼロの日付の %f の小数の桁が出ない**（段階 113。WordPress: いいえ）
-  - 補足: 受け入れた違い。段階 113 の文は「`%f` の小数の桁は出ない」とだけ書き、どの関数の形かは記録からは分からない（ゼロの日付の STR_TO_DATE か DATE_FORMAT と見られる）。段階 114 は STR_TO_DATE の %f を直したが、ゼロの日付の形かは不明
-- **EXTRACT(WEEK FROM '2024-01-01') が 1**（段階 113。WordPress: いいえ）
-  - MySQL: 0。HeimDB: 1
-  - 再現: `EXTRACT(WEEK FROM '2024-01-01')`
-  - 補足: 段階 114 に回したが、後の段階で直した記録は見つからない。WordPress は EXTRACT を出さない（推定）
-  - 段階 118 で確かめた: ゼロでない日付の EXTRACT(WEEK) は MySQL の WEEK(d, 0) と違う（'2024-02-10' は MySQL 5、HeimDB 6、'2024-12-31' は 52 と 53）。段階 118 はゼロの日付だけ直した
-- **既定の sql_mode（NO_ZERO_DATE）でゼロの日付の DATE()、YEAR()、CAST が NULL にならない**（段階 114。WordPress: いいえ）
-  - MySQL: NULL（MONTH(0) と列の値は 0 のまま）。HeimDB: WordPress の sql_mode と同じ値（ゼロの日付）
-  - 再現: `DATE('0000-00-00'); YEAR('0000-00-00'); CAST('0000-00-00' AS DATE); DATE(0)`
-  - 補足: 段階 116 で `DATE(0)` も同じ違いとして記録（engine.md の 116 の行）。WordPress は既定の sql_mode を使わない（推定）
-  - 段階 118 で確かめた: EXTRACT(WEEK FROM '0000-00-00')、EXTRACT(YEAR ...)、MONTH、DAYOFWEEK、MONTHNAME などの文字列の引数も同じ（MySQL は不正な日付として NULL と警告。HeimDB は WordPress の sql_mode と同じ値）。段階 118 のゴールデンのゼロの日付の組は WordPress の sql_mode だけで流す
-- **NO_ZERO_IN_DATE のない sql_mode で STR_TO_DATE の '2024-00-00' が NULL**（段階 114。WordPress: いいえ）
-  - MySQL: 月か日が 0 の日付。HeimDB: NULL（表せない）
-  - 補足: WordPress の sql_mode は NO_ZERO_IN_DATE を含まないが、WordPress がこの形を出すかは記されていない（推定）
-- **'0000-01-01' との差（TIMESTAMPDIFF など）が NULL**（段階 114。WordPress: いいえ）
-  - MySQL: 差の値。HeimDB: NULL（'0000-01-01' をゼロの日付として扱う）
-  - 補足: 段階 113 の違いと同じ根。engine.md の 104 の行（TIMESTAMPDIFF）。WordPress が出すかは記されていない（推定）
-- **秒未満の定数を列の精度に丸めない（索引のある DATETIME(0) の列と小数の定数の等号）**（段階 116。WordPress: いいえ）
-  - MySQL: 索引の ref の読み方のときだけ定数を列の桁に丸めて行を返す。HeimDB: 返さない（索引を使わないときの MySQL と同じ）
-  - 再現: `post_date = FROM_UNIXTIME(1704189600.5)`
-  - 補足: 段階 114 から回し、段階 116 の計画のレビューで記録だけにした。ENUM の COLLATE と同じ種類
-- **既定の sql_mode で、ゼロの日付の後ろに余計な文字のある文字列との = が通る**（段階 116。WordPress: いいえ）
-  - MySQL: 1525。HeimDB: ゼロの日付の行
-  - 再現: `d = '0000-00-00 00:00:00x'`
-  - 補足: engine.md 148 の行
-- **日時の列と、日時として読めない数を含む IN が 1105**（段階 116。WordPress: いいえ）
-  - MySQL: 何も返さない。HeimDB: 1105
-  - 再現: `d IN (20240101100000, 1)`
-- **数の DATE_ADD と TIMESTAMP() の型**（段階 116。WordPress: いいえ）
-  - MySQL: DATE_ADD は日付、TIMESTAMP は DATETIME。HeimDB: DATETIME と数
-  - 再現: `DATE_ADD(20240101, INTERVAL 1 DAY); TIMESTAMP(20240101)`
-  - 補足: 後の 65d845f で TIMESTAMP(x) は DATETIME になったので、TIMESTAMP の側は直った可能性がある（不確か）
-- **MAKETIME と SEC_TO_TIME がない**（段階 116。WordPress: いいえ）
-  - HeimDB: 非対応
-  - 補足: engine.md 149 の行
-- **TIME が小数の桁を持たない（TIME(n) の列は作れず、TIME の値の小数は 6 桁で出る）**（段階 116。WordPress: いいえ）
-  - MySQL: `.5`。HeimDB: `.500000`
-  - 再現: `TIME('-01:00:00.5'); TIME('13:04:05.5'); IFNULL(TIME('10:00:00.5'), '')`
-  - 補足: CONCAT も同じ。engine.md 149、152、161、164 の行
-- **TIME(0) の列に入れた小数の付いた時刻を丸めない**（段階 116。WordPress: いいえ）
-  - MySQL: 13:04:06。HeimDB: 13:04:05
-  - 補足: '13:04:05.5' を入れた場合
-- **`EXTRACT(MICROSECOND FROM '13:04:05.5')` が 0**（段階 116。WordPress: いいえ）
+- **TIMESTAMPDIFF overflows for MICROSECOND, SECOND, and DAY with large differences** (stage 110. WordPress: no)
+  - MySQL: 315537897599000000. HeimDB: 9223372036854775
+  - Repro: `TIMESTAMPDIFF(MICROSECOND, '0001-01-01 00:00:00', '9999-12-31 23:59:59')`
+  - Note: upstream #3410 (skipped in stage 110; a statement WordPress does not issue). Also SECOND and DAY for the difference from '1000-01-01' (HeimDB 9223372036, 106751; MySQL 32377449600, 374739). The TIMESTAMPDIFF fix in stage 114 covered only YEAR, QUARTER, and MONTH
+- **Short date strings without separators cannot be read as dates** (stage 110. WordPress: no)
+  - MySQL: cast('200101' as date) is 2020-01-01. HeimDB: NULL
+  - Repro: `cast('200101' as date)`
+  - Note: upstream #3901 (skipped in stage 110; a statement WordPress does not issue). cast('00200101.0203' as date) is NULL vs 0020-01-01, and cast('20101' as datetime(6)) is NULL vs 2020-10-01 00:00:00.000000. Stage 116 fixed numeric YYYYMMDD, but no record of the short string form was found. Not checked whether it is fixed
+- **Datetime strings whose time separators are symbols** (stage 110. WordPress: no)
+  - MySQL: CAST('2025/03/31 12.34.56' AS DATETIME) is 2025-03-31 12:34:56 (warning 4095). HeimDB: NULL
+  - Repro: `CAST('2025/03/31 12.34.56' AS DATETIME)`
+  - Note: upstream #4012 (skipped in stage 110; a statement WordPress does not issue). The form with extra characters at the end from the same PR ('...56xyz') was fixed in stage 114 (#3276, #3280). Date separators were also fixed in stage 114, but the records do not show whether the '.' separator inside the time was fixed
+- **A real '0000-01-01' is treated as the zero date** (stage 113. WordPress: no)
+  - MySQL: YEARWEEK('0000-01-01') is 1. HeimDB: NULL
+  - Repro: `YEARWEEK('0000-01-01')`
+  - Note: accepted difference. The zero date and '0000-01-01' are the same internal value, so the month is 0, the weekday is NULL, and so on (it was already displayed as the zero date before). WordPress does not use 0000-01-01
+- **STR_TO_DATE of a zero date with only a non-zero time is NULL** (stage 113. WordPress: no)
+  - MySQL: the zero date with the time. HeimDB: NULL
+  - Repro: `STR_TO_DATE('0000-00-00 01:02:03', ...)`
+  - Note: accepted difference. No record of a fix in a later stage was found
+- **%f gives no fractional digits for the zero date** (stage 113. WordPress: no)
+  - Note: accepted difference. Stage 113 only says "`%f` gives no fractional digits", and the records do not show which function form it is (it looks like STR_TO_DATE or DATE_FORMAT of the zero date). Stage 114 fixed %f in STR_TO_DATE, but it is unknown whether that covered the zero-date form
+- **EXTRACT(WEEK FROM '2024-01-01') is 1** (stage 113. WordPress: no)
+  - MySQL: 0. HeimDB: 1
+  - Repro: `EXTRACT(WEEK FROM '2024-01-01')`
+  - Note: moved to stage 114, but no record of a fix in a later stage was found. WordPress does not issue EXTRACT (inferred)
+  - Checked in stage 118: EXTRACT(WEEK) of non-zero dates differs from MySQL's WEEK(d, 0) ('2024-02-10' is 5 on MySQL and 6 on HeimDB; '2024-12-31' is 52 vs 53). Stage 118 fixed only the zero date
+- **Under the default sql_mode (NO_ZERO_DATE), DATE(), YEAR(), and CAST of the zero date are not NULL** (stage 114. WordPress: no)
+  - MySQL: NULL (MONTH(0) and column values stay 0). HeimDB: the same value as under the WordPress sql_mode (the zero date)
+  - Repro: `DATE('0000-00-00'); YEAR('0000-00-00'); CAST('0000-00-00' AS DATE); DATE(0)`
+  - Note: stage 116 recorded `DATE(0)` as the same difference (the 116 row of engine.md). WordPress does not use the default sql_mode (inferred)
+  - Checked in stage 118: string arguments to EXTRACT(WEEK FROM '0000-00-00'), EXTRACT(YEAR ...), MONTH, DAYOFWEEK, MONTHNAME, and others behave the same (MySQL returns NULL and a warning for an invalid date; HeimDB returns the same value as under the WordPress sql_mode). The zero-date set of the stage 118 golden tests runs only under the WordPress sql_mode
+- **Under an sql_mode without NO_ZERO_IN_DATE, STR_TO_DATE of '2024-00-00' is NULL** (stage 114. WordPress: no)
+  - MySQL: a date with month or day 0. HeimDB: NULL (cannot be represented)
+  - Note: the WordPress sql_mode does not include NO_ZERO_IN_DATE, but the record does not say whether WordPress issues this form (inferred)
+- **Differences from '0000-01-01' (TIMESTAMPDIFF and others) are NULL** (stage 114. WordPress: no)
+  - MySQL: the difference. HeimDB: NULL ('0000-01-01' is treated as the zero date)
+  - Note: same root as the stage 113 difference. The 104 row of engine.md (TIMESTAMPDIFF). The record does not say whether WordPress issues it (inferred)
+- **Sub-second constants are not rounded to the column precision (equality between an indexed DATETIME(0) column and a fractional constant)** (stage 116. WordPress: no)
+  - MySQL: only with the index ref access method, rounds the constant to the column's digits and returns the row. HeimDB: does not return it (the same as MySQL without the index)
+  - Repro: `post_date = FROM_UNIXTIME(1704189600.5)`
+  - Note: moved from stage 114, and made record-only in the review of the stage 116 plan. The same kind as COLLATE on ENUM
+- **Under the default sql_mode, = with a string that has extra characters after the zero date succeeds** (stage 116. WordPress: no)
+  - MySQL: 1525. HeimDB: the zero-date rows
+  - Repro: `d = '0000-00-00 00:00:00x'`
+  - Note: the 148 row of engine.md
+- **IN on a datetime column with a number that cannot be read as a datetime is 1105** (stage 116. WordPress: no)
+  - MySQL: returns nothing. HeimDB: 1105
+  - Repro: `d IN (20240101100000, 1)`
+- **Types of DATE_ADD and TIMESTAMP() on numbers** (stage 116. WordPress: no)
+  - MySQL: DATE_ADD is a date, TIMESTAMP is DATETIME. HeimDB: DATETIME and a number
+  - Repro: `DATE_ADD(20240101, INTERVAL 1 DAY); TIMESTAMP(20240101)`
+  - Note: the later commit 65d845f made TIMESTAMP(x) a DATETIME, so the TIMESTAMP side may be fixed (uncertain)
+- **MAKETIME and SEC_TO_TIME do not exist** (stage 116. WordPress: no)
+  - HeimDB: not supported
+  - Note: the 149 row of engine.md
+- **TIME has no fractional digits (TIME(n) columns cannot be created, and fractions of TIME values are shown with 6 digits)** (stage 116. WordPress: no)
+  - MySQL: `.5`. HeimDB: `.500000`
+  - Repro: `TIME('-01:00:00.5'); TIME('13:04:05.5'); IFNULL(TIME('10:00:00.5'), '')`
+  - Note: CONCAT is the same. The 149, 152, 161, and 164 rows of engine.md
+- **A fractional time inserted into a TIME(0) column is not rounded** (stage 116. WordPress: no)
+  - MySQL: 13:04:06. HeimDB: 13:04:05
+  - Note: when '13:04:05.5' is inserted
+- **`EXTRACT(MICROSECOND FROM '13:04:05.5')` is 0** (stage 116. WordPress: no)
   - HeimDB: 0
-  - 再現: `EXTRACT(MICROSECOND FROM '13:04:05.5')`
-  - 補足: MySQL の値は記録にない
-- **TIME と間隔の + に今日の日付が付く**（段階 116。WordPress: いいえ）
-  - MySQL: TIME。HeimDB: 今日の日時
-  - 補足: engine.md 150、164 の行、65d845f の Left as records
-- **TIME の SUM と AVG が 0**（段階 116。WordPress: いいえ）
+  - Repro: `EXTRACT(MICROSECOND FROM '13:04:05.5')`
+  - Note: the MySQL value is not in the record
+- **TIME + interval gets today's date** (stage 116. WordPress: no)
+  - MySQL: TIME. HeimDB: today's datetime
+  - Note: the 150 and 164 rows of engine.md, and "Left as records" of 65d845f
+- **SUM and AVG of TIME are 0** (stage 116. WordPress: no)
   - HeimDB: 0
-  - 補足: MySQL の値は記されていない
-- **数の文脈の TIMESTAMP(...) が UNIX 時刻になる**（段階 116。WordPress: いいえ）
-  - MySQL: 日時の数（YYYYMMDDhhmmss）。HeimDB: UNIX 時刻
-  - 補足: MySQL の値は記されていない（推定）
-- **ゼロの日付の `-dd` が `-0` でなく 0**（段階 116。WordPress: いいえ）
-  - MySQL: -0。HeimDB: 0
-  - 再現: `-dd`
-- **文字列の定数と間隔の + に時刻が付き、秒未満は秒に丸める**（段階 116。WordPress: いいえ）
-  - MySQL: '2024-01-02'。HeimDB: 時刻が付く。'... 10:00:00.5' + INTERVAL 1 DAY は秒に丸める
-  - 再現: `'2024-01-01' + INTERVAL 1 DAY`
-  - 補足: 4 度目のレビューの前からの違い
-- **`INTERVAL 1.5 SECOND` を 2 秒に丸める**（段階 116。WordPress: いいえ）
-  - MySQL: 1.5 秒を足す。HeimDB: 2 秒に丸める
-  - 再現: `INTERVAL 1.5 SECOND`
-- **セッションの time_zone が UTC でないとき、TIMESTAMP の列をその時間帯に直さない**（段階 116。WordPress: いいえ）
-  - MySQL: セッションの時間帯で表す。HeimDB: 直さない（UNIX_TIMESTAMP(TIMESTAMP(ts)) などが時差の分ずれる）
-  - 再現: `UNIX_TIMESTAMP(TIMESTAMP(ts))`
-  - 補足: UNIX_TIMESTAMP(DATE_ADD(ts, ...)) と UNIX_TIMESTAMP(CAST(ts AS DATETIME)) は前から同じ。WordPress と WooCommerce は通らない
-- **CURDATE() の型が文字列（TIMESTAMP(CURDATE()) が DATETIME(6)、CURDATE() - INTERVAL が DATETIME）**（段階 116。WordPress: いいえ）
-  - MySQL: DATE（TIMESTAMP(CURDATE()) は DATETIME）。HeimDB: 文字列
-  - 再現: `TIMESTAMP(CURDATE()); CURDATE() - INTERVAL 7 DAY`
-  - 補足: WordPress と WooCommerce は通らないとされた
-- **日時の式の小数の桁が MySQL と違う形が残る**（段階 116。WordPress: いいえ）
-  - MySQL: FROM_UNIXTIME(FLOOR(dbl)) は DATETIME(6)、など。HeimDB: FROM_UNIXTIME(FLOOR(dbl)) が DATETIME(0)、DATETIME の式と DATETIME(3) の列の UNION が DATETIME(0)、TIMESTAMP(time_col) が DATETIME(6)
-  - 補足: 65d845f の直しによる違い。バイナリプロトコルの TIMESTAMP(?) と COALESCE(?, dt) の桁、IF(id = 1, d, dt) + 0 も。WordPress と WooCommerce は通らない
-- **整数の列の DATE_ADD と TIMESTAMP() が 1105**（段階 116。WordPress: いいえ）
+  - Note: the MySQL value is not recorded
+- **TIMESTAMP(...) in a numeric context becomes a UNIX time** (stage 116. WordPress: no)
+  - MySQL: a datetime number (YYYYMMDDhhmmss). HeimDB: a UNIX time
+  - Note: the MySQL value is not recorded (inferred)
+- **`-dd` of the zero date is 0, not `-0`** (stage 116. WordPress: no)
+  - MySQL: -0. HeimDB: 0
+  - Repro: `-dd`
+- **String constant + interval gets a time, and sub-seconds are rounded to seconds** (stage 116. WordPress: no)
+  - MySQL: '2024-01-02'. HeimDB: a time is added. '... 10:00:00.5' + INTERVAL 1 DAY is rounded to seconds
+  - Repro: `'2024-01-01' + INTERVAL 1 DAY`
+  - Note: a pre-existing difference found before the 4th review
+- **`INTERVAL 1.5 SECOND` is rounded to 2 seconds** (stage 116. WordPress: no)
+  - MySQL: adds 1.5 seconds. HeimDB: rounds to 2 seconds
+  - Repro: `INTERVAL 1.5 SECOND`
+- **When the session time_zone is not UTC, TIMESTAMP columns are not converted to that time zone** (stage 116. WordPress: no)
+  - MySQL: shown in the session time zone. HeimDB: not converted (UNIX_TIMESTAMP(TIMESTAMP(ts)) and others are off by the time difference)
+  - Repro: `UNIX_TIMESTAMP(TIMESTAMP(ts))`
+  - Note: UNIX_TIMESTAMP(DATE_ADD(ts, ...)) and UNIX_TIMESTAMP(CAST(ts AS DATETIME)) were already the same. WordPress and WooCommerce do not take this path
+- **The type of CURDATE() is a string (TIMESTAMP(CURDATE()) is DATETIME(6), CURDATE() - INTERVAL is DATETIME)** (stage 116. WordPress: no)
+  - MySQL: DATE (TIMESTAMP(CURDATE()) is DATETIME). HeimDB: a string
+  - Repro: `TIMESTAMP(CURDATE()); CURDATE() - INTERVAL 7 DAY`
+  - Note: recorded as not taken by WordPress and WooCommerce
+- **Some datetime expressions still have different fractional digits from MySQL** (stage 116. WordPress: no)
+  - MySQL: FROM_UNIXTIME(FLOOR(dbl)) is DATETIME(6), and so on. HeimDB: FROM_UNIXTIME(FLOOR(dbl)) is DATETIME(0), the UNION of a DATETIME expression and a DATETIME(3) column is DATETIME(0), and TIMESTAMP(time_col) is DATETIME(6)
+  - Note: differences caused by the 65d845f fix. Also the digits of TIMESTAMP(?) and COALESCE(?, dt) over the binary protocol, and IF(id = 1, d, dt) + 0. WordPress and WooCommerce do not take this path
+- **DATE_ADD and TIMESTAMP() on an integer column are 1105** (stage 116. WordPress: no)
   - HeimDB: 1105
-  - 再現: `DATE_ADD(int_col, ...); TIMESTAMP(int_col)`
-  - 補足: MySQL の値は記されていない
-- **小数の付いた日時を DATE の列に入れると切り捨てる**（段階 116。WordPress: いいえ）
-  - MySQL: 丸める。HeimDB: 切り捨てる
-- **'0000-01-01' が真偽の文脈で偽**（段階 116。WordPress: いいえ）
-  - MySQL: 真。HeimDB: 偽（ゼロの日付として扱う）
-  - 補足: 段階 113 の記録と同じ根
-- **日時と数、DATE と TIME の IF、LEAST、GREATEST の型と値**（段階 116。WordPress: いいえ）
-  - MySQL: IF(id = 1, d, 0) + 0 は日時の数、IF(c, dd, t) は DATETIME。HeimDB: IF(...) + 0 は文字列の先頭の数
-  - 再現: `IF(id = 1, d, 0) + 0; LEAST(d, 1); GREATEST(d, '2024'); IF(c, dd, t)`
-  - 補足: LEAST と GREATEST の値は記されていない
-- **DATE と DATETIME の IFNULL が DATE**（段階 116。WordPress: いいえ）
-  - MySQL: DATETIME。HeimDB: 左の型（DATE）
-  - 再現: `IFNULL(dd, dt)`
-  - 補足: 後の 65d845f が IFNULL の日時の枝の桁を揃えた（TemporalBranchType）ので直った可能性がある（不確か）
-- **FROM_UNIXTIME の列で、MySQL が正しい値の行にも出す 1366 を出さない**（段階 118。WordPress: プラグインだけ）
-  - MySQL: LONGTEXT と VARCHAR の列の FROM_UNIXTIME(v) で、数でない値の行の 1292 の後に `1366 Incorrect DECIMAL value: '0' for column '' at row -1`。HeimDB: 1292 だけ
-  - 再現: `CREATE TABLE m (v LONGTEXT); INSERT INTO m VALUES ('1700000000'), ('1700000000:1'), ('abc'); SELECT FROM_UNIXTIME(v) FROM m; SHOW WARNINGS`
-  - 補足: MySQL の不具合と見て合わせない（値は同じ）。警告の細かな違いも残る: FROM_UNIXTIME(CONCAT('1', 'x')) は MySQL が警告なし、HeimDB は 1292。'1e20' の警告の文は MySQL が '100000000000000000000'、HeimDB は '1e20'
-- **時刻だけ 0 でないゼロの日付の文字列の TIME_TO_SEC が 1105、EXTRACT(WEEK) が NULL**（段階 118。WordPress: いいえ）
-  - MySQL: TIME_TO_SEC('0000-00-00 01:02:03') は 3723、EXTRACT(WEEK FROM '0000-00-00 01:02:03') は 613566757、CONVERT_TZ は NULL と警告 1292。HeimDB: 1105、NULL と警告、NULL で警告なし
-  - 再現: `TIME_TO_SEC('0000-00-00 01:02:03'); EXTRACT(WEEK FROM '0000-00-00 01:02:03')`
-  - 補足: 「時刻だけ 0 でないゼロの日付の STR_TO_DATE が NULL」と同じ根（この形の文字列を日時として読めない）。EXTRACT(HOUR FROM '0000-00-00 01:02:03') も NULL（MySQL 1）
-- **TO_SECONDS がない**（段階 118。WordPress: いいえ）
-  - MySQL: TO_SECONDS('2024-01-01') は 63871286400。HeimDB: 1105 function: 'to_seconds' not found
-- **日だけ 0 か月だけ 0 の日付の LAST_DAY と EXTRACT(WEEK)**（段階 118。WordPress: いいえ）
-  - MySQL: LAST_DAY('2024-02-00') は 2024-02-29、EXTRACT(WEEK FROM '0000-01-00') は 52、EXTRACT(WEEK FROM '2024-00-10') は 613566753。HeimDB: NULL と警告 1292（0 の日と月を日付として読めない）
-  - 補足: 0 の日を読む解析が要る。WordPress の sql_mode の NO_ZERO_IN_DATE では列に入らない
-- **ゼロの日付の列の DATEDIFF と `+ INTERVAL` が警告 1292 を出す**（段階 118。WordPress: いいえ）
-  - MySQL: 警告なしで NULL。HeimDB: NULL と警告 1292（`+ INTERVAL` は `'0000-01-01 00:00:00 +0000 UTC'` の文）
-  - 再現: `SELECT DATEDIFF(d, '2024-01-01'), d + INTERVAL 1 DAY FROM t`（d はゼロの日付の DATE の列）
-  - 補足: 値は同じ。段階 118 は DAYOFWEEK、WEEK、TO_DAYS などの日付の関数の警告だけ合わせた（列には出さず、文字列はその値）
-- **ゼロの日付の EXTRACT(DAY_HOUR) と EXTRACT(MICROSECOND) の警告**（段階 118。WordPress: いいえ）
-  - MySQL: 0 と警告 1292 `Truncated incorrect time value: '0000-00-00'`。HeimDB: 0 で警告なし
-- **文字列の CONVERT_TZ の結果の小数の桁**（段階 118。WordPress: いいえ）
-  - MySQL: CONVERT_TZ(s, '+00:00', '+09:00') は DATETIME(6)（'2024-02-10 19:00:00.000000'）。HeimDB: 小数の桁なし
-  - 再現: `CONVERT_TZ(varchar_col, '+00:00', '+09:00')`
-- **WEEK(d, 2)、WEEK(d, 3)、WEEK(d, 6)、WEEK(d, 7) が年の境で 0 か 53 になる**（段階 118 のレビュー。WordPress: いいえ）
-  - MySQL: WEEK('2024-12-30', 3) は 1、WEEK('2024-01-01', 2) は 53、WEEK('2021-01-01', 3) は 53、WEEK('2025-01-01', 7) は 53。HeimDB: 53、0、0、0
-  - 再現: `WEEK('2024-12-30', 3); WEEK('2024-01-01', 2)`
-  - 補足: 前からの違い（`time.go` の `Week.Eval` がいつも年の扱いを付けて計算し、年がずれたら 0 か 53 に丸める）。モード 0、1、4、5 と YEARWEEK、WEEKOFYEAR は 2021〜2027 の年の境の 24 日で同じ。WordPress 本体の `_wp_mysql_week()` はモード 0 と 1 だけを出す
-- **ゼロの日付の警告を、引数が列の参照かで決める**（段階 118 のレビュー。WordPress: いいえ）
-  - MySQL: 引数の型が日時なら出さない（TO_DAYS(DATE(c))、WEEK(DATE(c))、DAYOFWEEK(CAST(c AS DATE)) は警告なし。LAST_DAY は出す）。HeimDB: 列の参照でない式には関数ごとに `'0000-00-00'` の警告 1292
-  - 補足: 値は同じ。段階 118 より前は Go の時刻の形の文で出していた。`types.IsTime(e.Type())` で決めれば近づく
-- **ゼロの日付の SIGN が 1**（段階 119 の 2 回目のレビュー。WordPress: いいえ）
-  - MySQL: sql_mode='' で '0000-00-00 00:00:00' の post_date_gmt の SIGN は 0。HeimDB: 1（`math.go` の `Sign.Eval` が time.Time をいつも 1 にする。上流のまま）。POW(post_date_gmt, 1) と post_date_gmt + 0 は 0 で同じ
-  - 補足: 段階 119 で DoubleArg が日時を数の形で読むようになったので、その分岐を消せば直る
-- **型の違う日時が混ざる IF、CASE、IFNULL、COALESCE を数にするとき、式の型で読む**（段階 119 の 2 回目のレビュー。WordPress: いいえ）
-  - MySQL: 選んだ枝の型で読む（POW(IFNULL(d, dt), 1) は 20240102、SQRT(IF(id > 2, t, d)) の d の枝は 4498.9、SIGN(COALESCE(dt, t)) の t='00:00:00' は 1）。HeimDB: 20240102000000、0、0（`text_column_heimdb.go` の DoubleArg が式の型で `TemporalNumber` を呼ぶ）
-  - 補足: 段階 119 より前は 1105 で文全体が誤りだった。同じ型の枝どうし（`IF(post_date_gmt = '0000-00-00 00:00:00', post_date, post_date_gmt)`）は同じ
-- **型付きの日時のリテラルと日時を返す関数を数学の関数に渡すと文字列として読む**（段階 119 の 2 回目のレビュー。WordPress: いいえ）
-  - MySQL: POW(TIME '-01:00:00', 1) は -10000。HeimDB: -1（`TIME '...'`、`DATE_ADD(...)`、`CURDATE()` の結果が文字列の型）。YEAR の 0 の表示は MySQL '0000'、HeimDB '0'。警告 3156 の列の名前が式のとき、HeimDB は `convert('"5x"', json)`（MySQL は `cast_as_json`、`json_extract`）
-- **日時の文脈の IFNULL と COALESCE がゼロの日付を NULL として扱わない**（段階 118 のレビュー。WordPress: いいえ）
-  - MySQL: TO_DAYS(IFNULL(zero_col, NOW())) は第 2 引数を使う（740300）。HeimDB: NULL（段階 118 より前は 1）
+  - Repro: `DATE_ADD(int_col, ...); TIMESTAMP(int_col)`
+  - Note: the MySQL value is not recorded
+- **A fractional datetime inserted into a DATE column is truncated** (stage 116. WordPress: no)
+  - MySQL: rounds. HeimDB: truncates
+- **'0000-01-01' is false in a boolean context** (stage 116. WordPress: no)
+  - MySQL: true. HeimDB: false (treated as the zero date)
+  - Note: same root as the stage 113 record
+- **Types and values of IF, LEAST, and GREATEST on datetime and number, and on DATE and TIME** (stage 116. WordPress: no)
+  - MySQL: IF(id = 1, d, 0) + 0 is a datetime number, and IF(c, dd, t) is DATETIME. HeimDB: IF(...) + 0 is the leading number of the string
+  - Repro: `IF(id = 1, d, 0) + 0; LEAST(d, 1); GREATEST(d, '2024'); IF(c, dd, t)`
+  - Note: the values of LEAST and GREATEST are not recorded
+- **IFNULL of DATE and DATETIME is DATE** (stage 116. WordPress: no)
+  - MySQL: DATETIME. HeimDB: the type of the left argument (DATE)
+  - Repro: `IFNULL(dd, dt)`
+  - Note: the later commit 65d845f aligned the digits of IFNULL's datetime branches (TemporalBranchType), so this may be fixed (uncertain)
+- **FROM_UNIXTIME on a column does not give the 1366 that MySQL also gives for rows with valid values** (stage 118. WordPress: plugins only)
+  - MySQL: FROM_UNIXTIME(v) on LONGTEXT and VARCHAR columns gives, after the 1292 for rows with non-numeric values, `1366 Incorrect DECIMAL value: '0' for column '' at row -1`. HeimDB: only 1292
+  - Repro: `CREATE TABLE m (v LONGTEXT); INSERT INTO m VALUES ('1700000000'), ('1700000000:1'), ('abc'); SELECT FROM_UNIXTIME(v) FROM m; SHOW WARNINGS`
+  - Note: we see it as a MySQL bug and do not match it (the values are the same). Small differences in warnings also remain: FROM_UNIXTIME(CONCAT('1', 'x')) gives no warning on MySQL and 1292 on HeimDB. The warning text for '1e20' is '100000000000000000000' on MySQL and '1e20' on HeimDB
+- **TIME_TO_SEC of a zero-date string with only a non-zero time is 1105, and EXTRACT(WEEK) is NULL** (stage 118. WordPress: no)
+  - MySQL: TIME_TO_SEC('0000-00-00 01:02:03') is 3723, EXTRACT(WEEK FROM '0000-00-00 01:02:03') is 613566757, and CONVERT_TZ is NULL with warning 1292. HeimDB: 1105, NULL with a warning, and NULL without a warning
+  - Repro: `TIME_TO_SEC('0000-00-00 01:02:03'); EXTRACT(WEEK FROM '0000-00-00 01:02:03')`
+  - Note: same root as "STR_TO_DATE of a zero date with only a non-zero time is NULL" (strings of this form cannot be read as datetimes). EXTRACT(HOUR FROM '0000-00-00 01:02:03') is also NULL (MySQL 1)
+- **TO_SECONDS does not exist** (stage 118. WordPress: no)
+  - MySQL: TO_SECONDS('2024-01-01') is 63871286400. HeimDB: 1105 function: 'to_seconds' not found
+- **LAST_DAY and EXTRACT(WEEK) of dates with only the day 0 or only the month 0** (stage 118. WordPress: no)
+  - MySQL: LAST_DAY('2024-02-00') is 2024-02-29, EXTRACT(WEEK FROM '0000-01-00') is 52, and EXTRACT(WEEK FROM '2024-00-10') is 613566753. HeimDB: NULL with warning 1292 (a day or month of 0 cannot be read as a date)
+  - Note: needs a parser that reads day 0. Under NO_ZERO_IN_DATE in the WordPress sql_mode, such values cannot get into columns
+- **DATEDIFF and `+ INTERVAL` on a zero-date column give warning 1292** (stage 118. WordPress: no)
+  - MySQL: NULL without a warning. HeimDB: NULL with warning 1292 (for `+ INTERVAL`, the text is `'0000-01-01 00:00:00 +0000 UTC'`)
+  - Repro: `SELECT DATEDIFF(d, '2024-01-01'), d + INTERVAL 1 DAY FROM t` (d is a DATE column with the zero date)
+  - Note: the values are the same. Stage 118 aligned only the warnings of date functions such as DAYOFWEEK, WEEK, and TO_DAYS (none for columns; for strings, their value)
+- **Warnings of EXTRACT(DAY_HOUR) and EXTRACT(MICROSECOND) on the zero date** (stage 118. WordPress: no)
+  - MySQL: 0 with warning 1292 `Truncated incorrect time value: '0000-00-00'`. HeimDB: 0 without a warning
+- **Fractional digits of the result of CONVERT_TZ on a string** (stage 118. WordPress: no)
+  - MySQL: CONVERT_TZ(s, '+00:00', '+09:00') is DATETIME(6) ('2024-02-10 19:00:00.000000'). HeimDB: no fractional digits
+  - Repro: `CONVERT_TZ(varchar_col, '+00:00', '+09:00')`
+- **WEEK(d, 2), WEEK(d, 3), WEEK(d, 6), and WEEK(d, 7) become 0 or 53 at year boundaries** (review of stage 118. WordPress: no)
+  - MySQL: WEEK('2024-12-30', 3) is 1, WEEK('2024-01-01', 2) is 53, WEEK('2021-01-01', 3) is 53, and WEEK('2025-01-01', 7) is 53. HeimDB: 53, 0, 0, 0
+  - Repro: `WEEK('2024-12-30', 3); WEEK('2024-01-01', 2)`
+  - Note: pre-existing difference (`Week.Eval` in `time.go` always computes with year handling, and rounds to 0 or 53 when the year shifts). Modes 0, 1, 4, and 5, YEARWEEK, and WEEKOFYEAR are the same on 24 days around the year boundaries from 2021 to 2027. `_wp_mysql_week()` in WordPress core issues only modes 0 and 1
+- **Whether the zero-date warning is given depends on whether the argument is a column reference** (review of stage 118. WordPress: no)
+  - MySQL: not given if the argument's type is a datetime (TO_DAYS(DATE(c)), WEEK(DATE(c)), and DAYOFWEEK(CAST(c AS DATE)) give no warning; LAST_DAY gives one). HeimDB: for expressions that are not column references, each function gives warning 1292 with `'0000-00-00'`
+  - Note: the values are the same. Before stage 118 it was given with text in Go's time format. Deciding with `types.IsTime(e.Type())` would bring it closer
+- **SIGN of the zero date is 1** (2nd review of stage 119. WordPress: no)
+  - MySQL: with sql_mode='', SIGN of a post_date_gmt of '0000-00-00 00:00:00' is 0. HeimDB: 1 (`Sign.Eval` in `math.go` always makes time.Time 1; as upstream). POW(post_date_gmt, 1) and post_date_gmt + 0 are 0, the same
+  - Note: since stage 119, DoubleArg reads datetimes in numeric form, so removing that branch would fix it
+- **When IF, CASE, IFNULL, and COALESCE that mix datetimes of different types are made numbers, they are read by the expression's type** (2nd review of stage 119. WordPress: no)
+  - MySQL: read by the type of the chosen branch (POW(IFNULL(d, dt), 1) is 20240102, the d branch of SQRT(IF(id > 2, t, d)) is 4498.9, and SIGN(COALESCE(dt, t)) with t='00:00:00' is 1). HeimDB: 20240102000000, 0, 0 (DoubleArg in `text_column_heimdb.go` calls `TemporalNumber` with the expression's type)
+  - Note: before stage 119 the whole statement was an error with 1105. Branches of the same type (`IF(post_date_gmt = '0000-00-00 00:00:00', post_date, post_date_gmt)`) are the same
+- **Typed datetime literals and functions that return datetimes are read as strings when passed to math functions** (2nd review of stage 119. WordPress: no)
+  - MySQL: POW(TIME '-01:00:00', 1) is -10000. HeimDB: -1 (the results of `TIME '...'`, `DATE_ADD(...)`, and `CURDATE()` have string types). A YEAR of 0 is shown as '0000' on MySQL and '0' on HeimDB. When the column name in warning 3156 is an expression, HeimDB gives `convert('"5x"', json)` (MySQL gives `cast_as_json`, `json_extract`)
+- **IFNULL and COALESCE in a datetime context do not treat the zero date as NULL** (review of stage 118. WordPress: no)
+  - MySQL: TO_DAYS(IFNULL(zero_col, NOW())) uses the 2nd argument (740300). HeimDB: NULL (1 before stage 118)
 
-## 数
+## Numbers
 
-- **CONV の空の文字列と負の小数**（段階 110。WordPress: いいえ）
-  - MySQL: CONV('', 10, 2) は NULL。CONV(-1.5, 10, 2) は 64 個の 1。CONV('-17.5', 10, 16) は FFFFFFFFFFFFFFEF。HeimDB: CONV('', 10, 2) は 1105（panic の回復）。CONV(-1.5, 10, 2) は 1。CONV('-17.5', 10, 16) は 11
-  - 再現: `CONV('', 10, 2)`
-  - 補足: 上流の #3020（段階 110 で見送った。WordPress が出さない文）
-- **ビット演算の結果が符号なしの 64 ビットにならない**（段階 110。WordPress: いいえ）
-  - MySQL: -1 | 0 は 18446744073709551615。1 << 63 は 9223372036854775808。HeimDB: どちらも 9223372036854775807
-  - 再現: `-1 | 0`
-  - 補足: 上流の #3208（段階 110 で見送った。WordPress が出さない文）
-- **整数の最小値の二重の否定が 1 小さいか 1105**（段階 110。WordPress: いいえ）
-  - MySQL: -(-128) は 128。-(-9223372036854775808) は 9223372036854775808。HeimDB: -(-128) は 127。-(-9223372036854775808) は 1105 BIGINT out of range
-  - 再現: `-(-128)`
-  - 補足: 上流の #3256（段階 110 で見送った。WordPress が出さない文）。INT と TINYINT の最小値の列の否定も 1 小さい
-- **DOUBLE のあふれた値を数の列に入れられ、後の比較が 1105**（段階 110。WordPress: いいえ）
-  - MySQL: 1690 DOUBLE value is out of range。HeimDB: INSERT が通って +Inf を保存し、後の WHERE d > 1.5 が 1105 Cannot create a Decimal from +Inf（panic の回復）
-  - 再現: `POW(10,308)*10`
-  - 補足: 上流の #3265（段階 110 で見送った。WordPress が出さない文）。段階 116 で DOUBLE のあふれを 1690 にした（数の残りの組）ので、直っている可能性がある。確かめていない
-- **行の値（タプル）の比較で値の型を広げない**（段階 110。WordPress: いいえ）
-  - MySQL: (1, 1) = (1.1, 1.1) は 0。WHERE (a, b) = (1.1, 1.1) は空。HeimDB: 1。主キー (a, b) の表で 1 行
-  - 再現: `(1, 1) = (1.1, 1.1)`
-  - 補足: 上流の #3658（段階 110 で見送った。WordPress が出さない文）
-- **FORMAT の第 3 引数と数でない引数**（段階 110。WordPress: いいえ）
-  - MySQL: FORMAT(123456, 3, 1) は '123,456.000'。FORMAT('notanumber', 2) は 0.00、FORMAT('12abc', 2) は 12.00。HeimDB: FORMAT(123456, 3, 1) は 1105（panic の回復）。数でない引数は NULL
-  - 再現: `FORMAT(123456, 3, 1)`
-  - 補足: 上流の #3702（段階 110 で見送った。WordPress が出さない文）。FORMAT(123.456, 'notanumber') も HeimDB NULL、MySQL 123
-- **文字列どうしの DIV を浮動小数点数で割る**（段階 110。WordPress: いいえ）
-  - MySQL: '1.2' DIV '0.2' は 6。HeimDB: 5
-  - 再現: `'1.2' DIV '0.2'`
-  - 補足: 上流の #3777（段階 110 で見送った。WordPress が出さない文）。'1.2' DIV '0.4' は HeimDB 2、MySQL 3。段階 116 の DIV の直しは日時の引数だけ
-- **BIGINT UNSIGNED の大きな値の算術が化け、あふれが折り返す**（段階 110。WordPress: いいえ）
-  - MySQL: u + 0 は 18446744073709551615。u + 1、s + 1 は 1690。HeimDB: u + 0 は 9223372036854775807。u + 1、s + 1 は -9223372036854775808（折り返し）
-  - 補足: 上流の #3823（段階 110 で見送った。WordPress が出さない文）。段階 116 の 1690 の直しは DOUBLE のあふれで、整数の記録は見つからない
-- **BIGINT UNSIGNED の CAST AS SIGNED が飽和する**（段階 110。WordPress: いいえ）
-  - MySQL: 18446744073709551615 は -1。9223372036854775808 は -9223372036854775808。HeimDB: どちらも 9223372036854775807
-  - 再現: `CAST(u AS SIGNED)`
-  - 補足: 上流の #3957（段階 110 で見送った。WordPress が出さない文）
-- **GREATEST、LEAST の数と文字列の混ざった引数**（段階 110。WordPress: いいえ）
-  - MySQL: GREATEST(1, 'a') は 'a'。LEAST(10, '9') は 10。GREATEST(1, 2.5, '3') は 3。HeimDB: GREATEST(1, 'a') は 1。LEAST(10, '9') は 9。GREATEST(1, 2.5, '3') は 1105
-  - 再現: `GREATEST(1, 'a')`
-  - 補足: 上流の #4047（段階 110 で見送った。WordPress が出さない文）。同じ PR の日付の形は段階 114（#3447 の組）で直った見込み。段階 116 も日時と数の LEAST(d, 1)、GREATEST('1e400', 1) を記録だけにした
-- **HAVING の MAX で 2^53 を超える BIGINT UNSIGNED と BIGINT を double で比べる**（段階 112。WordPress: いいえ）
-  - 再現: `NOT EXISTS (... HAVING MAX(v) > 0)`
-  - 補足: 段階 114 に回したが、後の段階で直した記録は見つからない
-- **SELECT の値で DECIMAL と double の定数を DECIMAL で比べる**（段階 115。WordPress: いいえ）
-  - MySQL: 1（SELECT の値では DOUBLE で比べる）。HeimDB: 0（WHERE と同じく DECIMAL で比べる）
-  - 再現: `d = 0.1e0`
-  - 補足: d が 0.1000000000000000055511151 のとき。WordPress が出すかは記されていない（推定）
-- **数でない文字列のキー（'10abc'）で索引を引くとき、先頭の数に切り詰めて引く**（段階 115。WordPress: いいえ）
-  - MySQL: 計画で変わる。HeimDB: 先頭の数で引く
-  - 補足: MySQL 自身も計画で結果が変わる
-- **WHERE のユーザー変数と DECIMAL の列の比較を DECIMAL で行う**（段階 115。WordPress: いいえ）
-  - MySQL: DOUBLE で比べる。HeimDB: DECIMAL で比べる（定数の畳み込みで変数がリテラルになる）
-  - 再現: `SET @v = '10.5000000000000000001'; ... WHERE n = @v`
-  - 補足: SELECT の列の `n = @v` は DOUBLE で MySQL と同じ
-- **PREPARE の `n IN (?, ?)` に文字列を渡すと DOUBLE で比べる**（段階 115。WordPress: いいえ）
-  - MySQL: 引数を n の型にして DECIMAL で比べる。HeimDB: DOUBLE で比べる
-  - 補足: WordPress の prepare はリテラルを作る
-- **`d < -0.005` を MySQL は書き換えるが HeimDB は書き換えない**（段階 115。WordPress: いいえ）
-  - MySQL: 書き換える
-  - 再現: `d < -0.005`
-  - 補足: 段階 115 の前からの違いの一覧に一言あるだけで、中身（何に書き換えるか、結果が変わるか）は記されていない。段階 116 で扱った記述も見つからない（不確か）
-- **JSON の中の範囲の外の DOUBLE が ±Inf**（段階 116。WordPress: いいえ）
-  - MySQL: [0.0]。HeimDB: [+Inf]
-  - 再現: `JSON_ARRAY(SUM(d))`
-- **FLOAT の列と小数の定数の比較を単精度で行う**（段階 117。WordPress: いいえ）
-  - MySQL: f = 0.1 は 0 行（f の 0.1 は倍精度で 0.10000000149011612 なので）、f > 0.1 は 0.1 の行を含む 4 行。HeimDB: f = 0.1 は 1 行、f > 0.1 は 3 行（定数を単精度に丸めて比べる）。f = '0.1' と f > '0.1' も同じ
-  - 再現: `CREATE TABLE ff (id INT PRIMARY KEY, f FLOAT, KEY kf (f)); INSERT INTO ff VALUES (1, 0.1), (2, 0), (3, 0.3), (4, 1.5), (5, 1e38); SELECT id FROM ff WHERE f = 0.1`
-  - 補足: 前からの違い。段階 117 で FLOAT の索引がエントリを持つようになったが、範囲の端を含む側に広げて Filter で絞り直すので、索引の有無で結果は変わらない（索引のない比較と同じ）。WooCommerce の在庫（stock_quantity）は DOUBLE
-- **PI() の列の情報の Decimals が 31**（段階 118。WordPress: いいえ）
-  - MySQL: 6。HeimDB: 31（段階 118 で FLOAT と DOUBLE の式を 31 にした）
-  - 補足: テキストプロトコルの値は MySQL と同じ 3.141593
-- **FLOAT(M,D) と DOUBLE(M,D) の比べで、MySQL の定数の畳み込みと差の許しをしない**（段階 120。WordPress: プラグインだけ）
-  - MySQL: WHERE では定数を列の型に入れ直して比べる（FLOAT(7,2) の 1.55、1.56、0.1、100、1.555 の行で `f BETWEEN 1.55 AND 1.56` は 1.56 の行だけ、`f = 1.555` と `f IN (1.55, 1.56, 1.555)` は Impossible WHERE で 0 行）。SELECT の値では `compare_real_fixed`（差が 5/10^(桁の最大+1) 未満なら等しい）で、DOUBLE(10,3) に 1.555 を入れた行（丸めの式で 1.5550000000000002）の `d = 1.555` は 1（WHERE では 0 行）。HeimDB: 値どうしで比べる（`f BETWEEN 1.55 AND 1.56` は 1.55 の 2 行も入る 3 行、`f IN (...)` は 1.55 と 1.56 の行、SELECT の `d = 1.555` は 0）
-  - 再現: `CREATE TABLE c1 (id INT PRIMARY KEY, f FLOAT(7,2), d DOUBLE(10,3)); INSERT INTO c1 VALUES (1, 1.55, 1.5), (2, 1.56, 1.555), (3, 0.1, 0.1), (4, 100, 100), (5, 1.555, 2.0005); SELECT id FROM c1 WHERE f BETWEEN 1.55 AND 1.56`
-  - 補足: D 桁の定数の `=`、`>`、`>=`、`<`、`<>`（`f = 1.55`、`f = 0.1`、`f > 1.55`、`d = 2.001` など）と、丸めで値の変わる端（`d > 1.2495`）は MySQL と同じ行で、索引の有無で変わらない（段階 120 のゴールデン）。段階 120 のレビューで、WHERE の FLOAT(M,D) の列と定数のリテラルの直接の比べ（`=`、`<>`、`<`、`>` など、1 つだけの値の `IN`）は、MySQL と同じく定数を列の単精度の値にして比べるようにした（`h = 35.6812363`、`h = 35.6812363e0` の FLOAT(10,7)、`k = 1234567.125` の FLOAT(11,4) が 1 行。前は 0 行）。BETWEEN、CASE、2 つ以上の値の `IN`、定数の式（CONCAT）は MySQL も畳み込まず、HeimDB も前と同じ。残る違い: SELECT の値の `IF(h = 35.6812363, ...)` は MySQL が `compare_real_fixed` で真、HeimDB は偽。プリペアドステートメントの `h = ?`（PREPARE と、エミュレーションなしの PDO、mysqli_stmt）は畳み込まない（WordPress はエミュレーションで値を文に埋めるので当たらない）。8.0.46 で確かめ直すと、この再現の `f BETWEEN 1.55 AND 1.56` は MySQL が 1.56 の行（id 2）だけ、HeimDB は 1.55 の 2 行も入る 3 行（BETWEEN は DECIMAL で比べる前からの経路）。MySQL 自身も、WHERE と SELECT の値で `d = 1.555` の結果が違う。FLOAT(10,7) に 0.1 を入れた行の `CASE h WHEN 0.1 THEN 1 ELSE 0 END` は MySQL が倍精度で比べて 0、HeimDB は DECIMAL で比べて（単精度の値を最短の字にする）1（前から。段階 120 の検証。桁のない FLOAT の `f = 0.1` の項と同じ経路）
-- **DOUBLE から DOUBLE(M,D) にする ALTER で値を丸める**（段階 120。WordPress: プラグインだけ）
-  - MySQL: (M,D) を変えるだけの ALTER（`DOUBLE` から `DOUBLE(7,2)`、`FLOAT` から `FLOAT(11,4)`）は INPLACE で、値を丸めず範囲も確かめない（123456.789 が DOUBLE(7,2) で 123456.79 と表示され、後で DOUBLE(8,3) にすると 123456.789 に戻る）。UNSIGNED を変えるなど表を写す ALTER は丸め、STRICT では 1264。HeimDB: 表を書き直す ALTER はいつも丸めて範囲を確かめる（STRICT では 1264 で ALTER を戻す）
-  - 再現: `CREATE TABLE ra (id INT PRIMARY KEY, x DOUBLE); INSERT INTO ra VALUES (1, 1.23456), (2, 123456.789); ALTER TABLE ra MODIFY x DOUBLE(7,2)`（MySQL は通り、HeimDB は 1264）
-  - 補足: 表示は D 桁で同じ。MainWP Child の dbDelta が 0.2.40 以前に作った `float` の `duration` を `float(11,4)` にする ALTER では、HeimDB は既存の値を 4 桁に丸める（MySQL は丸めずに残すので、`duration * 1000` などの式の値が違いうる）
-- **FLOAT(M,D) と DOUBLE(M,D) の式の残りの細部**（段階 120。WordPress: いいえ）
-  - MySQL: `CREATE TABLE ... SELECT` の型は SUM が `double(19,2)`、AVG が `double(23,6)`（FLOAT(7,2) の f）、DOUBLE(17,6) UNSIGNED と 1 の UNION が `double(17,6)`、FLOAT(7,2) と INT の UNION が `double(13,2)`（HeimDB は `double(22,6)` と `double(22,2)`。値と小数の桁は同じ）。GREATEST と LEAST の値は引数の小数の桁の最大で表示（`GREATEST(f, d)` は 99999.992）。ROUND、CAST、文字列にしたとき（CONCAT）の桁、information_schema の NUMERIC_PRECISION と NUMERIC_SCALE（M と D）、CREATE の警告 1681（非推奨）。HeimDB: `CREATE TABLE ... SELECT` はどれも `double(22,D)`、GREATEST と LEAST は桁の決まらない DOUBLE（99999.9921875）、ほかは段階 120 で変えていない
-  - 補足: 段階 120 の計画で範囲の外にした（式の桁は `+ - * % /` と符号、ABS、SUM、AVG、MAX、MIN、IF、CASE、COALESCE、IFNULL を MySQL に合わせた）
-- **FLOAT と整数の LEAST、GREATEST の値**（段階 120。WordPress: いいえ）
-  - MySQL: p FLOAT が 1.5 の行の `LEAST(p, 1)` は 1。HeimDB: 1.5（0.2.40 も同じ）
-  - 再現: `CREATE TABLE t (id INT PRIMARY KEY, p FLOAT); INSERT INTO t VALUES (1, 1.5); SELECT LEAST(p, 1)`
-  - 補足: 前からの違い。DOUBLE の `LEAST(q, 1)` も同じ
-- **桁のない FLOAT と整数の COALESCE の型が文字列**（段階 120。WordPress: いいえ）
-  - MySQL: `COALESCE(p, 0)` は FLOAT。HeimDB: LONGTEXT（値は同じ。0.2.40 も同じ）
-  - 補足: 前からの違い。FLOAT(M,D) と整数は段階 120 で MySQL と同じ FLOAT にした
-- **ON DUPLICATE KEY UPDATE の数の列の範囲の外が 1105**（段階 120。WordPress: いいえ）
-  - MySQL: STRICT では 1264、そうでなければ端の値と警告 1264。HeimDB: どちらも `1105 300 out of range for tinyint`（FLOAT(5,1) UNSIGNED の -3 も）
-  - 再現: `INSERT INTO tz VALUES (1, 1) ON DUPLICATE KEY UPDATE a = 300`（a は TINYINT）
-  - 補足: 前からの違い（整数の列も同じ）。丸め（`f = f + 1.004`）は MySQL と同じ
-- **小数の桁の決まった FLOAT と DOUBLE の値を、倍精度の桁を超えて表示する**（段階 120 の 1 回目のレビュー。WordPress: プラグインだけ）
-  - MySQL: DOUBLE(17,6) の 1763290000.123456 の `ctime * 1000` と `AVG(ctime)` は 1763290000123.456000（`my_fcvt` は往復できる最短の桁を出し、残りを 0 で埋める）。HeimDB: 1763290000123.456055（`number.go` の `SQLFloat64` が `strconv.AppendFloat` の `'f'` で桁まで出す）
-  - 補足: 値は同じで表示の最後の桁だけ。Wordfence の時刻（DOUBLE(17,6)）の式で当たる
-- **非 STRICT の BIT の列の範囲の外が 1105**（段階 120 の 1 回目のレビュー。WordPress: いいえ）
-  - MySQL: BIT(8) に 300 は 255 と警告 1264。HeimDB: 1105（`nonstrict.go` の `fixNumber` が BIT の端を知らない）
-  - 補足: 前からの違い
-- **FLOAT(10,7) の SHOW CREATE TABLE の DEFAULT が '0'**（段階 120 の 1 回目のレビュー。WordPress: いいえ）
-  - MySQL: `DEFAULT '0.0000000'`。HeimDB: `DEFAULT '0'`。DESCRIBE の Default は MySQL と同じ
-  - 補足: 前からの違い。dbDelta は引用符のない既定値を比べないので、ALTER は出ない
-- **FLOAT(7,2) ZEROFILL が UNSIGNED にならない**（段階 120 の 1 回目のレビュー。WordPress: いいえ）
-  - MySQL: `float(7,2) unsigned zerofill`。HeimDB: ZEROFILL と暗黙の UNSIGNED を落とす
-  - 補足: 前からの違い
-- **桁のない FLOAT と整数の UNION の型が文字列**（段階 120 の 1 回目のレビュー。WordPress: いいえ）
-  - MySQL: FLOAT と INT の UNION は DOUBLE。HeimDB: LONGTEXT（文字列の順に並ぶ。0.2.40 も同じ）
-  - 補足: 前からの違い。FLOAT と DOUBLE どうし（(M,D) と UNSIGNED を含む）と、FLOAT(M,D) か DOUBLE(M,D) と整数か DECIMAL の UNION は段階 120 で MySQL と同じ FLOAT か DOUBLE にした
-- **FLOAT(M,D) の列と DECIMAL か DOUBLE(M,D) の列の結合で、MySQL は差の許しで合わせる**（段階 120 の 2 回目のレビュー。WordPress: いいえ）
-  - MySQL: 35.6812363、0.1、1.55、-35.6812363、100 の行で、DECIMAL(12,7) と FLOAT(10,7) の `a.dec1 = b.h` は 5 組、FLOAT(10,7) と DOUBLE(10,3) の `a.h = b.dm` は 0.1、1.55、100 の 3 組。HeimDB: どちらも 100 の 1 組（索引の有無で同じ）
-  - 補足: 段階 120 の 2 回目のレビューで、結合の索引の lookup のキーを列の型にして値が変わるもの（DOUBLE のキーを FLOAT の列に、35.6812363 を DOUBLE(10,3) の列に）は空の範囲にし、索引のないときと同じにした（前は索引のあるときだけ 5 組で、MySQL とも違った）。DOUBLE と DECIMAL の列、整数のキーと DOUBLE の列（WooCommerce の wc_order_stats と wc_product_meta_lookup）は前と同じ
-- **FLOAT(M,D) の範囲の確かめを、式が返した単精度の値で単精度にする**（段階 120 の 2 回目のレビュー。WordPress: いいえ）
-  - MySQL: h が 1000（FLOAT(10,7) の端を単精度にした値）の行で、`UPDATE SET h2 = -h` と `IF(id = 1, h, 0)` を入れると 1264。HeimDB: 通る（入れる値が float32 のままの式は、ほかの FLOAT の列の値と同じく単精度で比べる）。逆に、MySQL が列どうしを写して通すのに HeimDB が 1264 にする形もある
-  - 補足: 段階 120 の 1 回目のレビューで、保存した端の値を写す `INSERT ... SELECT` と ALTER を通すために、単精度の値は単精度で比べるようにした。端の値だけが当たる
-- **FLOAT(10,7) と DECIMAL(12,7) の UNION DISTINCT が 35.6812363 を 2 行残し、3 つ以上の UNION が文字列になる**（段階 120 の 2 回目のレビュー。WordPress: いいえ）
-  - MySQL: DOUBLE にして 1 行。`lat UNION total UNION i` も DOUBLE。HeimDB: 2 行（FLOAT(M,D) と DECIMAL を DECIMAL にして比べる）、`lat UNION total UNION i` は LONGTEXT
-  - 補足: 2 つの FLOAT と DOUBLE、FLOAT(M,D) と整数か DECIMAL の UNION の型は段階 120 で MySQL と同じにした
-- **索引のある FLOAT の列と DECIMAL か DOUBLE の定数の `<` と NOT BETWEEN が、端の行を落とす**（段階 120 の 2 回目のレビュー。WordPress: いいえ）
-  - MySQL: `f < 35.6812363`（35.6812363 を入れた桁のない FLOAT）はその行を含む。HeimDB: 索引で引くと落とす（索引のないときは含む）。FLOAT(10,7) の `h NOT BETWEEN 35.6812363 AND 36` も同じ（MySQL と索引のない HeimDB は 35.6812363 の行を含む）
-  - 補足: 前からの違い（a78d94e も同じ）。範囲の端を単精度にしたキーの開いた側を、比べる側（倍精度）より狭く読む（`internal/backend/rows.go` の FLOAT の範囲を広げるのは閉じた端だけ）
-- **TEXT の列の大きすぎる値の DIV が 1690 にならない**（段階 118。WordPress: いいえ）
-  - MySQL: '1.0e400' DIV 1 は 1690 BIGINT value is out of range。HeimDB: 9223372036854775807
-  - 再現: `SELECT v DIV 1 FROM t`（v は '1.0e400' の LONGTEXT）
-  - 補足: DIV の TEXT の列の警告も MySQL（1366 `Incorrect DECIMAL value: '0' for column '' at row -1` を 2 つ）と違う（HeimDB は値ごとに 1292）。% の警告は段階 119 で直した
-- **BLOB の列の値を数にすると値が違う**（段階 118。WordPress: いいえ）
-  - MySQL: 文字列として読む（'1700000000' + 0 は 1700000000、'abc' + 0 は 0）。HeimDB: 0 と 6382179（バイト列を数として読む）と、`'[49 55 48 ...]'` の形の警告 1292
-  - 補足: WordPress 本体と WooCommerce の表に BLOB の列はない
-- **FLOAT と DOUBLE の式の列の情報の型**（段階 118 のレビュー。WordPress: いいえ）
-  - MySQL: -f、STDDEV(f)、ABS(f) は DOUBLE、FLOOR(f) と CEIL(d) は DOUBLE（Decimals 31）、LEAST(f, 1) は FLOAT、f > 1 は LONGLONG。HeimDB: FLOAT、FLOAT、FLOAT、LONG（Decimals 0）、DOUBLE、TINY
-  - 補足: 前からの違い。Decimals は FLOAT と DOUBLE の型の 62 の列と式で MySQL と同じ（PI() は記録済み。FLOAT(M,D) と DOUBLE(M,D) は段階 120 で D にした）
-- **ビット演算の数でない文字列の値が DOUBLE になる**（段階 119。WordPress: いいえ）
-  - MySQL: '1700000000:1' の TEXT の列の `t | 0` は 1700000000、`mt << 1` は 3400000000、`v ^ 1` は 1700000001、'-3.5x' の `tt >> 1` は 9223372036854775806。HeimDB: 1.7e+09、3.4e+09、1.700000001e+09、9.223372036854776e+18（DOUBLE の値で返す）
-  - 再現: `SELECT t | 0, mt << 1, v ^ 1, tt >> 1 FROM t`
-  - 補足: 前からの違い。'abc' と '12abc' は同じ値
-- **数学の関数の値の最後の桁が MySQL と違う**（段階 119。WordPress: いいえ）
-  - MySQL: TAN(12) は -0.6358599286615808、ATAN(4) は 1.3258176636680326、ACOS(0.5) は 1.0471975511965979、LOG(2, 12) は 3.5849625007211565、COT(12) は -1.5726734063976893。HeimDB: -0.6358599286615807、1.3258176636680323、1.0471975511965976、3.584962500721156、-1.5726734063976895
-  - 補足: 前からの違い。Go の math と C の libm の丸めの違い（SIN、RADIANS も一部の値で）。段階 119 のゴールデンは ROUND(..., 12) で比べる
-- **POW と EXP の DOUBLE を超える結果が NULL**（段階 119。WordPress: いいえ）
-  - MySQL: POW(10, 400) と EXP(1000) は 1690 DOUBLE value is out of range。HeimDB: NULL
-  - 補足: 前からの違い
-- **整数と小数の文字列の IN が丸めて一致する**（段階 119 のレビュー。WordPress: いいえ）
-  - MySQL: `1 IN ('0.5'), 1 IN ('1.4'), 2 IN ('1.5'), 13 IN ('12.6abc')` はすべて 0。INT の列 n と LONGTEXT の列 v（'0.5x'）の `n IN (v)` も 0。HeimDB: すべて 1（右の文字列を左の整数の型に丸めて比べる。in.go の `convertOrTruncateQuiet`）
-  - 補足: 前からの違い。`n = v` は正しい。WordPress は `ID IN ('5', '6')` の形（整数の文字列）だけを出す
-- **日付と TIME の CEIL と FLOOR**（段階 119 のレビュー。WordPress: いいえ）
-  - MySQL: CEIL(DATE '2024-01-02') は 20240102、CEIL(TIME '01:02:03') は 10203。HeimDB: 2024、1
-  - 補足: 前からの違い
-- **DECIMAL と 0 の IF の値を数にしたときの桁**（段階 119 のレビュー。WordPress: いいえ）
-  - MySQL: d が DECIMAL(6,2) の `IF(n > 1, d, 0) + 0` は 0 の枝で 0.00。HeimDB: 0
-  - 補足: 前からの違い
-- **NULL の行の `-IFNULL(vc, 0)` の符号**（段階 119 のレビュー。WordPress: いいえ）
-  - MySQL: -0。HeimDB: 0
-  - 補足: 前からの違い
-- **DECIMAL の割り算の値を次の関数に渡すとき、表示の桁に丸める**（段階 119 のレビュー。WordPress: いいえ）
-  - MySQL: EXP(30405/100000) は 1.3553368212365906（0.30405 で計算）。HeimDB: 1.3554045897718519（0.3041 で計算）。TIME の列の `EXP(t / 100000)` も同じ。`EXP(TIME'03:04:05' / 100000)` は MySQL 1.3553368212365906、HeimDB 1.0000300004500045
-  - 補足: 前からの違い
+- **CONV of the empty string and of negative decimals** (stage 110. WordPress: no)
+  - MySQL: CONV('', 10, 2) is NULL. CONV(-1.5, 10, 2) is 64 ones. CONV('-17.5', 10, 16) is FFFFFFFFFFFFFFEF. HeimDB: CONV('', 10, 2) is 1105 (recovered from a panic). CONV(-1.5, 10, 2) is 1. CONV('-17.5', 10, 16) is 11
+  - Repro: `CONV('', 10, 2)`
+  - Note: upstream #3020 (skipped in stage 110; a statement WordPress does not issue)
+- **Results of bit operations are not unsigned 64-bit** (stage 110. WordPress: no)
+  - MySQL: -1 | 0 is 18446744073709551615. 1 << 63 is 9223372036854775808. HeimDB: both are 9223372036854775807
+  - Repro: `-1 | 0`
+  - Note: upstream #3208 (skipped in stage 110; a statement WordPress does not issue)
+- **Double negation of the minimum integer is 1 too small, or 1105** (stage 110. WordPress: no)
+  - MySQL: -(-128) is 128. -(-9223372036854775808) is 9223372036854775808. HeimDB: -(-128) is 127. -(-9223372036854775808) is 1105 BIGINT out of range
+  - Repro: `-(-128)`
+  - Note: upstream #3256 (skipped in stage 110; a statement WordPress does not issue). Negating columns holding the minimum INT and TINYINT is also 1 too small
+- **An overflowing DOUBLE value can be inserted into a numeric column, and later comparisons are 1105** (stage 110. WordPress: no)
+  - MySQL: 1690 DOUBLE value is out of range. HeimDB: the INSERT succeeds and stores +Inf, and a later WHERE d > 1.5 is 1105 Cannot create a Decimal from +Inf (recovered from a panic)
+  - Repro: `POW(10,308)*10`
+  - Note: upstream #3265 (skipped in stage 110; a statement WordPress does not issue). Stage 116 made DOUBLE overflow 1690 (the remaining numeric set), so this may be fixed. Not checked
+- **Comparisons of row values (tuples) do not widen the value types** (stage 110. WordPress: no)
+  - MySQL: (1, 1) = (1.1, 1.1) is 0. WHERE (a, b) = (1.1, 1.1) is empty. HeimDB: 1. 1 row on a table with primary key (a, b)
+  - Repro: `(1, 1) = (1.1, 1.1)`
+  - Note: upstream #3658 (skipped in stage 110; a statement WordPress does not issue)
+- **The 3rd argument of FORMAT, and non-numeric arguments** (stage 110. WordPress: no)
+  - MySQL: FORMAT(123456, 3, 1) is '123,456.000'. FORMAT('notanumber', 2) is 0.00, FORMAT('12abc', 2) is 12.00. HeimDB: FORMAT(123456, 3, 1) is 1105 (recovered from a panic). Non-numeric arguments give NULL
+  - Repro: `FORMAT(123456, 3, 1)`
+  - Note: upstream #3702 (skipped in stage 110; a statement WordPress does not issue). FORMAT(123.456, 'notanumber') is also NULL on HeimDB and 123 on MySQL
+- **DIV between strings divides as floating point** (stage 110. WordPress: no)
+  - MySQL: '1.2' DIV '0.2' is 6. HeimDB: 5
+  - Repro: `'1.2' DIV '0.2'`
+  - Note: upstream #3777 (skipped in stage 110; a statement WordPress does not issue). '1.2' DIV '0.4' is 2 on HeimDB and 3 on MySQL. The DIV fix in stage 116 covered only datetime arguments
+- **Arithmetic on large BIGINT UNSIGNED values is garbled, and overflow wraps around** (stage 110. WordPress: no)
+  - MySQL: u + 0 is 18446744073709551615. u + 1 and s + 1 are 1690. HeimDB: u + 0 is 9223372036854775807. u + 1 and s + 1 are -9223372036854775808 (wrap-around)
+  - Note: upstream #3823 (skipped in stage 110; a statement WordPress does not issue). The 1690 fix in stage 116 was for DOUBLE overflow; no record for integers was found
+- **CAST AS SIGNED of BIGINT UNSIGNED saturates** (stage 110. WordPress: no)
+  - MySQL: 18446744073709551615 is -1. 9223372036854775808 is -9223372036854775808. HeimDB: both are 9223372036854775807
+  - Repro: `CAST(u AS SIGNED)`
+  - Note: upstream #3957 (skipped in stage 110; a statement WordPress does not issue)
+- **GREATEST and LEAST with mixed number and string arguments** (stage 110. WordPress: no)
+  - MySQL: GREATEST(1, 'a') is 'a'. LEAST(10, '9') is 10. GREATEST(1, 2.5, '3') is 3. HeimDB: GREATEST(1, 'a') is 1. LEAST(10, '9') is 9. GREATEST(1, 2.5, '3') is 1105
+  - Repro: `GREATEST(1, 'a')`
+  - Note: upstream #4047 (skipped in stage 110; a statement WordPress does not issue). The date forms from the same PR are likely fixed in stage 114 (the #3447 set). Stage 116 also made LEAST(d, 1) and GREATEST('1e400', 1) on datetimes and numbers record-only
+- **MAX in HAVING compares BIGINT UNSIGNED and BIGINT above 2^53 as doubles** (stage 112. WordPress: no)
+  - Repro: `NOT EXISTS (... HAVING MAX(v) > 0)`
+  - Note: moved to stage 114, but no record of a fix in a later stage was found
+- **In SELECT values, DECIMAL and a double constant are compared as DECIMAL** (stage 115. WordPress: no)
+  - MySQL: 1 (SELECT values compare as DOUBLE). HeimDB: 0 (compares as DECIMAL, the same as in WHERE)
+  - Repro: `d = 0.1e0`
+  - Note: when d is 0.1000000000000000055511151. The record does not say whether WordPress issues it (inferred)
+- **An index lookup with a non-numeric string key ('10abc') is truncated to the leading number** (stage 115. WordPress: no)
+  - MySQL: depends on the plan. HeimDB: looks up the leading number
+  - Note: MySQL itself gives different results depending on the plan
+- **Comparisons between a user variable and a DECIMAL column in WHERE are done as DECIMAL** (stage 115. WordPress: no)
+  - MySQL: compares as DOUBLE. HeimDB: compares as DECIMAL (constant folding turns the variable into a literal)
+  - Repro: `SET @v = '10.5000000000000000001'; ... WHERE n = @v`
+  - Note: `n = @v` in a SELECT column compares as DOUBLE, the same as MySQL
+- **Passing strings to `n IN (?, ?)` in PREPARE compares as DOUBLE** (stage 115. WordPress: no)
+  - MySQL: converts the arguments to n's type and compares as DECIMAL. HeimDB: compares as DOUBLE
+  - Note: WordPress's prepare builds literals
+- **MySQL rewrites `d < -0.005`, but HeimDB does not** (stage 115. WordPress: no)
+  - MySQL: rewrites it
+  - Repro: `d < -0.005`
+  - Note: there is only one line about it in the list of pre-existing differences in stage 115, and the details (what it is rewritten to, whether the result changes) are not recorded. No mention of it in stage 116 was found either (uncertain)
+- **Out-of-range DOUBLEs inside JSON are ±Inf** (stage 116. WordPress: no)
+  - MySQL: [0.0]. HeimDB: [+Inf]
+  - Repro: `JSON_ARRAY(SUM(d))`
+- **Comparisons between a FLOAT column and a decimal constant are done in single precision** (stage 117. WordPress: no)
+  - MySQL: f = 0.1 is 0 rows (because 0.1 in f is 0.10000000149011612 in double precision), and f > 0.1 is 4 rows including the 0.1 row. HeimDB: f = 0.1 is 1 row and f > 0.1 is 3 rows (the constant is rounded to single precision before comparing). f = '0.1' and f > '0.1' are the same
+  - Repro: `CREATE TABLE ff (id INT PRIMARY KEY, f FLOAT, KEY kf (f)); INSERT INTO ff VALUES (1, 0.1), (2, 0), (3, 0.3), (4, 1.5), (5, 1e38); SELECT id FROM ff WHERE f = 0.1`
+  - Note: pre-existing difference. Since stage 117 FLOAT indexes have entries, but the range ends are widened to the inclusive side and the rows are filtered again with Filter, so the result does not depend on whether there is an index (the same as the comparison without an index). WooCommerce's stock (stock_quantity) is DOUBLE
+- **Decimals in the column info of PI() is 31** (stage 118. WordPress: no)
+  - MySQL: 6. HeimDB: 31 (stage 118 made FLOAT and DOUBLE expressions 31)
+  - Note: the value over the text protocol is 3.141593, the same as MySQL
+- **Comparisons of FLOAT(M,D) and DOUBLE(M,D) do not do MySQL's constant folding and difference tolerance** (stage 120. WordPress: plugins only)
+  - MySQL: in WHERE, the constant is stored into the column's type before comparing (on FLOAT(7,2) rows of 1.55, 1.56, 0.1, 100, and 1.555, `f BETWEEN 1.55 AND 1.56` is only the 1.56 row, and `f = 1.555` and `f IN (1.55, 1.56, 1.555)` are 0 rows with Impossible WHERE). In SELECT values it uses `compare_real_fixed` (equal if the difference is less than 5/10^(max digits+1)), so for the row with 1.555 inserted into DOUBLE(10,3) (1.5550000000000002 by the rounding expression), `d = 1.555` is 1 (0 rows in WHERE). HeimDB: compares the values directly (`f BETWEEN 1.55 AND 1.56` is 3 rows including the two 1.55 rows, `f IN (...)` is the 1.55 and 1.56 rows, and `d = 1.555` in SELECT is 0)
+  - Repro: `CREATE TABLE c1 (id INT PRIMARY KEY, f FLOAT(7,2), d DOUBLE(10,3)); INSERT INTO c1 VALUES (1, 1.55, 1.5), (2, 1.56, 1.555), (3, 0.1, 0.1), (4, 100, 100), (5, 1.555, 2.0005); SELECT id FROM c1 WHERE f BETWEEN 1.55 AND 1.56`
+  - Note: `=`, `>`, `>=`, `<`, and `<>` with constants of D digits (`f = 1.55`, `f = 0.1`, `f > 1.55`, `d = 2.001` and so on), and edges where rounding changes the value (`d > 1.2495`), give the same rows as MySQL, with or without an index (the stage 120 golden tests). In the stage 120 review, direct comparisons between a FLOAT(M,D) column and a constant literal in WHERE (`=`, `<>`, `<`, `>` and so on, and `IN` with a single value) were changed to compare the constant as the column's single-precision value, as MySQL does (`h = 35.6812363` and `h = 35.6812363e0` on FLOAT(10,7), and `k = 1234567.125` on FLOAT(11,4), give 1 row; 0 rows before). MySQL does not fold BETWEEN, CASE, `IN` with 2 or more values, or constant expressions (CONCAT) either, and HeimDB is unchanged for them. Remaining differences: `IF(h = 35.6812363, ...)` in SELECT values is true on MySQL by `compare_real_fixed` and false on HeimDB. `h = ?` in prepared statements (PREPARE, PDO without emulation, mysqli_stmt) is not folded (WordPress embeds the values into the statement by emulation, so it is not hit). Checked again on 8.0.46: `f BETWEEN 1.55 AND 1.56` in this repro is only the 1.56 row (id 2) on MySQL, and 3 rows including the two 1.55 rows on HeimDB (BETWEEN takes the pre-existing path that compares as DECIMAL). MySQL itself gives different results for `d = 1.555` in WHERE and in SELECT values. For a row with 0.1 inserted into FLOAT(10,7), `CASE h WHEN 0.1 THEN 1 ELSE 0 END` is 0 on MySQL, which compares in double precision, and 1 on HeimDB, which compares as DECIMAL (the single-precision value as its shortest text) (pre-existing; verification in stage 120. The same path as the `f = 0.1` item for FLOAT without digits)
+- **ALTER from DOUBLE to DOUBLE(M,D) rounds the values** (stage 120. WordPress: plugins only)
+  - MySQL: an ALTER that only changes (M,D) (`DOUBLE` to `DOUBLE(7,2)`, `FLOAT` to `FLOAT(11,4)`) is INPLACE, and neither rounds the values nor checks the range (123456.789 is shown as 123456.79 in DOUBLE(7,2), and goes back to 123456.789 when later changed to DOUBLE(8,3)). An ALTER that copies the table, such as changing UNSIGNED, rounds, and is 1264 under STRICT. HeimDB: an ALTER that rewrites the table always rounds and checks the range (under STRICT, it is 1264 and the ALTER is rolled back)
+  - Repro: `CREATE TABLE ra (id INT PRIMARY KEY, x DOUBLE); INSERT INTO ra VALUES (1, 1.23456), (2, 123456.789); ALTER TABLE ra MODIFY x DOUBLE(7,2)` (succeeds on MySQL, 1264 on HeimDB)
+  - Note: the display is the same, with D digits. In the ALTER by MainWP Child's dbDelta that changes the `float` column `duration` created on 0.2.40 or earlier to `float(11,4)`, HeimDB rounds the existing values to 4 digits (MySQL keeps them unrounded, so the values of expressions such as `duration * 1000` can differ)
+- **Remaining details of FLOAT(M,D) and DOUBLE(M,D) expressions** (stage 120. WordPress: no)
+  - MySQL: the types in `CREATE TABLE ... SELECT` are `double(19,2)` for SUM and `double(23,6)` for AVG (on f FLOAT(7,2)), `double(17,6)` for the UNION of DOUBLE(17,6) UNSIGNED and 1, and `double(13,2)` for the UNION of FLOAT(7,2) and INT (HeimDB gives `double(22,6)` and `double(22,2)`; the values and fractional digits are the same). GREATEST and LEAST values are shown with the maximum fractional digits of the arguments (`GREATEST(f, d)` is 99999.992). Also the digits of ROUND, CAST, and conversion to a string (CONCAT), NUMERIC_PRECISION and NUMERIC_SCALE in information_schema (M and D), and warning 1681 (deprecated) on CREATE. HeimDB: `CREATE TABLE ... SELECT` is always `double(22,D)`, GREATEST and LEAST are DOUBLE with undetermined digits (99999.9921875), and the rest was not changed in stage 120
+  - Note: put out of scope in the stage 120 plan (the digits of expressions were matched to MySQL for `+ - * % /` and sign, ABS, SUM, AVG, MAX, MIN, IF, CASE, COALESCE, and IFNULL)
+- **Values of LEAST and GREATEST of FLOAT and an integer** (stage 120. WordPress: no)
+  - MySQL: `LEAST(p, 1)` on a row with FLOAT p of 1.5 is 1. HeimDB: 1.5 (the same on 0.2.40)
+  - Repro: `CREATE TABLE t (id INT PRIMARY KEY, p FLOAT); INSERT INTO t VALUES (1, 1.5); SELECT LEAST(p, 1)`
+  - Note: pre-existing difference. `LEAST(q, 1)` on DOUBLE is the same
+- **The type of COALESCE of FLOAT without digits and an integer is a string** (stage 120. WordPress: no)
+  - MySQL: `COALESCE(p, 0)` is FLOAT. HeimDB: LONGTEXT (the value is the same; the same on 0.2.40)
+  - Note: pre-existing difference. For FLOAT(M,D) and integers, stage 120 made it FLOAT, the same as MySQL
+- **Out-of-range values for numeric columns in ON DUPLICATE KEY UPDATE are 1105** (stage 120. WordPress: no)
+  - MySQL: 1264 under STRICT; otherwise the edge value and warning 1264. HeimDB: `1105 300 out of range for tinyint` in both cases (also -3 for FLOAT(5,1) UNSIGNED)
+  - Repro: `INSERT INTO tz VALUES (1, 1) ON DUPLICATE KEY UPDATE a = 300` (a is TINYINT)
+  - Note: pre-existing difference (the same for integer columns). Rounding (`f = f + 1.004`) is the same as MySQL
+- **FLOAT and DOUBLE values with fixed fractional digits are shown beyond the digits of double precision** (1st review of stage 120. WordPress: plugins only)
+  - MySQL: `ctime * 1000` and `AVG(ctime)` of 1763290000.123456 in DOUBLE(17,6) are 1763290000123.456000 (`my_fcvt` gives the shortest digits that round-trip and pads the rest with 0). HeimDB: 1763290000123.456055 (`SQLFloat64` in `number.go` writes all the digits with `'f'` of `strconv.AppendFloat`)
+  - Note: the value is the same; only the last digits of the display differ. Hit by expressions on Wordfence's times (DOUBLE(17,6))
+- **Out-of-range values for BIT columns under non-STRICT are 1105** (1st review of stage 120. WordPress: no)
+  - MySQL: 300 into BIT(8) is 255 with warning 1264. HeimDB: 1105 (`fixNumber` in `nonstrict.go` does not know the edges of BIT)
+  - Note: pre-existing difference
+- **The DEFAULT of FLOAT(10,7) in SHOW CREATE TABLE is '0'** (1st review of stage 120. WordPress: no)
+  - MySQL: `DEFAULT '0.0000000'`. HeimDB: `DEFAULT '0'`. Default in DESCRIBE is the same as MySQL
+  - Note: pre-existing difference. dbDelta does not compare default values without quotes, so no ALTER is issued
+- **FLOAT(7,2) ZEROFILL does not become UNSIGNED** (1st review of stage 120. WordPress: no)
+  - MySQL: `float(7,2) unsigned zerofill`. HeimDB: drops ZEROFILL and the implicit UNSIGNED
+  - Note: pre-existing difference
+- **The type of the UNION of FLOAT without digits and an integer is a string** (1st review of stage 120. WordPress: no)
+  - MySQL: the UNION of FLOAT and INT is DOUBLE. HeimDB: LONGTEXT (sorted in string order; the same on 0.2.40)
+  - Note: pre-existing difference. Stage 120 made the UNION of FLOAT and DOUBLE with each other (including (M,D) and UNSIGNED), and of FLOAT(M,D) or DOUBLE(M,D) with integers or DECIMAL, FLOAT or DOUBLE, the same as MySQL
+- **In joins between a FLOAT(M,D) column and a DECIMAL or DOUBLE(M,D) column, MySQL matches with difference tolerance** (2nd review of stage 120. WordPress: no)
+  - MySQL: on rows of 35.6812363, 0.1, 1.55, -35.6812363, and 100, `a.dec1 = b.h` between DECIMAL(12,7) and FLOAT(10,7) gives 5 pairs, and `a.h = b.dm` between FLOAT(10,7) and DOUBLE(10,3) gives 3 pairs (0.1, 1.55, 100). HeimDB: 1 pair (100) for both (the same with or without an index)
+  - Note: in the 2nd review of stage 120, index lookup keys in joins whose value changes when converted to the column's type (a DOUBLE key on a FLOAT column, 35.6812363 on a DOUBLE(10,3) column) were made empty ranges, the same as without an index (before, it was 5 pairs only with an index, which also differed from MySQL). DOUBLE and DECIMAL columns, and integer keys on DOUBLE columns (WooCommerce's wc_order_stats and wc_product_meta_lookup), are unchanged
+- **The range check of FLOAT(M,D) is done in single precision on the single-precision value returned by the expression** (2nd review of stage 120. WordPress: no)
+  - MySQL: on a row where h is 1000 (the FLOAT(10,7) edge in single precision), inserting `UPDATE SET h2 = -h` and `IF(id = 1, h, 0)` gives 1264. HeimDB: succeeds (an expression whose value stays float32 is compared in single precision, like values of other FLOAT columns). Conversely, there are also forms where MySQL copies between columns and succeeds but HeimDB gives 1264
+  - Note: in the 1st review of stage 120, single-precision values were made to be compared in single precision, so that `INSERT ... SELECT` and ALTER copying stored edge values succeed. Only edge values are hit
+- **UNION DISTINCT of FLOAT(10,7) and DECIMAL(12,7) leaves 35.6812363 twice, and UNIONs of 3 or more become strings** (2nd review of stage 120. WordPress: no)
+  - MySQL: converts to DOUBLE and gives 1 row. `lat UNION total UNION i` is also DOUBLE. HeimDB: 2 rows (FLOAT(M,D) and DECIMAL are compared as DECIMAL), and `lat UNION total UNION i` is LONGTEXT
+  - Note: stage 120 made the types of the UNION of two FLOAT and DOUBLE columns, and of FLOAT(M,D) with integers or DECIMAL, the same as MySQL
+- **`<` and NOT BETWEEN between an indexed FLOAT column and a DECIMAL or DOUBLE constant drop the edge row** (2nd review of stage 120. WordPress: no)
+  - MySQL: `f < 35.6812363` (FLOAT without digits holding 35.6812363) includes that row. HeimDB: drops it when looked up through the index (includes it without the index). `h NOT BETWEEN 35.6812363 AND 36` on FLOAT(10,7) is the same (MySQL and HeimDB without the index include the 35.6812363 row)
+  - Note: pre-existing difference (the same on a78d94e). The open side of a key whose range end was made single precision is read narrower than the comparing side (double precision) (`internal/backend/rows.go` widens FLOAT ranges only at closed ends)
+- **DIV of too-large values in a TEXT column is not 1690** (stage 118. WordPress: no)
+  - MySQL: '1.0e400' DIV 1 is 1690 BIGINT value is out of range. HeimDB: 9223372036854775807
+  - Repro: `SELECT v DIV 1 FROM t` (v is a LONGTEXT holding '1.0e400')
+  - Note: the warnings of DIV on TEXT columns also differ from MySQL (two of 1366 `Incorrect DECIMAL value: '0' for column '' at row -1`) (HeimDB gives 1292 per value). The warnings of % were fixed in stage 119
+- **BLOB column values give different values when made numbers** (stage 118. WordPress: no)
+  - MySQL: read as strings ('1700000000' + 0 is 1700000000, 'abc' + 0 is 0). HeimDB: 0 and 6382179 (reads the bytes as a number), and warning 1292 in the form `'[49 55 48 ...]'`
+  - Note: the tables of WordPress core and WooCommerce have no BLOB columns
+- **Types in the column info of FLOAT and DOUBLE expressions** (review of stage 118. WordPress: no)
+  - MySQL: -f, STDDEV(f), and ABS(f) are DOUBLE, FLOOR(f) and CEIL(d) are DOUBLE (Decimals 31), LEAST(f, 1) is FLOAT, and f > 1 is LONGLONG. HeimDB: FLOAT, FLOAT, FLOAT, LONG (Decimals 0), DOUBLE, TINY
+  - Note: pre-existing difference. Decimals is the same as MySQL for 62 columns and expressions of FLOAT and DOUBLE types (PI() is already recorded. FLOAT(M,D) and DOUBLE(M,D) were made D in stage 120)
+- **Bit operations on non-numeric string values give DOUBLE** (stage 119. WordPress: no)
+  - MySQL: on a TEXT column holding '1700000000:1', `t | 0` is 1700000000, `mt << 1` is 3400000000, and `v ^ 1` is 1700000001; `tt >> 1` on '-3.5x' is 9223372036854775806. HeimDB: 1.7e+09, 3.4e+09, 1.700000001e+09, 9.223372036854776e+18 (returned as DOUBLE values)
+  - Repro: `SELECT t | 0, mt << 1, v ^ 1, tt >> 1 FROM t`
+  - Note: pre-existing difference. 'abc' and '12abc' give the same values
+- **The last digits of math function values differ from MySQL** (stage 119. WordPress: no)
+  - MySQL: TAN(12) is -0.6358599286615808, ATAN(4) is 1.3258176636680326, ACOS(0.5) is 1.0471975511965979, LOG(2, 12) is 3.5849625007211565, and COT(12) is -1.5726734063976893. HeimDB: -0.6358599286615807, 1.3258176636680323, 1.0471975511965976, 3.584962500721156, -1.5726734063976895
+  - Note: pre-existing difference. Rounding differences between Go's math and C's libm (also SIN and RADIANS for some values). The stage 119 golden tests compare with ROUND(..., 12)
+- **Results of POW and EXP beyond DOUBLE are NULL** (stage 119. WordPress: no)
+  - MySQL: POW(10, 400) and EXP(1000) are 1690 DOUBLE value is out of range. HeimDB: NULL
+  - Note: pre-existing difference
+- **IN between an integer and decimal strings matches after rounding** (review of stage 119. WordPress: no)
+  - MySQL: `1 IN ('0.5'), 1 IN ('1.4'), 2 IN ('1.5'), 13 IN ('12.6abc')` are all 0. `n IN (v)` between INT column n and LONGTEXT column v ('0.5x') is also 0. HeimDB: all 1 (the string on the right is rounded to the type of the integer on the left before comparing; `convertOrTruncateQuiet` in in.go)
+  - Note: pre-existing difference. `n = v` is correct. WordPress issues only the form `ID IN ('5', '6')` (integer strings)
+- **CEIL and FLOOR of dates and TIME** (review of stage 119. WordPress: no)
+  - MySQL: CEIL(DATE '2024-01-02') is 20240102, and CEIL(TIME '01:02:03') is 10203. HeimDB: 2024, 1
+  - Note: pre-existing difference
+- **Digits when the value of IF of DECIMAL and 0 is made a number** (review of stage 119. WordPress: no)
+  - MySQL: `IF(n > 1, d, 0) + 0` with d DECIMAL(6,2) is 0.00 in the 0 branch. HeimDB: 0
+  - Note: pre-existing difference
+- **The sign of `-IFNULL(vc, 0)` on NULL rows** (review of stage 119. WordPress: no)
+  - MySQL: -0. HeimDB: 0
+  - Note: pre-existing difference
+- **The value of a DECIMAL division is rounded to its display digits when passed to the next function** (review of stage 119. WordPress: no)
+  - MySQL: EXP(30405/100000) is 1.3553368212365906 (computed with 0.30405). HeimDB: 1.3554045897718519 (computed with 0.3041). `EXP(t / 100000)` on a TIME column is the same. `EXP(TIME'03:04:05' / 100000)` is 1.3553368212365906 on MySQL and 1.0000300004500045 on HeimDB
+  - Note: pre-existing difference
 
-## 文字列と照合順序
+## Strings and collations
 
-- **CHAR の列が末尾の空白を落とさない**（段階 110。WordPress: いいえ）
-  - MySQL: CHAR(3) の 'a ' は LENGTH 1。GROUP BY c は 2 組。HeimDB: LENGTH 2。GROUP BY c は 3 組。DISTINCT、WHERE c = 'a'、PARTITION BY c も違う
-  - 補足: 上流の #3845（段階 110 で見送った。WordPress が出さない文）。段階 110 で PR と関係なく見つけた違いとしても挙がった。WordPress の表は CHAR の列をほとんど使わない（推定）
-- **照合順序のない JSON_TABLE の TEXT の列の LIKE が一致しない**（段階 110。WordPress: いいえ）
-  - MySQL: foo。HeimDB: 空
-  - 補足: 上流の #3023（段階 110 で見送った。WordPress が出さない文）。JSON_TABLE は WordPress が使わない
-- **不正な UTF-8 のバイナリへのハッシュの関数が 1105**（段階 110。WordPress: いいえ）
-  - MySQL: 00594fd4...、85e53271...、'/w=='。HeimDB: STRICT でも WordPress の sql_mode でも 1105 invalid string for charset utf8mb4
-  - 再現: `MD5(UNHEX('FF'))`
-  - 補足: 上流の #3161（段階 110 で見送った。WordPress が出さない文）。SHA1、TO_BASE64 も同じ。段階 116 は MD5 などの ENUM と日時の引数を直したが、バイナリの引数の記録は見つからない
-- **数を引数にした BIT_LENGTH が 1105**（段階 110。WordPress: いいえ）
-  - MySQL: BIT_LENGTH(123), BIT_LENGTH(1.5) は 24, 24。HeimDB: 1105 Invalid argument to bit_length
-  - 再現: `BIT_LENGTH(1.5)`
-  - 補足: 上流の #3209（段階 110 で見送った。WordPress が出さない文）。同じ PR の BIT_LENGTH(DATE(...))（MySQL 80）は、段階 116 で日時の引数を値の文字列にしたので直っている見込み。数の引数は後の記録に見つからない
-- **HEX(CHAR(0)) が空**（段階 110。WordPress: いいえ）
-  - MySQL: '00'。HeimDB: ''
-  - 再現: `HEX(CHAR(0))`
-  - 補足: 上流の #3228（段階 110 で見送った。WordPress が出さない文）。CHAR(NULL, 65) と CHAR(256) も同じ
-- **CONCAT の結果の照合順序（強さ）がバイナリと明示の COLLATE を見ない**（段階 110。WordPress: いいえ）
-  - MySQL: COLLATION(CONCAT(a, b)) は binary。CONCAT(a, 'x' COLLATE utf8mb4_bin) は utf8mb4_bin。HeimDB: どちらも utf8mb4_unicode_520_ci
-  - 補足: 上流の #3824（段階 110 で見送った。WordPress が出さない文）。比較の結果（CONCAT(a, b) = 'aA'）は同じ 1
-- **CONVERT ... USING utf8mb4 が不正な UTF-8 をそのまま返す**（段階 110。WordPress: いいえ）
-  - MySQL: NULL と警告 1300。HeimDB: 壊れた文字列
-  - 再現: `CONVERT(0xC328 USING utf8mb4)`
-  - 補足: 上流の #3958（段階 110 で見送った。WordPress が出さない文）。HEX(CONVERT(0x61FF62 USING utf8mb4)) は HeimDB 61FF62、MySQL NULL
-- **空の文字列を文字列の長さ + 1 の位置から LOCATE すると 0**（段階 110。WordPress: いいえ）
-  - MySQL: 4。HeimDB: 0
-  - 再現: `locate('', 'abc', 4)`
-  - 補足: 上流の #4020（段階 110 で見送った。WordPress が出さない文）。段階 114 で LOCATE を文字で数えるように直したが、この形が直ったかは記録にない
-- **UPDATE で文字列の列にバイナリの値をつなぐと、切り詰めて警告 1366**（段階 114。WordPress: いいえ）
-  - MySQL: 3854（Cannot convert string。WordPress の sql_mode でも）。HeimDB: 切り詰めて警告 1366
-  - 再現: `UPDATE ... SET s = CONCAT(s, UNHEX('FF'))`
-  - 補足: concat.go。WordPress が出すかは記されていない（推定）
-- **列の側に COLLATE を付けた ENUM と後ろに空白のある文字列が合わない**（段階 116。WordPress: いいえ）
-  - MySQL: 合う。HeimDB: 合わない（PAD SPACE の後ろの空白、文字列の既知の違い）
-  - 再現: `e COLLATE utf8mb4_bin = 'a '`
-- **FIELD が大文字と小文字だけを無視し、PAD SPACE の後ろの空白を除かない**（段階 116。WordPress: いいえ）
-  - MySQL: FIELD(st, 'publish ') は 1。HeimDB: 0（strings.EqualFold で比べる）
-  - 再現: `FIELD(st, 'publish ')`
-- **数と文字列の混ざった FIELD を文字列で比べる**（段階 116。WordPress: いいえ）
-  - MySQL: DOUBLE で比べる（空の値の FIELD(st, 2, 'x') は 2）。HeimDB: 文字列で比べる
-  - 再現: `FIELD(st, 2, 'x')`
-- **GREATEST が照合順序で比べない**（段階 116。WordPress: いいえ）
-  - MySQL: 'Dd'。HeimDB: 'b'
-  - 再現: `GREATEST('Dd', 'b')`
-- **SOUNDEX('') が '0000'**（段階 116。WordPress: いいえ）
-  - MySQL: ''。HeimDB: '0000'
-  - 再現: `SOUNDEX('')`
-- **MAKE_SET、INSERT()、INTERVAL()、OCT、WEIGHT_STRING が非対応**（段階 116。WordPress: いいえ）
-  - HeimDB: 非対応のエラー
-  - 補足: 前から非対応
+- **CHAR columns do not strip trailing spaces** (stage 110. WordPress: no)
+  - MySQL: 'a ' in CHAR(3) has LENGTH 1. GROUP BY c gives 2 groups. HeimDB: LENGTH 2. GROUP BY c gives 3 groups. DISTINCT, WHERE c = 'a', and PARTITION BY c also differ
+  - Note: upstream #3845 (skipped in stage 110; a statement WordPress does not issue). Also listed in stage 110 as a difference found independently of the PRs. WordPress tables hardly use CHAR columns (inferred)
+- **LIKE on a TEXT column of JSON_TABLE without a collation does not match** (stage 110. WordPress: no)
+  - MySQL: foo. HeimDB: empty
+  - Note: upstream #3023 (skipped in stage 110; a statement WordPress does not issue). WordPress does not use JSON_TABLE
+- **Hash functions on binary data that is invalid UTF-8 are 1105** (stage 110. WordPress: no)
+  - MySQL: 00594fd4..., 85e53271..., '/w=='. HeimDB: 1105 invalid string for charset utf8mb4, under both STRICT and the WordPress sql_mode
+  - Repro: `MD5(UNHEX('FF'))`
+  - Note: upstream #3161 (skipped in stage 110; a statement WordPress does not issue). SHA1 and TO_BASE64 are the same. Stage 116 fixed ENUM and datetime arguments of MD5 and others, but no record for binary arguments was found
+- **BIT_LENGTH with a numeric argument is 1105** (stage 110. WordPress: no)
+  - MySQL: BIT_LENGTH(123), BIT_LENGTH(1.5) are 24, 24. HeimDB: 1105 Invalid argument to bit_length
+  - Repro: `BIT_LENGTH(1.5)`
+  - Note: upstream #3209 (skipped in stage 110; a statement WordPress does not issue). BIT_LENGTH(DATE(...)) from the same PR (MySQL 80) is likely fixed, since stage 116 made datetime arguments the string of their value. Numeric arguments are not found in later records
+- **HEX(CHAR(0)) is empty** (stage 110. WordPress: no)
+  - MySQL: '00'. HeimDB: ''
+  - Repro: `HEX(CHAR(0))`
+  - Note: upstream #3228 (skipped in stage 110; a statement WordPress does not issue). CHAR(NULL, 65) and CHAR(256) are the same
+- **The collation (coercibility) of the result of CONCAT ignores binary and explicit COLLATE** (stage 110. WordPress: no)
+  - MySQL: COLLATION(CONCAT(a, b)) is binary. CONCAT(a, 'x' COLLATE utf8mb4_bin) is utf8mb4_bin. HeimDB: both are utf8mb4_unicode_520_ci
+  - Note: upstream #3824 (skipped in stage 110; a statement WordPress does not issue). The comparison result (CONCAT(a, b) = 'aA') is the same, 1
+- **CONVERT ... USING utf8mb4 returns invalid UTF-8 as it is** (stage 110. WordPress: no)
+  - MySQL: NULL and warning 1300. HeimDB: a broken string
+  - Repro: `CONVERT(0xC328 USING utf8mb4)`
+  - Note: upstream #3958 (skipped in stage 110; a statement WordPress does not issue). HEX(CONVERT(0x61FF62 USING utf8mb4)) is 61FF62 on HeimDB and NULL on MySQL
+- **LOCATE of the empty string from position string length + 1 is 0** (stage 110. WordPress: no)
+  - MySQL: 4. HeimDB: 0
+  - Repro: `locate('', 'abc', 4)`
+  - Note: upstream #4020 (skipped in stage 110; a statement WordPress does not issue). Stage 114 fixed LOCATE to count characters, but the record does not say whether this form was fixed
+- **In UPDATE, appending a binary value to a string column truncates it with warning 1366** (stage 114. WordPress: no)
+  - MySQL: 3854 (Cannot convert string; also under the WordPress sql_mode). HeimDB: truncates with warning 1366
+  - Repro: `UPDATE ... SET s = CONCAT(s, UNHEX('FF'))`
+  - Note: concat.go. The record does not say whether WordPress issues it (inferred)
+- **An ENUM with COLLATE on the column side does not match a string with trailing spaces** (stage 116. WordPress: no)
+  - MySQL: matches. HeimDB: does not match (trailing spaces under PAD SPACE; a known difference for strings)
+  - Repro: `e COLLATE utf8mb4_bin = 'a '`
+- **FIELD ignores only case, and does not strip trailing spaces under PAD SPACE** (stage 116. WordPress: no)
+  - MySQL: FIELD(st, 'publish ') is 1. HeimDB: 0 (compares with strings.EqualFold)
+  - Repro: `FIELD(st, 'publish ')`
+- **FIELD with mixed numbers and strings compares as strings** (stage 116. WordPress: no)
+  - MySQL: compares as DOUBLE (FIELD(st, 2, 'x') on an empty value is 2). HeimDB: compares as strings
+  - Repro: `FIELD(st, 2, 'x')`
+- **GREATEST does not compare by collation** (stage 116. WordPress: no)
+  - MySQL: 'Dd'. HeimDB: 'b'
+  - Repro: `GREATEST('Dd', 'b')`
+- **SOUNDEX('') is '0000'** (stage 116. WordPress: no)
+  - MySQL: ''. HeimDB: '0000'
+  - Repro: `SOUNDEX('')`
+- **MAKE_SET, INSERT(), INTERVAL(), OCT, and WEIGHT_STRING are not supported** (stage 116. WordPress: no)
+  - HeimDB: a not-supported error
+  - Note: were already not supported
 
-## ENUM と SET
+## ENUM and SET
 
-- **SET の列と文字列の大小を番号で比べ、数との比べが 1105**（段階 120。WordPress: いいえ）
-  - MySQL: `s >= 'b'`（'a'、'a,c'、''、'b,c'、NULL、'a'、'c' の行）は文字列で比べて 'b,c' と 'c' の 2 行。`s = 16`（定義の外の番号）は 0 行。HeimDB: 番号で比べて 'a,c'、'b,c'、'c' の 3 行。`s = 16` と `s = -1` は `1105 value 16 is not valid for this set`（0.2.40 も同じ）
-  - 補足: 前からの違い。段階 120 で SET の索引がエントリを持つようになったが、MySQL と同じく `=` と `IN` だけを範囲で引き、大小の比べは NULL でない行を読んで比べる側で決めるので、索引の有無で結果は変わらない
-- **BIT の列の文字列と小数との比べ（MySQL は索引の有無で違う）**（段階 120。WordPress: いいえ）
-  - MySQL: BIT(8) の 5、255、0、16、NULL、6、53 の行で、索引があると `b = '5'` は 53 の行（0x35）、`b > '5'` は 255 と 53、`b = 'A'` は 0 行、`b = 5.4` は 5 の行。索引がないと `b = '5'` は 5 の行、`b > '5'` は 255、16、6、53、`b = 'A'` は 0 の行、`b = 5.4` は 0 行。HeimDB: 索引の有無によらず、MySQL の索引のないときと同じ
-  - 補足: 段階 120 の計画のレビューで、索引のある表だけ文全体の誤り（1265、1105）になっていたのを直し、比べる側で決める形にした
-- **BIT(64) の 2^63 以上の値の数が飽和し、`b64 > 9223372036854775807` が 1 行落ちる**（段階 120。WordPress: いいえ）
-  - MySQL: `b64 + 0` は 18446744073709551615 と 9223372036854775808、`b64 > 9223372036854775807` は 2 行。HeimDB: どちらも 9223372036854775807、1 行（2^63 の行が落ちる。0.2.40 も同じ）
-  - 補足: 前からの違い。索引のエントリは符号なしの数の順で、`b64 >= 9223372036854775808` と索引の順の読み出しは MySQL と同じ
-- **SET の列と、並びの違う同じ要素の文字列の比較**（段階 110。WordPress: いいえ）
-  - MySQL: s = 'b,a' は 0。HeimDB: 1
-  - 再現: `s = 'b,a'`
-  - 補足: 上流の #3111（段階 110 で見送った。WordPress が出さない文）。同じ PR の、定義の違う ENUM どうしの e1 = e2 は段階 116 で直った。SET の部分は後の記録に見つからない（段階 116 の SET の比べの直しは定義にない文字列だけ）。直っているかは確かめていない
-- **ENUM と文字列の大小、定義の違う ENUM どうしの < を番号で比べる**（段階 116。WordPress: いいえ）
-  - MySQL: 文字列で比べる。HeimDB: 値がどちらも定義にあれば番号で比べる
-  - 補足: `enum('b','a')` や COLLATE utf8mb4_bin の 'Dd' と 'a' の順が違う。= は段階 116 で直した
-- **ENUM と番号の文字列、真偽、<=> の比較**（段階 116。WordPress: いいえ）
-  - MySQL: e = '1' と e = 1.5 は合わない、e = true と e <=> 'a' は合う。HeimDB: e = '1' と e = 1.5 は番号として合う、e = true と e <=> 'a' は合わない
-  - 再現: `e = '1'; e = 1.5; e = true; e <=> 'a'`
-  - 補足: WordPress は出さない
-- **後ろに空白のある値を含む IN 副問い合わせで ENUM の行が返らない**（段階 116。WordPress: いいえ）
-  - MySQL: 'c' の行。HeimDB: 返さない
-  - 再現: `e IN (SELECT 'a ' UNION SELECT 'c')`
-- **索引のある ENUM の列で、MySQL が索引を使うときだけ合う比較（BINARY、定義にない値、COLLATE utf8mb4_bin）**（段階 116。WordPress: いいえ）
-  - MySQL: 索引を使うと合う（e = BINARY 'a ' と 'A' は 'a' の行、e = 'zz' は空の値の行、e = 'A' COLLATE utf8mb4_bin は 'a' の行）。使わないと合わない。HeimDB: 索引を使わないときの MySQL と同じく返さない
-  - 再現: `e = BINARY 'a '; e = BINARY 'A'; e = 'zz'; e = 'A' COLLATE utf8mb4_bin`
-  - 補足: PAD SPACE の照合順序の索引のある ENUM の列。MySQL は ref の読み方でキーを Field::store で作って比べ直さない
-- **SET に要素の後ろに空白のある値を入れると空白を除いて入れる**（段階 116。WordPress: いいえ）
-  - MySQL: STRICT で 1265。HeimDB: 要素ごとに空白を除いて 'x,y'
-  - 補足: 上流と同じ
-- **照合順序の違う ENUM と VARCHAR の列の比較が通る**（段階 116。WordPress: いいえ）
-  - MySQL: 1267。HeimDB: 行を返す
-  - 補足: utf8mb4_0900_ai_ci と utf8mb4_unicode_520_ci
-- **ENUM の BIN と CONV が番号を使う**（段階 116。WordPress: いいえ）
-  - MySQL: 値の文字列を数として読む（'a' は 0 と 10）。HeimDB: 番号
-  - 再現: `BIN(e); CONV(e, 16, 10)`
-- **ENUM の JSON_ARRAY、JSON_OBJECT、JSON_QUOTE が 1105**（段階 116。WordPress: いいえ）
-  - MySQL: 値の文字列。HeimDB: 1105（invalid type）
-  - 再現: `JSON_ARRAY(e); JSON_OBJECT('k', e); JSON_QUOTE(e)`
-- **ENUM と数の IF に + 0 をすると番号にならない**（段階 116。WordPress: いいえ）
-  - MySQL: ENUM の番号
-  - 再現: `IF(id = 1, e, 1) + 0`
-  - 補足: HeimDB の値は記されていない
+- **Order comparisons between a SET column and a string use the numbers, and comparisons with numbers are 1105** (stage 120. WordPress: no)
+  - MySQL: `s >= 'b'` (on rows 'a', 'a,c', '', 'b,c', NULL, 'a', 'c') compares as strings and gives 2 rows, 'b,c' and 'c'. `s = 16` (a number outside the definition) is 0 rows. HeimDB: compares by number and gives 3 rows, 'a,c', 'b,c', and 'c'. `s = 16` and `s = -1` are `1105 value 16 is not valid for this set` (the same on 0.2.40)
+  - Note: pre-existing difference. Since stage 120 SET indexes have entries, but as in MySQL only `=` and `IN` are looked up as ranges, and order comparisons read the non-NULL rows and are decided on the comparing side, so the result does not depend on whether there is an index
+- **Comparisons of BIT columns with strings and decimals (MySQL differs with and without an index)** (stage 120. WordPress: no)
+  - MySQL: on BIT(8) rows of 5, 255, 0, 16, NULL, 6, and 53, with an index `b = '5'` is the 53 row (0x35), `b > '5'` is 255 and 53, `b = 'A'` is 0 rows, and `b = 5.4` is the 5 row. Without an index `b = '5'` is the 5 row, `b > '5'` is 255, 16, 6, 53, `b = 'A'` is the 0 row, and `b = 5.4` is 0 rows. HeimDB: the same as MySQL without an index, whether or not there is an index
+  - Note: in the review of the stage 120 plan, the whole statement used to be an error (1265, 1105) only on tables with an index; this was fixed to decide on the comparing side
+- **Numbers of BIT(64) values at or above 2^63 saturate, and `b64 > 9223372036854775807` drops 1 row** (stage 120. WordPress: no)
+  - MySQL: `b64 + 0` is 18446744073709551615 and 9223372036854775808, and `b64 > 9223372036854775807` is 2 rows. HeimDB: both are 9223372036854775807, and 1 row (the 2^63 row is dropped; the same on 0.2.40)
+  - Note: pre-existing difference. Index entries are in unsigned number order, and `b64 >= 9223372036854775808` and reads in index order are the same as MySQL
+- **Comparison of a SET column with a string of the same elements in a different order** (stage 110. WordPress: no)
+  - MySQL: s = 'b,a' is 0. HeimDB: 1
+  - Repro: `s = 'b,a'`
+  - Note: upstream #3111 (skipped in stage 110; a statement WordPress does not issue). e1 = e2 between ENUMs with different definitions, from the same PR, was fixed in stage 116. The SET part is not found in later records (the SET comparison fix in stage 116 covered only strings not in the definition). Not checked whether it is fixed
+- **Order comparisons of ENUM with strings, and < between ENUMs with different definitions, use the numbers** (stage 116. WordPress: no)
+  - MySQL: compares as strings. HeimDB: compares by number if both values are in the definition
+  - Note: the order of `enum('b','a')`, and of 'Dd' and 'a' under COLLATE utf8mb4_bin, differs. = was fixed in stage 116
+- **Comparisons of ENUM with number strings, booleans, and <=>** (stage 116. WordPress: no)
+  - MySQL: e = '1' and e = 1.5 do not match; e = true and e <=> 'a' match. HeimDB: e = '1' and e = 1.5 match as numbers; e = true and e <=> 'a' do not match
+  - Repro: `e = '1'; e = 1.5; e = true; e <=> 'a'`
+  - Note: WordPress does not issue these
+- **An IN subquery containing values with trailing spaces does not return the ENUM row** (stage 116. WordPress: no)
+  - MySQL: the 'c' row. HeimDB: does not return it
+  - Repro: `e IN (SELECT 'a ' UNION SELECT 'c')`
+- **Comparisons on an indexed ENUM column that match only when MySQL uses the index (BINARY, values not in the definition, COLLATE utf8mb4_bin)** (stage 116. WordPress: no)
+  - MySQL: match when the index is used (e = BINARY 'a ' and 'A' give the 'a' row, e = 'zz' gives the empty-value row, and e = 'A' COLLATE utf8mb4_bin gives the 'a' row). Do not match when it is not used. HeimDB: returns nothing, the same as MySQL without the index
+  - Repro: `e = BINARY 'a '; e = BINARY 'A'; e = 'zz'; e = 'A' COLLATE utf8mb4_bin`
+  - Note: an indexed ENUM column with a PAD SPACE collation. With ref access, MySQL builds the key with Field::store and does not compare again
+- **Inserting values with trailing spaces after elements into SET strips the spaces** (stage 116. WordPress: no)
+  - MySQL: 1265 under STRICT. HeimDB: strips the spaces from each element and inserts 'x,y'
+  - Note: the same as upstream
+- **Comparisons between ENUM and VARCHAR columns with different collations succeed** (stage 116. WordPress: no)
+  - MySQL: 1267. HeimDB: returns rows
+  - Note: utf8mb4_0900_ai_ci and utf8mb4_unicode_520_ci
+- **BIN and CONV of ENUM use the number** (stage 116. WordPress: no)
+  - MySQL: read the value's string as a number ('a' is 0 and 10). HeimDB: the number
+  - Repro: `BIN(e); CONV(e, 16, 10)`
+- **JSON_ARRAY, JSON_OBJECT, and JSON_QUOTE of ENUM are 1105** (stage 116. WordPress: no)
+  - MySQL: the value's string. HeimDB: 1105 (invalid type)
+  - Repro: `JSON_ARRAY(e); JSON_OBJECT('k', e); JSON_QUOTE(e)`
+- **+ 0 on IF of ENUM and a number does not give the number** (stage 116. WordPress: no)
+  - MySQL: the ENUM's number
+  - Repro: `IF(id = 1, e, 1) + 0`
+  - Note: the HeimDB value is not recorded
 
-## 集計とウィンドウ関数
+## Aggregates and window functions
 
-- **選択の項目の相関副問い合わせの別名で GROUP BY すると値が NULL**（段階 110。WordPress: いいえ）
-  - MySQL: (2,1),(3,2)。HeimDB: (2,NULL),(3,NULL)
-  - 補足: 上流の #3172（段階 110 で見送った。WordPress が出さない文）。v0.20.0 のフォークでも起きる
-- **副問い合わせの中の外の列の集計（相関の集計）が 1105 か 1146**（段階 110。WordPress: いいえ）
-  - MySQL: (1,'a|b'),(2,'c')。HeimDB: 1105 unable to find field with index 2 in row of 1 columns。HAVING の形は 1146 table not found: a
-  - 再現: `SELECT grp, (SELECT GROUP_CONCAT(a.val ...) FROM concat_probe p) FROM concat_scope a GROUP BY grp`
-  - 補足: 上流の #3797（段階 110 で見送った。WordPress が出さない文）。MAX(a.val)、COUNT(a.val) でも同じ。段階 115 は HAVING の GROUP_CONCAT の 1146（同じ文の列）を直したが、外の列の集計の形は直した記録がない
-- **GROUP BY のある結合の相関副問い合わせの値が違う**（段階 110。WordPress: いいえ）
-  - MySQL: ('second row', 2)。HeimDB: ('second row', 3)
-  - 再現: `select mt.s, (select count(*) from othertable where i2 <= mt.i) from mytable mt left join othertable ot on mt.i = ot.i2 where mt.i = 2 group by mt.i, mt.s`
-  - 補足: 上流の #3950（段階 110 で見送った。WordPress が出さない文）
-- **COUNT(1) と COUNT(*) をこの順で並べると 1105**（段階 110。WordPress: いいえ）
-  - MySQL: (3,3)。HeimDB: 1105 column "COUNT(*)" does not exist in scope
-  - 再現: `SELECT COUNT(1), COUNT(*) FROM count_t`
-  - 補足: 上流の #4070（段階 110 で見送った。WordPress が出さない文）。GROUP BY の形も 1105。順が COUNT(*), COUNT(1) なら通る
-- **外の集計の別名を副問い合わせの集計で読むと、外の行の値で集計する**（段階 115。WordPress: いいえ）
-  - MySQL: 1247。HeimDB: 外の行の値で集計する
-  - 再現: `(SELECT SUM(cnt) ...)`
-  - 補足: planbuilder の HAVING の解決
-- **HAVING の `GROUP_CONCAT(x ORDER BY 1)` が 1105**（段階 115。WordPress: いいえ）
+- **GROUP BY on the alias of a correlated subquery in the select list gives NULL values** (stage 110. WordPress: no)
+  - MySQL: (2,1),(3,2). HeimDB: (2,NULL),(3,NULL)
+  - Note: upstream #3172 (skipped in stage 110; a statement WordPress does not issue). Also happens on the v0.20.0 fork
+- **Aggregates of outer columns inside a subquery (correlated aggregates) are 1105 or 1146** (stage 110. WordPress: no)
+  - MySQL: (1,'a|b'),(2,'c'). HeimDB: 1105 unable to find field with index 2 in row of 1 columns. The HAVING form is 1146 table not found: a
+  - Repro: `SELECT grp, (SELECT GROUP_CONCAT(a.val ...) FROM concat_probe p) FROM concat_scope a GROUP BY grp`
+  - Note: upstream #3797 (skipped in stage 110; a statement WordPress does not issue). The same with MAX(a.val) and COUNT(a.val). Stage 115 fixed the 1146 of GROUP_CONCAT in HAVING (on columns of the same statement), but there is no record of a fix for the form that aggregates outer columns
+- **Correlated subqueries in a join with GROUP BY give different values** (stage 110. WordPress: no)
+  - MySQL: ('second row', 2). HeimDB: ('second row', 3)
+  - Repro: `select mt.s, (select count(*) from othertable where i2 <= mt.i) from mytable mt left join othertable ot on mt.i = ot.i2 where mt.i = 2 group by mt.i, mt.s`
+  - Note: upstream #3950 (skipped in stage 110; a statement WordPress does not issue)
+- **COUNT(1) and COUNT(*) in this order are 1105** (stage 110. WordPress: no)
+  - MySQL: (3,3). HeimDB: 1105 column "COUNT(*)" does not exist in scope
+  - Repro: `SELECT COUNT(1), COUNT(*) FROM count_t`
+  - Note: upstream #4070 (skipped in stage 110; a statement WordPress does not issue). The GROUP BY form is also 1105. In the order COUNT(*), COUNT(1) it works
+- **Reading the alias of an outer aggregate in a subquery's aggregate aggregates over the outer row's value** (stage 115. WordPress: no)
+  - MySQL: 1247. HeimDB: aggregates over the outer row's value
+  - Repro: `(SELECT SUM(cnt) ...)`
+  - Note: HAVING resolution in planbuilder
+- **`GROUP_CONCAT(x ORDER BY 1)` in HAVING is 1105** (stage 115. WordPress: no)
   - HeimDB: 1105
-  - 再現: `HAVING GROUP_CONCAT(x ORDER BY 1)`
-  - 補足: 前からの違い
-- **ウィンドウ関数の枠の違いが残る（RANGE の同順位の行など）**（段階 116。WordPress: いいえ）
-  - 補足: RANGE の枠の同順位の行、DESC か複数の列の ORDER BY の RANGE の枠、前からの和が ±1e308 の隣の小さい値を吸い込む、ORDER BY のある MAX と LAST_VALUE、STD と VARIANCE の OVER が 1690
-- **WITH ROLLUP が構文エラー**（段階 116。WordPress: いいえ）
-  - MySQL: 集計の小計の行。HeimDB: 構文エラー
-- **ウィンドウの VARIANCE と STDDEV の値の最後の桁が違う**（段階 119。WordPress: いいえ）
-  - MySQL: 'abc'、'12abc'、''、'4'、NULL、'0.5x' の `VARIANCE(v) OVER ()` は 21.16、`VAR_SAMP(w) OVER ()` は 26.45。HeimDB: 21.159999999999997、26.449999999999996
-  - 補足: 前からの違い（段階 119 で数でない文字列を先頭の数の部分で読むようにして見えた）。HeimDB は前からの和で平均を出してから偏差を足す。集計の VARIANCE（GROUP BY）は MySQL と同じ値
-- **VARIANCE と STDDEV の仲間の型が、整数と DECIMAL の引数で引数の型**（段階 119 のレビュー。WordPress: いいえ）
-  - MySQL: DOUBLE。n INT（1、12、1、1000）と d DECIMAL(6,2) の `VARIANCE(n), STDDEV_SAMP(n), STDDEV(d)` は 185774.25、497.6936808921729、467.7302365880893。HeimDB: 185774、498、467.73（`unary_aggs.og.go` の Type が引数の型。上流のまま）。LONGTEXT の列の `VARIANCE(v) OVER ()` は文字列の型で返す（値は正しい）
-  - 補足: 前からの違い。段階 119 のレビューで、日付、日時、TIME の引数だけを DOUBLE にした（TIME の値にならない分散が 1105 になるのを防ぐため。`VarianceType`）。JSON の引数も型が JSON のまま（MySQL は集計では誤り 3156。HeimDB は DOUBLE の値を JSON の形で返す）
-- **ウィンドウの VARIANCE と STDDEV の TIME、日付、JSON の引数**（段階 119 の 2 回目のレビュー。WordPress: いいえ）
-  - MySQL: `VARIANCE(t) OVER ()`（TIME）は 4974831076112.828、日付は数の形（20240102）で計算。HeimDB: TIME は NULL、日付は UNIX 時刻で計算、JSON は警告 1292 と違う値（`window_functions.go` の `floatPrefixSumVals` と `computeStd2` が `types.Float64.Convert` のまま）
-  - 補足: 前からの違い。集計（OVER なし）は段階 119 で MySQL と同じにした
+  - Repro: `HAVING GROUP_CONCAT(x ORDER BY 1)`
+  - Note: pre-existing difference
+- **Differences in window frames remain (peer rows in RANGE and others)** (stage 116. WordPress: no)
+  - Note: peer rows in RANGE frames, RANGE frames with DESC or multi-column ORDER BY, prefix sums absorbing small values next to ±1e308, MAX and LAST_VALUE with ORDER BY, and STD and VARIANCE with OVER giving 1690
+- **WITH ROLLUP is a syntax error** (stage 116. WordPress: no)
+  - MySQL: subtotal rows of the aggregates. HeimDB: syntax error
+- **The last digits of window VARIANCE and STDDEV values differ** (stage 119. WordPress: no)
+  - MySQL: on 'abc', '12abc', '', '4', NULL, and '0.5x', `VARIANCE(v) OVER ()` is 21.16 and `VAR_SAMP(w) OVER ()` is 26.45. HeimDB: 21.159999999999997, 26.449999999999996
+  - Note: pre-existing difference (it became visible when stage 119 made non-numeric strings be read by their leading numeric part). HeimDB computes the mean from prefix sums and then adds the deviations. Aggregate VARIANCE (GROUP BY) gives the same values as MySQL
+- **The type of VARIANCE, STDDEV, and related functions with integer and DECIMAL arguments is the argument's type** (review of stage 119. WordPress: no)
+  - MySQL: DOUBLE. With n INT (1, 12, 1, 1000) and d DECIMAL(6,2), `VARIANCE(n), STDDEV_SAMP(n), STDDEV(d)` are 185774.25, 497.6936808921729, 467.7302365880893. HeimDB: 185774, 498, 467.73 (Type in `unary_aggs.og.go` is the argument's type; as upstream). `VARIANCE(v) OVER ()` on a LONGTEXT column returns a string type (the value is correct)
+  - Note: pre-existing difference. In the review of stage 119, only date, datetime, and TIME arguments were made DOUBLE (to prevent variances that are not valid TIME values from becoming 1105; `VarianceType`). JSON arguments also keep the JSON type (MySQL gives error 3156 for aggregates; HeimDB returns the DOUBLE value in JSON form)
+- **TIME, date, and JSON arguments of window VARIANCE and STDDEV** (2nd review of stage 119. WordPress: no)
+  - MySQL: `VARIANCE(t) OVER ()` (TIME) is 4974831076112.828, and dates are computed in numeric form (20240102). HeimDB: TIME gives NULL, dates are computed as UNIX times, and JSON gives warning 1292 and a different value (`floatPrefixSumVals` and `computeStd2` in `window_functions.go` still use `types.Float64.Convert`)
+  - Note: pre-existing difference. Aggregates (without OVER) were made the same as MySQL in stage 119
 
-## SQL の形
+## SQL syntax
 
-- **CTE の ORDER BY (i) の括弧の付いた列で並べない**（段階 110。WordPress: いいえ）
-  - MySQL: 0,2,4,9。HeimDB: 並べずに 2,0,9,4
-  - 再現: `WITH cte(i) AS (SELECT i FROM t) SELECT * FROM cte ORDER BY (i)`
-  - 補足: 上流の #3131（段階 110 で見送った。WordPress が出さない文）。派生表の ORDER BY ((i)) と式の ORDER BY (i*10+j) は同じ。CTE は WordPress が使わない
-- **結合と副問い合わせを含む UNION が panic の回復で 1105**（段階 110。WordPress: いいえ）
-  - MySQL: 0,1,2。HeimDB: 1105 slice bounds out of range（接続は保たれる）
-  - 再現: `SELECT * FROM t1 UNION (SELECT j FROM t2 WHERE (j > 10 OR j IN (SELECT j FROM t1 JOIN t2)))`
-  - 補足: 上流の #3145（段階 110 で見送った。WordPress が出さない文）
-- **空の派生テーブルとの ON TRUE の LEFT JOIN と RIGHT JOIN が交差結合になり空**（段階 110。WordPress: いいえ）
-  - MySQL: 1。HeimDB: 空
-  - 再現: `t LEFT JOIN (SELECT ... WHERE FALSE) AS subq ON TRUE`
-  - 補足: 上流の #3193（段階 110 で見送った。WordPress が出さない文）
-- **BLOB の列と NULL の UNION ALL で、左の行の値まで NULL になる**（段階 110。WordPress: いいえ）
-  - MySQL: 0xDEADBEEF。HeimDB: NULL
-  - 再現: `SELECT name, data FROM a UNION ALL SELECT name, NULL FROM b`
-  - 補足: 上流の #3219（段階 110 で見送った。WordPress が出さない文）。data は BLOB。v0.20.0 のフォークでも起きる
-- **結合の条件の列どうしの BETWEEN が行を落とす**（段階 110。WordPress: いいえ）
-  - MySQL: (0, NULL, NULL, NULL, 'KZ')。HeimDB: 空
-  - 再現: `t1 INNER JOIN t0 ON (t1.c0 BETWEEN t0.c2 AND t0.c2)`
-  - 補足: 上流の #3388、#3415（段階 110 で見送った。WordPress が出さない文）。2 つの PR は同じ文
-- **主キーのない表を含む本当の交差結合の COUNT(*) が多い**（段階 110。WordPress: いいえ）
-  - MySQL: 4。HeimDB: 12
-  - 補足: 上流の #3417（段階 110 で見送った。WordPress が出さない文）。FROM t6, t1 JOIN t0 ON ... で t6 とつなぐ条件がない形。つなぐ条件があれば正しい。WordPress の結合はどれも条件でつなぐ
-- **2 段の JOIN LATERAL が panic の回復で 1105**（段階 110。WordPress: いいえ）
-  - MySQL: 8 行。HeimDB: 1105 slice bounds out of range [8:7]
-  - 補足: 上流の #3433（段階 110 で見送った。WordPress が出さない文）。LATERAL を使わない入れ子は MySQL と同じ
-- **NULL を含む行の値（タプル）の <=> と > が 1105**（段階 110。WordPress: いいえ）
-  - MySQL: (1, NULL) <=> (1, 2) は 0。(CAST(NULL AS DATETIME), 5) <=> (1, 5) は 0。HeimDB: <=> と > の形は 1105（value not nil、Incorrect datetime value）
-  - 再現: `SELECT (1, NULL) <=> (1, 2)`
-  - 補足: 上流の #3651、#3789、#4032（段階 110 で見送った。WordPress が出さない文）。行の値の = と値の並びの IN の NULL は段階 116 で直した（484901a）。<=> と > が直ったかは記録にない
-- **入れ子の派生テーブルの中から外の列を見ると 1105**（段階 110。WordPress: いいえ）
-  - MySQL: (1,1),(2,2)。HeimDB: 1105 unable to find field with index 1 in row of 0 columns
-  - 再現: `SELECT a, (SELECT colid FROM (SELECT x AS colid FROM (SELECT outer_t.a AS x FROM inner_t) inner1) outer1) FROM outer_t`
-  - 補足: 上流の #3717（段階 110 で見送った。WordPress が出さない文）。3 段の形も同じ
-- **型のない NULL の列の CREATE TABLE ... SELECT が 1105**（段階 110。WordPress: いいえ）
-  - MySQL: a binary(0) で作る。HeimDB: 1105 column t.a: parse type "null"
-  - 再現: `CREATE TABLE t AS SELECT NULL AS a, 1 AS b`
-  - 補足: 上流の #3923（段階 110 で見送った。WordPress が出さない文）。保存層が型 null を読めない
-- **NOT IN を 2 つ並べ、片方が UNION の副問い合わせだと NOT が落ちる**（段階 110。WordPress: いいえ）
-  - MySQL: b。HeimDB: leaf, root
-  - 再現: `id NOT IN (SELECT ... tags) AND id NOT IN (SELECT ... UNION SELECT ...)`
-  - 補足: 上流の #3956（段階 110 で見送った。WordPress が出さない文）。UNION 側の NOT が落ちて IN になる
-- **括弧の付いた GROUP BY の列を HAVING で使うと 1105**（段階 110。WordPress: いいえ）
-  - MySQL: 0 行。HeimDB: 1105 column "col1" could not be found in any table in scope
-  - 再現: `SELECT COUNT(*) FROM tab0 GROUP BY (col1), col2 HAVING col1 >= COUNT(*)`
-  - 補足: 上流の #4002（段階 110 で見送った。WordPress が出さない文）
-- **EXISTS (... LIMIT 0) が真**（段階 112。WordPress: いいえ）
-  - MySQL: 偽。HeimDB: 真
-  - 再現: `EXISTS (... LIMIT 0)`
-  - 補足: 上流も同じ。段階 112 の #3780 で集計だけの副問い合わせの LIMIT 0 の形は MySQL と同じになったが、この形は段階 114 に回し、後の段階で直した記録は見つからない
-- **主キーのない表を LEFT JOIN の右から消す DELETE が、本物のすべて NULL の行を消さない**（段階 112。WordPress: いいえ）
-  - MySQL: 消す。HeimDB: 消さない
-  - 補足: 結合が埋めた NULL と見分けられない。段階 115 で受け入れた違いにした（WordPress とプラグインの表は主キーを持つ）
-- **括弧のない入れ子の ON が構文エラー**（段階 112。WordPress: いいえ）
-  - HeimDB: 構文エラー
-  - 再現: `t3 JOIN t1 LEFT JOIN t2 ON ... ON ...`
-  - 補足: 解析器（vitess）の違い。vitess はバージョンを固定していて範囲の外（推定）
-- **修飾のない存在しない列の名前がシステム変数を返す（timestamp、version）**（段階 115。WordPress: いいえ）
-  - MySQL: 1054。HeimDB: @@timestamp、@@version の値
-  - 再現: `SELECT timestamp FROM A; SELECT version FROM A`
-  - 補足: 上流も同じ。段階 116 でも記録（engine.md 132、156 の行）
-- **主キーのない表の明示の UPDATE JOIN が 1105**（段階 115。WordPress: いいえ）
-  - MySQL: 実行する。HeimDB: 1105（keyless tables unsupported for UPDATE JOIN）
-  - 補足: 段階 116 でも記録。WordPress とプラグインの表は主キーを持つ
-- **HAVING で、同じ名前の式の別名と列の別名があると先の別名を選ぶ**（段階 115。WordPress: いいえ）
-  - MySQL: 式の別名（z + 0）。HeimDB: 先の別名
-  - 再現: `SELECT y AS q, z + 0 AS Q ... HAVING q > 0`
-  - 補足: 段階 116 の 6d398b7 が「表の列でない SELECT の項を列の項より先に足す」ようにしたので直った可能性がある（不確か。直ったという記述はない）
-- **SELECT の列の副問い合わせの集計の中で外の別名を使うと 1054**（段階 115。WordPress: いいえ）
-  - MySQL: 行を返す。HeimDB: 1054
-  - 再現: `SELECT y AS w, (SELECT SUM(w) FROM xy2)`
-- **CREATE TABLE ... SELECT の IFNULL と COALESCE の列が NULL を許す LONGTEXT**（段階 116。WordPress: いいえ）
-  - MySQL: NOT NULL の VARCHAR(n)。HeimDB: NULL を許す LONGTEXT
-  - 再現: `CREATE TABLE ... SELECT IFNULL(...)`
-- **`IN (SELECT ... LIMIT n)` が通る**（段階 116。WordPress: いいえ）
-  - MySQL: 1235。HeimDB: 実行する
-  - 再現: `IN (SELECT ... LIMIT n)`
-  - 補足: 段階 115 で見つかり、段階 116 の計画のレビューで記録だけにした
-- **HAVING の副問い合わせで外の列を集計する形**（段階 116。WordPress: いいえ）
-  - MySQL: 外で集計する（段階 115 の記録では 1242）。HeimDB: 副問い合わせの中で集計する
-  - 再現: `SELECT SUM(x) FROM t6 ... HAVING ...`
-  - 補足: 段階 115 で見つかった前からの違い
-- **HAVING の集計の引数の別名が外の表の列でもあると 1105**（段階 116。WordPress: いいえ）
-  - MySQL: 別名。HeimDB: 1105（段階 116 の前は外の列）
-  - 再現: `EXISTS (SELECT k, v AS x FROM t6 GROUP BY k HAVING SUM(x) > 25)`
-  - 補足: 段階 115 で見つかった前からの違い
-- **行の値の IN 副問い合わせで NULL が一致する**（段階 116。WordPress: いいえ）
-  - MySQL: NULL。HeimDB: 一致する
-  - 補足: 段階 116 の 484901a で行の = と値の並びの IN は直した。副問い合わせの形が記録に残る（不確か）
-- **`> ALL` と `> ANY` の違い**（段階 116。WordPress: いいえ）
-  - 補足: 中身は記されていない（不確か）
-- **知らない表の修飾子の列の誤りの番号**（段階 116。WordPress: いいえ）
-  - MySQL: 1054。HeimDB: 1146
-  - 再現: `SELECT nope.x ...; HAVING t6.v`
-  - 補足: 上流のテストの多くが ErrTableNotFound を期待する
-- **SELECT DISTINCT で SELECT にない列の ORDER BY が通る**（段階 116。WordPress: いいえ）
-  - MySQL: 3065。HeimDB: 実行する
-  - 再現: `SELECT DISTINCT -i FROM t ORDER BY id`
-- **ALTER TABLE t FORCE と ALTER TABLE t ENGINE=InnoDB が表を作り直さない**（段階 117。WordPress: いいえ）
-  - MySQL: 表と索引を作り直す。HeimDB: 何もしない（定義も行も変えない）
-  - 補足: 段階 117 より前に作った DECIMAL などの索引のエントリは、FORCE ではなく `CALL heimdb_rebuild_indexes()` で作る（表を書き直すほかの ALTER TABLE でも作られる）
-- **単項の `~` が 1105**（段階 119 のレビュー。WordPress: いいえ）
-  - MySQL: ビットの反転。HeimDB: `unsupported feature: unary operator: ~`
-  - 再現: `SELECT ~v FROM t`
+- **ORDER BY (i) with a parenthesized column in a CTE does not sort** (stage 110. WordPress: no)
+  - MySQL: 0,2,4,9. HeimDB: unsorted, 2,0,9,4
+  - Repro: `WITH cte(i) AS (SELECT i FROM t) SELECT * FROM cte ORDER BY (i)`
+  - Note: upstream #3131 (skipped in stage 110; a statement WordPress does not issue). ORDER BY ((i)) on a derived table and the expression ORDER BY (i*10+j) are the same. WordPress does not use CTEs
+- **A UNION containing a join and a subquery is 1105 after recovering from a panic** (stage 110. WordPress: no)
+  - MySQL: 0,1,2. HeimDB: 1105 slice bounds out of range (the connection is kept)
+  - Repro: `SELECT * FROM t1 UNION (SELECT j FROM t2 WHERE (j > 10 OR j IN (SELECT j FROM t1 JOIN t2)))`
+  - Note: upstream #3145 (skipped in stage 110; a statement WordPress does not issue)
+- **LEFT JOIN and RIGHT JOIN ON TRUE with an empty derived table become a cross join and are empty** (stage 110. WordPress: no)
+  - MySQL: 1. HeimDB: empty
+  - Repro: `t LEFT JOIN (SELECT ... WHERE FALSE) AS subq ON TRUE`
+  - Note: upstream #3193 (skipped in stage 110; a statement WordPress does not issue)
+- **In UNION ALL of a BLOB column and NULL, even the values of the left rows become NULL** (stage 110. WordPress: no)
+  - MySQL: 0xDEADBEEF. HeimDB: NULL
+  - Repro: `SELECT name, data FROM a UNION ALL SELECT name, NULL FROM b`
+  - Note: upstream #3219 (skipped in stage 110; a statement WordPress does not issue). data is BLOB. Also happens on the v0.20.0 fork
+- **BETWEEN between columns in a join condition drops rows** (stage 110. WordPress: no)
+  - MySQL: (0, NULL, NULL, NULL, 'KZ'). HeimDB: empty
+  - Repro: `t1 INNER JOIN t0 ON (t1.c0 BETWEEN t0.c2 AND t0.c2)`
+  - Note: upstream #3388, #3415 (skipped in stage 110; a statement WordPress does not issue). The two PRs are the same statement
+- **COUNT(*) of a true cross join that includes a table without a primary key is too large** (stage 110. WordPress: no)
+  - MySQL: 4. HeimDB: 12
+  - Note: upstream #3417 (skipped in stage 110; a statement WordPress does not issue). The form FROM t6, t1 JOIN t0 ON ... with no condition joining t6. Correct if there is a joining condition. All WordPress joins are joined by conditions
+- **Two levels of JOIN LATERAL are 1105 after recovering from a panic** (stage 110. WordPress: no)
+  - MySQL: 8 rows. HeimDB: 1105 slice bounds out of range [8:7]
+  - Note: upstream #3433 (skipped in stage 110; a statement WordPress does not issue). Nesting without LATERAL is the same as MySQL
+- **<=> and > on row values (tuples) containing NULL are 1105** (stage 110. WordPress: no)
+  - MySQL: (1, NULL) <=> (1, 2) is 0. (CAST(NULL AS DATETIME), 5) <=> (1, 5) is 0. HeimDB: the <=> and > forms are 1105 (value not nil, Incorrect datetime value)
+  - Repro: `SELECT (1, NULL) <=> (1, 2)`
+  - Note: upstream #3651, #3789, #4032 (skipped in stage 110; a statement WordPress does not issue). NULL in = on row values and in IN with a list of values was fixed in stage 116 (484901a). The record does not say whether <=> and > were fixed
+- **Seeing an outer column from inside nested derived tables is 1105** (stage 110. WordPress: no)
+  - MySQL: (1,1),(2,2). HeimDB: 1105 unable to find field with index 1 in row of 0 columns
+  - Repro: `SELECT a, (SELECT colid FROM (SELECT x AS colid FROM (SELECT outer_t.a AS x FROM inner_t) inner1) outer1) FROM outer_t`
+  - Note: upstream #3717 (skipped in stage 110; a statement WordPress does not issue). The 3-level form is the same
+- **CREATE TABLE ... SELECT with an untyped NULL column is 1105** (stage 110. WordPress: no)
+  - MySQL: creates a as binary(0). HeimDB: 1105 column t.a: parse type "null"
+  - Repro: `CREATE TABLE t AS SELECT NULL AS a, 1 AS b`
+  - Note: upstream #3923 (skipped in stage 110; a statement WordPress does not issue). The storage layer cannot read the type null
+- **With two NOT IN, if one is a UNION subquery, the NOT is dropped** (stage 110. WordPress: no)
+  - MySQL: b. HeimDB: leaf, root
+  - Repro: `id NOT IN (SELECT ... tags) AND id NOT IN (SELECT ... UNION SELECT ...)`
+  - Note: upstream #3956 (skipped in stage 110; a statement WordPress does not issue). The NOT on the UNION side is dropped and it becomes IN
+- **Using a parenthesized GROUP BY column in HAVING is 1105** (stage 110. WordPress: no)
+  - MySQL: 0 rows. HeimDB: 1105 column "col1" could not be found in any table in scope
+  - Repro: `SELECT COUNT(*) FROM tab0 GROUP BY (col1), col2 HAVING col1 >= COUNT(*)`
+  - Note: upstream #4002 (skipped in stage 110; a statement WordPress does not issue)
+- **EXISTS (... LIMIT 0) is true** (stage 112. WordPress: no)
+  - MySQL: false. HeimDB: true
+  - Repro: `EXISTS (... LIMIT 0)`
+  - Note: upstream is the same. With #3780 in stage 112, the LIMIT 0 form of subqueries with only aggregates became the same as MySQL, but this form was moved to stage 114, and no record of a fix in a later stage was found
+- **DELETE that deletes from a table without a primary key on the right side of LEFT JOIN does not delete real all-NULL rows** (stage 112. WordPress: no)
+  - MySQL: deletes them. HeimDB: does not
+  - Note: they cannot be told apart from NULLs filled in by the join. Made an accepted difference in stage 115 (WordPress and plugin tables have primary keys)
+- **Nested ON without parentheses is a syntax error** (stage 112. WordPress: no)
+  - HeimDB: syntax error
+  - Repro: `t3 JOIN t1 LEFT JOIN t2 ON ... ON ...`
+  - Note: a difference in the parser (vitess). The vitess version is pinned, so this is out of scope (inferred)
+- **Unqualified names of non-existent columns return system variables (timestamp, version)** (stage 115. WordPress: no)
+  - MySQL: 1054. HeimDB: the values of @@timestamp and @@version
+  - Repro: `SELECT timestamp FROM A; SELECT version FROM A`
+  - Note: upstream is the same. Also recorded in stage 116 (the 132 and 156 rows of engine.md)
+- **Explicit UPDATE JOIN on a table without a primary key is 1105** (stage 115. WordPress: no)
+  - MySQL: runs it. HeimDB: 1105 (keyless tables unsupported for UPDATE JOIN)
+  - Note: also recorded in stage 116. WordPress and plugin tables have primary keys
+- **In HAVING, when an expression alias and a column alias have the same name, the earlier alias is chosen** (stage 115. WordPress: no)
+  - MySQL: the expression alias (z + 0). HeimDB: the earlier alias
+  - Repro: `SELECT y AS q, z + 0 AS Q ... HAVING q > 0`
+  - Note: 6d398b7 in stage 116 changed it to "add SELECT items that are not table columns before column items", so this may be fixed (uncertain; nothing says it was fixed)
+- **Using an outer alias inside an aggregate in a subquery in a SELECT column is 1054** (stage 115. WordPress: no)
+  - MySQL: returns rows. HeimDB: 1054
+  - Repro: `SELECT y AS w, (SELECT SUM(w) FROM xy2)`
+- **IFNULL and COALESCE columns in CREATE TABLE ... SELECT are nullable LONGTEXT** (stage 116. WordPress: no)
+  - MySQL: NOT NULL VARCHAR(n). HeimDB: nullable LONGTEXT
+  - Repro: `CREATE TABLE ... SELECT IFNULL(...)`
+- **`IN (SELECT ... LIMIT n)` succeeds** (stage 116. WordPress: no)
+  - MySQL: 1235. HeimDB: runs it
+  - Repro: `IN (SELECT ... LIMIT n)`
+  - Note: found in stage 115, and made record-only in the review of the stage 116 plan
+- **The form that aggregates outer columns in a HAVING subquery** (stage 116. WordPress: no)
+  - MySQL: aggregates in the outer query (1242 in the stage 115 record). HeimDB: aggregates inside the subquery
+  - Repro: `SELECT SUM(x) FROM t6 ... HAVING ...`
+  - Note: a pre-existing difference found in stage 115
+- **When an alias in the argument of an aggregate in HAVING is also a column of the outer table, it is 1105** (stage 116. WordPress: no)
+  - MySQL: the alias. HeimDB: 1105 (the outer column before stage 116)
+  - Repro: `EXISTS (SELECT k, v AS x FROM t6 GROUP BY k HAVING SUM(x) > 25)`
+  - Note: a pre-existing difference found in stage 115
+- **NULL matches in IN subqueries on row values** (stage 116. WordPress: no)
+  - MySQL: NULL. HeimDB: matches
+  - Note: 484901a in stage 116 fixed = on rows and IN with a list of values. The subquery form remains in the record (uncertain)
+- **Differences in `> ALL` and `> ANY`** (stage 116. WordPress: no)
+  - Note: the details are not recorded (uncertain)
+- **Error number for columns with an unknown table qualifier** (stage 116. WordPress: no)
+  - MySQL: 1054. HeimDB: 1146
+  - Repro: `SELECT nope.x ...; HAVING t6.v`
+  - Note: many upstream tests expect ErrTableNotFound
+- **ORDER BY on a column not in the SELECT list succeeds with SELECT DISTINCT** (stage 116. WordPress: no)
+  - MySQL: 3065. HeimDB: runs it
+  - Repro: `SELECT DISTINCT -i FROM t ORDER BY id`
+- **ALTER TABLE t FORCE and ALTER TABLE t ENGINE=InnoDB do not rebuild the table** (stage 117. WordPress: no)
+  - MySQL: rebuilds the table and indexes. HeimDB: does nothing (changes neither the definition nor the rows)
+  - Note: index entries for DECIMAL and other indexes created before stage 117 are built with `CALL heimdb_rebuild_indexes()`, not FORCE (other ALTER TABLE statements that rewrite the table also build them)
+- **Unary `~` is 1105** (review of stage 119. WordPress: no)
+  - MySQL: bit inversion. HeimDB: `unsupported feature: unary operator: ~`
+  - Repro: `SELECT ~v FROM t`
 
-## 誤りの番号と警告
+## Error numbers and warnings
 
-- **選ぶ列の SLEEP を KILL QUERY で止めると、1317 でなく 1105 context canceled になる**（段階 124。WordPress: いいえ（推定））
-  - HeimDB: `SELECT i, SLEEP(0.01) FROM r` を KILL QUERY で止めると `1105 context canceled`（実行時間の上限なら 3024、ロックの待ちの KILL QUERY は 1317）
-  - 補足: 段階 123 のバージョンも同じ（前からの違い）。SLEEP が context の取り消しをそのまま返し、選ぶ列の式の評価のエラーは取り消しの理由に置き換えない。MySQL の番号は確かめていない
-- **FLOAT(7,2) UNSIGNED の DEFAULT -1 が 1105**（段階 120 の 1 回目のレビュー。WordPress: いいえ）
-  - MySQL: 1067 Invalid default value for 'f'。HeimDB: 1105
-- **非 STRICT で DOUBLE(17,6) に '' を入れると警告 1265 を出さない**（段階 120 の 1 回目のレビュー。WordPress: いいえ）
-  - MySQL: 0 と警告 1265。HeimDB: 0 で警告なし
-  - 補足: 前からの違い（桁のない DOUBLE も同じ）
-- **latin1 の表の接頭辞の索引が、utf8mb4 への変換の案内でなく索引の誤りで拒否される**（段階 110。WordPress: いいえ）
-  - 補足: 段階 110 で PR と関係なく見つけた違い。後の段階で直した記録は見つからない。WordPress は utf8mb4 の表を作るので当たらない（推定）
-- **存在しない時間帯の SET time_zone を受け付ける**（段階 110。WordPress: いいえ）
-  - MySQL: SET の時点で 1298 Unknown or incorrect time zone。HeimDB: 受け付け、後の SELECT NOW() が 1105 invalid time zone
-  - 再現: `SET time_zone = 'Not/AZone'`
-  - 補足: 上流の #3118（段階 110 で見送った。WordPress が出さない文）
-- **GLOBAL だけの変数を @@SESSION で読める**（段階 110。WordPress: いいえ）
-  - MySQL: 1238。HeimDB: 2
-  - 再現: `SELECT @@SESSION.innodb_autoinc_lock_mode`
-  - 補足: 上流の #3618（段階 110 で見送った。WordPress が出さない文）
-- **型の違う列の組の行の値の IN 副問い合わせが 1366**（段階 112。WordPress: いいえ）
+- **Stopping a SLEEP in a selected column with KILL QUERY gives 1105 context canceled, not 1317** (stage 124. WordPress: no (inferred))
+  - HeimDB: stopping `SELECT i, SLEEP(0.01) FROM r` with KILL QUERY gives `1105 context canceled` (the execution time limit gives 3024, and KILL QUERY while waiting for a lock gives 1317)
+  - Note: the stage 123 version is the same (pre-existing difference). SLEEP returns the context cancellation as it is, and errors from evaluating expressions in selected columns are not replaced with the reason for the cancellation. The MySQL number was not checked
+- **DEFAULT -1 on FLOAT(7,2) UNSIGNED is 1105** (1st review of stage 120. WordPress: no)
+  - MySQL: 1067 Invalid default value for 'f'. HeimDB: 1105
+- **Inserting '' into DOUBLE(17,6) under non-STRICT gives no warning 1265** (1st review of stage 120. WordPress: no)
+  - MySQL: 0 and warning 1265. HeimDB: 0 without a warning
+  - Note: pre-existing difference (the same for DOUBLE without digits)
+- **Prefix indexes on latin1 tables are rejected with an index error, not with guidance to convert to utf8mb4** (stage 110. WordPress: no)
+  - Note: a difference found in stage 110 independently of the PRs. No record of a fix in a later stage was found. WordPress creates utf8mb4 tables, so it is not hit (inferred)
+- **SET time_zone with a non-existent time zone is accepted** (stage 110. WordPress: no)
+  - MySQL: 1298 Unknown or incorrect time zone at the SET. HeimDB: accepts it, and a later SELECT NOW() is 1105 invalid time zone
+  - Repro: `SET time_zone = 'Not/AZone'`
+  - Note: upstream #3118 (skipped in stage 110; a statement WordPress does not issue)
+- **GLOBAL-only variables can be read with @@SESSION** (stage 110. WordPress: no)
+  - MySQL: 1238. HeimDB: 2
+  - Repro: `SELECT @@SESSION.innodb_autoinc_lock_mode`
+  - Note: upstream #3618 (skipped in stage 110; a statement WordPress does not issue)
+- **An IN subquery on row values whose column pairs have different types is 1366** (stage 112. WordPress: no)
   - HeimDB: 1366
-  - 再現: `(i, s) IN (SELECT s, i ...)`
-  - 補足: 段階 114 に回したが、後の段階で直した記録は見つからない
-- **日時の区切りの記号と空白についての注意 4095、4096 を出さない**（段階 114。WordPress: いいえ）
-  - MySQL: 注意 4095、4096。HeimDB: 出さない
-  - 補足: 推定: 結果の値は同じ
-- **日時の列と日時として読めない文字列の = の誤りの番号**（段階 114。WordPress: いいえ）
-  - MySQL: 1525。HeimDB: 索引があれば 1105、なければゼロの日時として比べる
-  - 再現: `d = 'garbage'`
-  - 補足: 段階 116 で IN の値は直した（`d IN ('garbage', ...)`）が、1 つの値の = は記録のまま（engine.md 147、156 の行、484901a）
-- **STRICT で整数の列に '5abc' を入れると 1366**（段階 114。WordPress: いいえ）
-  - MySQL: 1265。HeimDB: 1366
-  - 補足: 段階 116 の誤りの番号の直し（484901a）に '5abc' は出てこないので残っていると見た（不確か）。WordPress は STRICT を使わない（推定）
-- **1054 の SQLSTATE と文言が MySQL と違う**（段階 115。WordPress: いいえ）
-  - HeimDB: SQLSTATE HY000、文言も違う
-  - 補足: 段階 116 で直したという記述は見つからない。MySQL の値は記録にない
-- **`d > '123.45x'` の警告 1292 が行ごとに出る**（段階 115。WordPress: いいえ）
-  - HeimDB: 行ごとに出る
-  - 再現: `d > '123.45x'`
-  - 補足: MySQL の出し方は記されていない（推定で 1 回）
-- **日付の値を真偽や数にすると警告 1292 が出る**（段階 116。WordPress: いいえ）
-  - MySQL: 出さない。HeimDB: 出す（DATE の値が文字列のため）
-  - 再現: `IF(DATE('2024-01-01'), 1, 0)`
-  - 補足: 答えは合う。`IFNULL(dd, 0) + 0` は段階 119 で MySQL と同じく出さなくなった（IFNULL と COALESCE の値は警告なしで数にする）
-- **'1e400' の GREATEST の値**（段階 116。段階 119 で確かめ直した。WordPress: いいえ）
-  - MySQL: GREATEST('1e400', 1) は '1e400'（警告なし）。HeimDB: 1
-  - 再現: `GREATEST('1e400', 1)`
-  - 補足: 「GREATEST、LEAST の数と文字列の混ざった引数」（数）と同じ違い。SQRT('1e400') は段階 119 で MySQL と同じ 1.3407807929942596e154 と警告 1292 になった（前は 1366）
-- **'1e400' を DECIMAL と DOUBLE の列に入れたときの誤りの番号が逆**（段階 116。WordPress: いいえ）
-  - MySQL: DECIMAL は 1366、DOUBLE は 1264。HeimDB: DECIMAL は 1264、DOUBLE は 1366
-  - 補足: 段階 114 から回した「DECIMAL への '1e400'」を含む
-- **HAVING と GROUP BY の名前が曖昧なときの警告 1052 を出さない**（段階 116。WordPress: いいえ）
-  - MySQL: 警告 1052。HeimDB: 出さない
-- **VARCHAR の列の値を数にするときの警告 1292 の規則が MySQL と違う**（段階 118。WordPress: いいえ）
-  - MySQL: '1700000000:1'、'12:1'、'1 2'、'1,5'、'5 x' では出さず、'abc'、'12abc'、'1.0e400' では出す。HeimDB: 数として読めなければいつも出す
-  - 再現: `SELECT vc + 0 FROM t; SHOW WARNINGS`（vc は VARCHAR）
-  - 補足: 値は同じ。WordPress の meta_value と option_value は LONGTEXT（推定）
-- **集計とウィンドウ関数を混ぜた文の 1140 と、その文言**（段階 118。WordPress: いいえ）
-  - MySQL: `SELECT STDDEV(v), SUM(v) OVER () FROM t` と `SELECT id, SUM(v + 0) OVER (), MAX(v + 0) FROM t GROUP BY id` は値（前者は WordPress の sql_mode で、後者は ONLY_FULL_GROUP_BY のある既定の sql_mode で確かめた）。HeimDB: 1140 で、文言が `expression #%!d(MISSING) ... '%!s(MISSING)'`
-  - 補足: VARIANCE の警告の文（`%!s(float64=0)`）は段階 119 で直した
-- **TEXT の列と文字列の定数を枝に持つ IF と CASE の値を数にすると、TEXT の列の枝でも警告 1292 を出す**（段階 119。WordPress: いいえ）
-  - MySQL: 選んだ枝で決める（`IF(id > 1, v, 'x') + 0` は 'x' を選んだ行だけ出す。`IF(id > 1, v, vc) + 0` は vc を選んだ行だけ）。HeimDB: 枝のどれかが TEXT の列でない文字列なら、どの行でも出す
-  - 補足: 値は同じ。段階 119 は、結果になりうる文字列の枝がすべて TEXT の列（か IFNULL などの警告を出さない式）の IF、CASE、NULLIF だけを出さないようにした（`IsTextColumn`。枝を選ぶ前に決める）
-- **TEXT の列の副問い合わせ `(SELECT v) + 0` で警告 1292 を出す**（段階 119。WordPress: いいえ）
-  - MySQL: 出さない。HeimDB: 出す
-  - 補足: 値は同じ。`IsTextColumn` は副問い合わせを見ない
-- **派生表と UNION の文字列の定数の列を、TEXT の列として警告 1292 を出さない**（段階 119。WordPress: いいえ）
-  - MySQL: `SELECT VARIANCE(x) FROM (SELECT 'abc' x UNION ALL SELECT '12abc' UNION ALL SELECT '') q` は 'abc' と '12abc' で 4 つ出す（列は VARCHAR）。HeimDB: 出さない（列の型が LONGTEXT）
-  - 補足: 値は同じ（32）
-- **定数の IFNULL と COALESCE の値を数にするときの警告**（段階 119。WordPress: いいえ）
-  - MySQL: `IFNULL('12x', 0) + 0` は出す（`COALESCE('abc') + 0` と `IFNULL(NULL, 'abc') + 0` は出さない）。HeimDB: どれも出さない
-  - 補足: 値は同じ。段階 119 で、列を引数にした IFNULL と COALESCE は MySQL と同じく引数によらず出さないようにした。定数だけの形は MySQL が前もって畳むかで違うと見られる（確かめていない）
-- **VARCHAR の列と定数のビット演算の警告の型の名前**（段階 119。WordPress: いいえ）
-  - MySQL: `'x' | 0` は `Truncated incorrect INTEGER value: 'x'`。HeimDB: `Truncated incorrect DOUBLE value: 'x'`
-  - 補足: TEXT の列の警告は段階 119 で MySQL と同じく出さなくなった
-- **動く枠のウィンドウ関数の VARCHAR の列の警告の数**（段階 119。WordPress: いいえ）
-  - MySQL: `VAR_SAMP(vc) OVER (ORDER BY id)` は枠ごとに値を読み直し、行ごとに同じ警告を重ねて出す（4 行で 7 つ）。HeimDB: 値ごとに 1 回（2 つ）
-  - 補足: 値は同じ。`OVER ()` は MySQL も 1 回
-- **ゼロの日付と FROM_UNIXTIME の警告の文の細部**（段階 118 のレビュー。WordPress: いいえ）
-  - MySQL: TO_DAYS(0.0) は `'0.0'`、TO_DAYS(false) は `'0'`。FROM_UNIXTIME('9223372036854775807') と '18446744073709551616' は 1292 DECIMAL、'1e1000' と '-1e1000' は 2 つ（'1' と '999…'）。FROM_UNIXTIME(x'31') は 1970-01-01 00:00:49。HeimDB: `'0'`、`'false'`、警告なし、1 つ、00:00:01.000000
-  - 補足: 値は FROM_UNIXTIME(x'31') のほかは同じ
-- **JSON の値を DOUBLE にするときの警告 3156 の文に行の番号がない**（段階 119 のレビュー。WordPress: いいえ）
-  - MySQL: `Invalid JSON value for CAST to DOUBLE from column j at row 2`。HeimDB: `Invalid JSON value for CAST to DOUBLE from column j`
-  - 補足: 段階 119 のレビューで、SIGN、POW、SQRT などの JSON の引数を値で読み、警告 3156 を出すようにした（数と順は MySQL と同じ）。HeimDB は行の番号を持たない
+  - Repro: `(i, s) IN (SELECT s, i ...)`
+  - Note: moved to stage 114, but no record of a fix in a later stage was found
+- **Notes 4095 and 4096 about datetime separator symbols and spaces are not given** (stage 114. WordPress: no)
+  - MySQL: notes 4095, 4096. HeimDB: not given
+  - Note: inferred: the result values are the same
+- **Error number for = between a datetime column and a string that cannot be read as a datetime** (stage 114. WordPress: no)
+  - MySQL: 1525. HeimDB: 1105 with an index; without one, compares as the zero datetime
+  - Repro: `d = 'garbage'`
+  - Note: stage 116 fixed IN values (`d IN ('garbage', ...)`), but = with a single value is as recorded (the 147 and 156 rows of engine.md, 484901a)
+- **Inserting '5abc' into an integer column under STRICT is 1366** (stage 114. WordPress: no)
+  - MySQL: 1265. HeimDB: 1366
+  - Note: '5abc' does not appear in the error number fix of stage 116 (484901a), so we assume it remains (uncertain). WordPress does not use STRICT (inferred)
+- **The SQLSTATE and message of 1054 differ from MySQL** (stage 115. WordPress: no)
+  - HeimDB: SQLSTATE HY000, and the message also differs
+  - Note: nothing was found saying it was fixed in stage 116. The MySQL values are not in the record
+- **Warning 1292 for `d > '123.45x'` is given per row** (stage 115. WordPress: no)
+  - HeimDB: given per row
+  - Repro: `d > '123.45x'`
+  - Note: how MySQL gives it is not recorded (inferred to be once)
+- **Making a date value a boolean or a number gives warning 1292** (stage 116. WordPress: no)
+  - MySQL: not given. HeimDB: given (because DATE values are strings)
+  - Repro: `IF(DATE('2024-01-01'), 1, 0)`
+  - Note: the answer matches. `IFNULL(dd, 0) + 0` stopped giving it in stage 119, as in MySQL (values of IFNULL and COALESCE are made numbers without a warning)
+- **The value of GREATEST with '1e400'** (stage 116; checked again in stage 119. WordPress: no)
+  - MySQL: GREATEST('1e400', 1) is '1e400' (no warning). HeimDB: 1
+  - Repro: `GREATEST('1e400', 1)`
+  - Note: the same difference as "GREATEST and LEAST with mixed number and string arguments" (Numbers). SQRT('1e400') became 1.3407807929942596e154 with warning 1292 in stage 119, the same as MySQL (1366 before)
+- **The error numbers for inserting '1e400' into DECIMAL and DOUBLE columns are swapped** (stage 116. WordPress: no)
+  - MySQL: DECIMAL is 1366, DOUBLE is 1264. HeimDB: DECIMAL is 1264, DOUBLE is 1366
+  - Note: includes "'1e400' into DECIMAL", moved from stage 114
+- **Warning 1052 is not given when names in HAVING and GROUP BY are ambiguous** (stage 116. WordPress: no)
+  - MySQL: warning 1052. HeimDB: not given
+- **The rules for warning 1292 when VARCHAR column values are made numbers differ from MySQL** (stage 118. WordPress: no)
+  - MySQL: not given for '1700000000:1', '12:1', '1 2', '1,5', and '5 x'; given for 'abc', '12abc', and '1.0e400'. HeimDB: always given if the value cannot be read as a number
+  - Repro: `SELECT vc + 0 FROM t; SHOW WARNINGS` (vc is VARCHAR)
+  - Note: the values are the same. WordPress's meta_value and option_value are LONGTEXT (inferred)
+- **1140 for statements mixing aggregates and window functions, and its message** (stage 118. WordPress: no)
+  - MySQL: `SELECT STDDEV(v), SUM(v) OVER () FROM t` and `SELECT id, SUM(v + 0) OVER (), MAX(v + 0) FROM t GROUP BY id` return values (the former checked under the WordPress sql_mode, the latter under the default sql_mode with ONLY_FULL_GROUP_BY). HeimDB: 1140, with the message `expression #%!d(MISSING) ... '%!s(MISSING)'`
+  - Note: the text of the VARIANCE warning (`%!s(float64=0)`) was fixed in stage 119
+- **Making the value of IF and CASE with branches of a TEXT column and a string constant a number gives warning 1292 even for the TEXT column branch** (stage 119. WordPress: no)
+  - MySQL: decided by the chosen branch (`IF(id > 1, v, 'x') + 0` gives it only on rows that chose 'x'; `IF(id > 1, v, vc) + 0` only on rows that chose vc). HeimDB: if any branch is a string that is not a TEXT column, given on every row
+  - Note: the values are the same. Stage 119 stopped giving it only for IF, CASE, and NULLIF whose possible string result branches are all TEXT columns (or expressions that give no warning, such as IFNULL) (`IsTextColumn`; decided before a branch is chosen)
+- **The TEXT column subquery `(SELECT v) + 0` gives warning 1292** (stage 119. WordPress: no)
+  - MySQL: not given. HeimDB: given
+  - Note: the values are the same. `IsTextColumn` does not look into subqueries
+- **String constant columns of derived tables and UNIONs are treated as TEXT columns and give no warning 1292** (stage 119. WordPress: no)
+  - MySQL: `SELECT VARIANCE(x) FROM (SELECT 'abc' x UNION ALL SELECT '12abc' UNION ALL SELECT '') q` gives 4 warnings for 'abc' and '12abc' (the column is VARCHAR). HeimDB: not given (the column type is LONGTEXT)
+  - Note: the value is the same (32)
+- **Warnings when the values of constant IFNULL and COALESCE are made numbers** (stage 119. WordPress: no)
+  - MySQL: `IFNULL('12x', 0) + 0` gives one (`COALESCE('abc') + 0` and `IFNULL(NULL, 'abc') + 0` do not). HeimDB: none of them give one
+  - Note: the values are the same. Stage 119 made IFNULL and COALESCE with column arguments give no warning regardless of the arguments, as in MySQL. The constant-only forms seem to differ depending on whether MySQL folds them in advance (not checked)
+- **The type name in warnings for bit operations between a VARCHAR column and a constant** (stage 119. WordPress: no)
+  - MySQL: `'x' | 0` gives `Truncated incorrect INTEGER value: 'x'`. HeimDB: `Truncated incorrect DOUBLE value: 'x'`
+  - Note: warnings for TEXT columns stopped being given in stage 119, as in MySQL
+- **The number of warnings for VARCHAR columns in window functions with moving frames** (stage 119. WordPress: no)
+  - MySQL: `VAR_SAMP(vc) OVER (ORDER BY id)` reads the values again for each frame, and gives the same warnings again for each row (7 for 4 rows). HeimDB: once per value (2)
+  - Note: the values are the same. With `OVER ()`, MySQL also gives them once
+- **Details of warning texts for the zero date and FROM_UNIXTIME** (review of stage 118. WordPress: no)
+  - MySQL: TO_DAYS(0.0) gives `'0.0'`, and TO_DAYS(false) gives `'0'`. FROM_UNIXTIME('9223372036854775807') and '18446744073709551616' give 1292 DECIMAL, and '1e1000' and '-1e1000' give 2 ('1' and '999…'). FROM_UNIXTIME(x'31') is 1970-01-01 00:00:49. HeimDB: `'0'`, `'false'`, no warning, 1, 00:00:01.000000
+  - Note: the values are the same, except for FROM_UNIXTIME(x'31')
+- **The text of warning 3156 when converting JSON values to DOUBLE has no row number** (review of stage 119. WordPress: no)
+  - MySQL: `Invalid JSON value for CAST to DOUBLE from column j at row 2`. HeimDB: `Invalid JSON value for CAST to DOUBLE from column j`
+  - Note: in the review of stage 119, JSON arguments of SIGN, POW, SQRT, and others were made to be read by value and give warning 3156 (the number and order are the same as MySQL). HeimDB does not keep row numbers
 
-## そのほか
+## Other
 
-- **最初の 128 行を送った後に行のエラーが起きると、接続が閉じる**（段階 124。WordPress: いいえ（推定））
-  - MySQL: 送った行の後にエラーのパケットを返し、接続は使える。HeimDB: vitess が「Error in the middle of a stream」をログに出して接続を閉じる（go-sql-driver は `invalid connection`）。最初の組を送る前のエラーは、エラーを返して接続を保つ
-  - 再現: 500 行目の値が JSON でない表で `SELECT i, JSON_EXTRACT(v, '$.a') FROM r ORDER BY i`
-  - 補足: 段階 123 のバージョンも同じ（前からの違い。vitess の結果の送り方）。WordPress は実行中に行のエラーになる文をほとんど出さない
-- **INET_NTOA が 2^31 以上の値を誤る**（段階 110。WordPress: いいえ）
-  - MySQL: 192.168.1.1、255.255.255.255、203.0.113.9。HeimDB: すべて 127.255.255.255
-  - 再現: `INET_NTOA(3232235777)`
-  - 補足: 上流の #3770（段階 110 で見送った。WordPress が出さない文）
-- **段階 111 より前に作るのに失敗した、' を含む ENUM の表を DROP できない**（段階 111。WordPress: いいえ）
-  - 補足: 段階 111（#2995）で新しくは作られなくなったので、残った表を消せるようにすることは範囲の外にした
-- **wp_postmeta の post_id IN (SELECT ID FROM wp_posts ...) が wp_postmeta 全体を読むハッシュ結合になる**（段階 112。WordPress: いいえ）
-  - HeimDB: 記事 3,000 件で 14 ms
-  - 補足: 性能だけで、結果は同じ。段階 118 で「いいえ」に直した: WordPress 本体のソースにこの形はない。WooCommerce の近い形 `post_id IN (SELECT post_id FROM wp_postmeta WHERE meta_key = ... AND post_id IN (...))` は meta_key の索引で引かれ 0.5 ms
-- **重複を持つ水準 0 の一意の索引を含む時点への heimdb_restore が 1105 で拒まれる**（段階 117。WordPress: いいえ）
+- **If a row error happens after the first 128 rows have been sent, the connection is closed** (stage 124. WordPress: no (inferred))
+  - MySQL: returns an error packet after the rows sent, and the connection stays usable. HeimDB: vitess logs "Error in the middle of a stream" and closes the connection (go-sql-driver gives `invalid connection`). An error before the first batch is sent returns the error and keeps the connection
+  - Repro: `SELECT i, JSON_EXTRACT(v, '$.a') FROM r ORDER BY i` on a table whose value in row 500 is not JSON
+  - Note: the stage 123 version is the same (pre-existing difference; the way vitess sends results). WordPress hardly issues statements that get row errors during execution
+- **INET_NTOA gets values at or above 2^31 wrong** (stage 110. WordPress: no)
+  - MySQL: 192.168.1.1, 255.255.255.255, 203.0.113.9. HeimDB: all 127.255.255.255
+  - Repro: `INET_NTOA(3232235777)`
+  - Note: upstream #3770 (skipped in stage 110; a statement WordPress does not issue)
+- **Tables with ENUMs containing ' whose creation failed before stage 111 cannot be dropped** (stage 111. WordPress: no)
+  - Note: since stage 111 (#2995) such tables are no longer created, so making the remaining ones droppable was put out of scope
+- **wp_postmeta's post_id IN (SELECT ID FROM wp_posts ...) becomes a hash join that reads all of wp_postmeta** (stage 112. WordPress: no)
+  - HeimDB: 14 ms with 3,000 posts
+  - Note: performance only; the result is the same. Changed to "no" in stage 118: this form is not in the WordPress core source. WooCommerce's similar form `post_id IN (SELECT post_id FROM wp_postmeta WHERE meta_key = ... AND post_id IN (...))` is looked up through the meta_key index and takes 0.5 ms
+- **heimdb_restore to a point that includes a level-0 unique index with duplicates is rejected with 1105** (stage 117. WordPress: no)
   - HeimDB: `1105 HeimDB: restore old_udup: duplicate unique key given: [1.5]`
-  - 補足: 0.2.38 以前の CREATE UNIQUE INDEX が既存の行の重複を確かめなかった索引だけが当たる。段階 116 の HeimDB も同じ
-- **0.2.38 以前に作った DECIMAL、FLOAT、DOUBLE、ENUM の列の索引と、0.2.40 以前に作った SET と BIT の列の索引は、作り直すまでエントリを持たず、引くと表をすべて読む**（段階 117。段階 120 で SET と BIT を足した。WordPress: はい）
-  - MySQL: 索引で引く。HeimDB: 全走査して絞る。結合は LookupJoin で行の数の 2 乗の時間（4,000 行どうしで約 7 秒。作り直すと 9 ms）
-  - 補足: 結果は同じで性能の違い。WooCommerce の wc_product_meta_lookup の min_max_price と stock_quantity に当たる。新しい表と索引は段階 117 からエントリを持つ。前からの索引は、段階 121 から、本番が起動の後に main のものを裏で 1 つずつ作り直す（`-rebuild-indexes`。docs/operations.md の「古いインデックスの作り直し」）。ブランチのものと、裏の処理が飛ばしたもの（重複のある一意索引、500 万行（一意は 100 万行）を超えるもの、書き込みのロックを 5 秒で取れなかったもの）は、利用者が `CALL heimdb_rebuild_indexes()` で作り直す（起動時にログで知らせる。docs/procedures.md）。作り直すまでの一意索引は、0.2.38 以前の `CREATE UNIQUE INDEX` が重複を確かめずに作ったので、重複した行を持ちうる（作り直しが 1062 で止まる）
-- **過去の時点からのブランチの作成で、その時点がインデックスの作成の途中なら、ブランチは作りかけのエントリを見る**（段階 121。WordPress: いいえ）
-  - HeimDB: `heimdb_branch_create('b', 'main', '<時刻>')` の時刻が、何回かに分けてコミットするインデックスの作成（`CREATE INDEX`、表を書き直す ALTER、`heimdb_rebuild_indexes`、起動の後の作り直し）の途中だと、ブランチは前の定義のまま親の作りかけのエントリを見る。そのブランチで作り直すと、ブランチで消した行の親のエントリが残る
-  - 補足: 前からの問題。段階 121 で、今の時点からの作成は親の書き込みのロックを取るようにした（作成の途中に分かれない）。過去の時点はロックでは防げない。ホスティング側は今の時点から作る。過去の時点の作成の途中かを、作成の途中の印の時刻で確かめて拒否するのは、次の段階の候補
-- **ブランチの作成が、親の書き込み中のトランザクションを待つ**（段階 121。WordPress: いいえ）
-  - HeimDB: 親の書き込みのロックを取ってから作るので、親で長いトランザクションが開いていれば `-lock-wait-timeout` まで待ち、過ぎると 1205
-  - 補足: 設計どおり（上の作りかけのエントリを見ないため）。呼んだ接続のトランザクションが親のロックを持っていれば待たない。作成は親のロックを持ったままブランチの操作の排他（`branchOpMu`）を取るので、別のブランチの `heimdb_branch_drop` がそのブランチのトランザクションを待つ間（最大 2 秒、過ぎると drop が拒否される）は、作成とともに親への書き込みも待つ（段階 121 の実装のレビュー。デッドロックにはならない）
-- **上げた後、Wordfence と MainWP Child が FLOAT と DOUBLE の列を (M,D) の型にする ALTER を 1 回出す**（段階 120。WordPress: プラグインだけ）
-  - HeimDB: 0.2.40 以前に作った表の FLOAT(10,7)、DOUBLE(17,6) UNSIGNED、FLOAT(11,4) の列は、上げた後も `float` と `double` のまま（バージョン 7 の定義のまま読む）。MainWP Child の dbDelta や Wordfence のバージョンアップの処理が DESCRIBE の型と定義の違いを見て `ALTER TABLE ... CHANGE COLUMN` を 1 回出し、表を書き直す（`wfHits` などの大きな表では時間がかかる）。その後は MySQL と同じく ALTER を出さない
-  - 補足: 運用の注意（設計どおり）。その ALTER の後、ALTER より前に分かれたブランチへの `heimdb_branch_sync` は表の定義の違いで拒否される（`sync.go` の definitions differ。前からの仕様）。マージは列の型の変更の経路（coldiff）に乗る
+  - Note: only hits indexes for which CREATE UNIQUE INDEX on 0.2.38 or earlier did not check existing rows for duplicates. HeimDB in stage 116 is the same
+- **Indexes on DECIMAL, FLOAT, DOUBLE, and ENUM columns created on 0.2.38 or earlier, and indexes on SET and BIT columns created on 0.2.40 or earlier, have no entries until rebuilt, and lookups read the whole table** (stage 117; SET and BIT added in stage 120. WordPress: yes)
+  - MySQL: looks up through the index. HeimDB: full scan and filter. Joins take time proportional to the square of the row count with LookupJoin (about 7 seconds for 4,000 rows on each side; 9 ms after rebuilding)
+  - Note: the results are the same; it is a performance difference. Hits min_max_price and stock_quantity of WooCommerce's wc_product_meta_lookup. New tables and indexes have entries since stage 117. Since stage 121, production rebuilds the old indexes on main one by one in the background after startup (`-rebuild-indexes`; "Rebuilding old indexes" in docs/operations.md). Indexes on branches, and indexes the background process skipped (unique indexes with duplicates, indexes over 5 million rows (1 million for unique ones), and indexes whose write lock could not be taken within 5 seconds), are rebuilt by the user with `CALL heimdb_rebuild_indexes()` (a log message at startup says so; docs/procedures.md). Until they are rebuilt, unique indexes can hold duplicate rows, because `CREATE UNIQUE INDEX` on 0.2.38 or earlier created them without checking for duplicates (the rebuild stops with 1062)
+- **When a branch is created from a past point and that point is in the middle of an index build, the branch sees the half-built entries** (stage 121. WordPress: no)
+  - HeimDB: if the time in `heimdb_branch_create('b', 'main', '<time>')` falls in the middle of an index build that commits in several batches (`CREATE INDEX`, ALTER that rewrites the table, `heimdb_rebuild_indexes`, the rebuild after startup), the branch keeps the previous definition and sees the parent's half-built entries. If the index is rebuilt on that branch, the parent's entries for rows deleted on the branch remain
+  - Note: a pre-existing problem. In stage 121, creation from the current point was made to take the parent's write lock (so the branch is not split off in the middle of a build). For past points a lock cannot prevent it. The hosting side creates branches from the current point. Checking with the time of the in-progress marker whether a past point is in the middle of a build, and rejecting it, is a candidate for the next stage
+- **Branch creation waits for write transactions on the parent** (stage 121. WordPress: no)
+  - HeimDB: the branch is created after taking the parent's write lock, so if a long transaction is open on the parent, it waits up to `-lock-wait-timeout`, and after that gives 1205
+  - Note: by design (so as not to see the half-built entries above). It does not wait if the calling connection's transaction holds the parent's lock. Creation takes the exclusive lock for branch operations (`branchOpMu`) while holding the parent's lock, so while `heimdb_branch_drop` of another branch waits for that branch's transactions (up to 2 seconds; after that the drop is rejected), writes to the parent wait along with the creation (review of the stage 121 implementation; this does not deadlock)
+- **After upgrading, Wordfence and MainWP Child issue one ALTER that changes FLOAT and DOUBLE columns to (M,D) types** (stage 120. WordPress: plugins only)
+  - HeimDB: FLOAT(10,7), DOUBLE(17,6) UNSIGNED, and FLOAT(11,4) columns in tables created on 0.2.40 or earlier stay `float` and `double` after the upgrade (the definitions are read as data format version 7). MainWP Child's dbDelta and Wordfence's upgrade process see the difference between the type in DESCRIBE and their definition, issue `ALTER TABLE ... CHANGE COLUMN` once, and rewrite the table (this takes time on large tables such as `wfHits`). After that, no ALTER is issued, as in MySQL
+  - Note: an operational note (by design). After that ALTER, `heimdb_branch_sync` to branches split off before the ALTER is rejected because the table definitions differ (definitions differ in `sync.go`; the existing behaviour). Merges go through the path for column type changes (coldiff)
