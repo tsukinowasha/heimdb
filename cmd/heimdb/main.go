@@ -495,6 +495,8 @@ func checkBackupDir(dataDir, backupDir string) error {
 	if err != nil {
 		return fmt.Errorf("-data: %w", err)
 	}
+	// シンボリックリンクを解いてから比べる（あるものだけ。バックアップの場所は初めてのバックアップで作る）。
+	data, backupDir = resolveExisting(data), resolveExisting(backupDir)
 	rel, err := filepath.Rel(data, backupDir)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return nil // -data の外
@@ -503,10 +505,24 @@ func checkBackupDir(dataDir, backupDir string) error {
 		return errors.New("-backup-dir must differ from -data")
 	}
 	top, _, _ := strings.Cut(rel, string(filepath.Separator))
-	if strings.Contains(top, ".") || top == "LOCK" || strings.HasPrefix(top, "MANIFEST-") || strings.HasPrefix(top, "OPTIONS-") {
+	if strings.Contains(top, ".") || top == "LOCK" || top == "CURRENT" || strings.HasPrefix(top, "MANIFEST-") || strings.HasPrefix(top, "OPTIONS-") {
 		return fmt.Errorf("-backup-dir inside -data must be under a directory whose name has no '.' and is not a store file name (got %q)", top)
 	}
 	return nil
+}
+
+// resolveExisting は、p のうち、あるところまでのシンボリックリンクを解いたパスを返す（まだない後ろの部分はそのまま）。
+func resolveExisting(p string) string {
+	rest := ""
+	for q := p; ; q = filepath.Dir(q) {
+		if r, err := filepath.EvalSymlinks(q); err == nil {
+			return filepath.Join(r, rest)
+		}
+		if filepath.Dir(q) == q {
+			return p
+		}
+		rest = filepath.Join(filepath.Base(q), rest)
+	}
 }
 
 func isFlagSet(name string) bool {

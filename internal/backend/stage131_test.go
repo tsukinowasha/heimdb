@@ -2,6 +2,8 @@ package backend
 
 import (
 	"context"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -42,7 +44,14 @@ func TestSelectDoesNotWaitBehindInsert(t *testing.T) {
 		_, err := b.ExecContext(ctx, "INSERT INTO wp_posts (post_title, post_content, post_excerpt, to_ping, pinged, post_content_filtered) VALUES ('second', 'c', '', '', '', '')")
 		bDone <- err
 	}()
-	time.Sleep(300 * time.Millisecond) // INSERT が値を取り、ロックを待つまで
+	// INSERT が値を取り、書き込みのロックを待つまで待つ（待つ前に SELECT を流すと、直す前のコードでも通ってしまう）。
+	for deadline := time.Now().Add(10 * time.Second); !waitingForWriteLock(); {
+		if time.Now().After(deadline) {
+			close(release)
+			t.Fatal("the INSERT did not reach the write lock")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	cDone := make(chan error, 1)
 	go func() {
@@ -68,4 +77,16 @@ func TestSelectDoesNotWaitBehindInsert(t *testing.T) {
 	if err := c.QueryRowContext(ctx, "SELECT COUNT(*) FROM wp_posts").Scan(&n); err != nil || n != 2 {
 		t.Errorf("posts = %d, %v; want 2", n, err)
 	}
+}
+
+// waitingForWriteLock は、Txn.Commit の中で書き込みのロックを待っている goroutine があるかを返す。
+func waitingForWriteLock() bool {
+	buf := make([]byte, 1<<22)
+	for _, g := range strings.Split(string(buf[:runtime.Stack(buf, true)]), "\n\n") {
+		if strings.Contains(g, "sync.(*Mutex).Lock") && strings.Contains(g, "store.(*Store).updateWaits") &&
+			strings.Contains(g, "store.(*Txn).Commit") {
+			return true
+		}
+	}
+	return false
 }
