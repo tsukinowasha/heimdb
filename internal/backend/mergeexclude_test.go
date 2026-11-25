@@ -186,6 +186,17 @@ func testMergeExcludedTables(t *testing.T) {
 		t.Errorf("wp_posts not merged: %s", got)
 	}
 
+	// ブランチがあれば消せない（段階 132）。ないパターンを消すのは何もしない。
+	if _, err := mainDB.Exec("CALL heimdb_merge_include('wp_yoast_%')"); sqlErrNum(err) != 51011 ||
+		!strings.Contains(err.Error(), "HeimDB: merge refused (branches_exist)") || !strings.HasSuffix(err.Error(), ": staging") {
+		t.Errorf("include with a branch: %v", err)
+	}
+	if got := strings.Join(diffRows(t, mainDB, "CALL heimdb_merge_include('wp_none')"), ","); got != "wp_yoast_%" {
+		t.Errorf("include of an unknown pattern: %s", got)
+	}
+	staging.Close()
+	mustExec(t, mainDB, "CALL heimdb_branch_delete('staging')")
+
 	// 消すと、一覧から消える。同じものを足しても消しても 1 つ。
 	mustExec(t, mainDB, "CALL heimdb_merge_exclude('WP_YOAST_%')")
 	mustExec(t, mainDB, "CALL heimdb_merge_exclude('wp_redirection_404')")
