@@ -48,6 +48,11 @@ func sqlErrNum(err error) uint16 {
 	return 0
 }
 
+// notSynced は、本番で変わったが取り込まないコメントとユーザーの表の、結果の行。
+func notSynced(table string) string {
+	return table + "|not synced|0|0|0|0|0|0|0|comments and users are not synced; recreate the branch to get them"
+}
+
 // TestBranchSync は、段階 94 の完了条件の流れ: A と B をマージした後、検証中の C に本番の最新を取り込み、C をマージしても
 // A と B の変更が壊れず、C の変更が入る。
 func TestBranchSync(t *testing.T) {
@@ -84,7 +89,7 @@ func TestBranchSync(t *testing.T) {
 	synced := diffRows(t, mainDB, "CALL heimdb_branch_sync('c')")
 	got := strings.Join(synced[:len(synced)-1], "\n")
 	want := strings.Join([]string{
-		"wp_comments|synced|1|0|0|0|0|0|0|",
+		notSynced("wp_comments"),
 		"wp_options|synced|0|1|0|1|0|0|0|",
 		"wp_posts|synced|1|1|0|0|0|0|0|",
 		"wp_term_relationships|synced|1|0|0|0|0|0|0|",
@@ -93,17 +98,17 @@ func TestBranchSync(t *testing.T) {
 		t.Errorf("sync:\n%s\nwant:\n%s", got, want)
 	}
 	if undo := lastRow(synced); !strings.HasPrefix(undo, "*|undo|0|0|0|0|0|0|0|CALL heimdb_restore('c', '") ||
-		!strings.HasSuffix(undo, "', 'wp_comments,wp_options,wp_posts,wp_term_relationships,wp_term_taxonomy')") {
+		!strings.HasSuffix(undo, "', 'wp_options,wp_posts,wp_term_relationships,wp_term_taxonomy')") {
 		t.Errorf("undo: %s", undo)
 	}
 	for q, want := range map[string]string{
-		"SELECT CONCAT(post_title, '/', post_content, '/', comment_count) FROM wp_posts WHERE ID = 2": "About (a)/about v1/1",
+		"SELECT CONCAT(post_title, '/', post_content, '/', comment_count) FROM wp_posts WHERE ID = 2": "About (a)/about v1/0",
 		"SELECT post_content FROM wp_posts WHERE ID = 3":                                              "contact (c)",
 		"SELECT post_title FROM wp_posts WHERE ID = 20000000000":                                      "B post",
 		"SELECT post_title FROM wp_posts WHERE ID = 30000000000":                                      "C page",
 		"SELECT option_value FROM wp_options WHERE option_name = 'blogname'":                          "Prod (a)",
 		"SELECT option_value FROM wp_options WHERE option_name = 'siteurl'":                           "https://c.example.com",
-		"SELECT COUNT(*) FROM wp_comments":                                                            "1",
+		"SELECT COUNT(*) FROM wp_comments":                                                            "0",
 		"SELECT count FROM wp_term_taxonomy WHERE term_taxonomy_id = 1":                               "2",
 	} {
 		if got := one(t, c, q); got != want {
@@ -194,22 +199,23 @@ func TestBranchSyncUndo(t *testing.T) {
 	}
 }
 
-// TestBranchSyncAfterMerge: C を一度マージした後の取り込みは、そのマージの前に本番に入った変更（コメント）も拾う
+// TestBranchSyncAfterMerge: C を一度マージした後の取り込みは、そのマージの前に本番に入った変更（メタ）も拾う
 // （基準はマージの時点のブランチ、候補は分岐の後に本番が書いた行）。
 func TestBranchSyncAfterMerge(t *testing.T) {
 	mainDB, _, br, stop := syncFixture(t)
 	defer stop()
 	c := br["c"]
+	mustExec(t, mainDB, "INSERT INTO wp_postmeta (post_id, meta_key, meta_value) VALUES (2, 'k', 'before the merge')")
 	mustExec(t, mainDB, "INSERT INTO wp_comments (comment_post_ID, comment_author, comment_content, comment_approved) VALUES (2, 'reader', 'before the merge', '1')")
 	mustExec(t, c, "UPDATE wp_posts SET post_content = 'about (c)' WHERE ID = 2")
 	diffRows(t, mainDB, "CALL heimdb_branch_merge('c')")
 	mustExec(t, c, "UPDATE wp_posts SET post_content = 'about (c2)' WHERE ID = 2")
 	rows := diffRows(t, mainDB, "CALL heimdb_branch_sync('c')")
-	// 記事の行は書かない（本番の記事 2 はマージで入れた C の値のまま）。コメント数は数え直す。rewrite_rules は環境ごとの値。
-	if len(rows) != 3 || rows[0] != "wp_comments|synced|1|0|0|0|0|0|0|" || rows[1] != "wp_options|synced|0|0|0|1|0|0|0|" {
+	// 記事の行は書かない（本番の記事 2 はマージで入れた C の値のまま）。rewrite_rules は環境ごとの値。
+	if len(rows) != 4 || rows[0] != notSynced("wp_comments") || rows[1] != "wp_options|synced|0|0|0|1|0|0|0|" || rows[2] != "wp_postmeta|synced|1|0|0|0|0|0|0|" {
 		t.Errorf("sync: %v", rows)
 	}
-	if got := one(t, c, "SELECT CONCAT(post_content, '/', comment_count) FROM wp_posts WHERE ID = 2"); got != "about (c2)/1" {
+	if got := one(t, c, "SELECT CONCAT(post_content, '/', comment_count) FROM wp_posts WHERE ID = 2"); got != "about (c2)/0" {
 		t.Errorf("c: %s", got)
 	}
 	diffRows(t, mainDB, "CALL heimdb_branch_merge('c')")
@@ -492,7 +498,7 @@ func TestBranchSyncProperty(t *testing.T) {
 
 // TestBranchSyncConcurrent: 本番に書き込みながら取り込み、同じブランチのマージとも同時に流す。取り込みは本番をロック
 // しないので本番の書き込みは止まらず、ブランチごとの鍵でマージと取り込みの基準の記録は食い違わない。最後に取り込むと、
-// 本番のコメントがすべてブランチに入り、ブランチの変更はすべて本番に入る。
+// 本番のメタがすべてブランチに入り、ブランチの変更はすべて本番に入る。
 func TestBranchSyncConcurrent(t *testing.T) {
 	mainDB, _, br, stop := syncFixture(t)
 	defer stop()
@@ -500,7 +506,7 @@ func TestBranchSyncConcurrent(t *testing.T) {
 	done := make(chan error, 3)
 	go func() {
 		for i := 0; i < 40; i++ {
-			if _, err := mainDB.Exec(fmt.Sprintf("INSERT INTO wp_comments (comment_post_ID, comment_author, comment_content, comment_approved) VALUES (2, 'r', 'k%d', '1')", i)); err != nil {
+			if _, err := mainDB.Exec(fmt.Sprintf("INSERT INTO wp_postmeta (post_id, meta_key, meta_value) VALUES (2, 'k%d', 'v')", i)); err != nil {
 				done <- err
 				return
 			}
@@ -536,8 +542,8 @@ func TestBranchSyncConcurrent(t *testing.T) {
 	}
 	diffRows(t, mainDB, "CALL heimdb_branch_sync('c')")
 	diffRows(t, mainDB, "CALL heimdb_branch_merge('c')")
-	if got := one(t, c, "SELECT CONCAT(COUNT(*), '/', MAX(comment_content)) FROM wp_comments"); got != "40/k9" {
-		t.Errorf("comments on c: %s", got)
+	if got := one(t, c, "SELECT CONCAT(COUNT(*), '/', MAX(meta_key)) FROM wp_postmeta"); got != "40/k9" {
+		t.Errorf("meta on c: %s", got)
 	}
 	if got := one(t, mainDB, "SELECT post_content FROM wp_posts WHERE ID = 3"); got != "c7" {
 		t.Errorf("main: %s", got)
@@ -589,7 +595,7 @@ func TestBranchSyncDependents(t *testing.T) {
 	got := strings.Join(rows[:len(rows)-1], "\n")
 	want := strings.Join([]string{
 		"wp_cache|excluded|0|0|0|0|0|0|0|matches the pattern 'wp_cache'; the branch's table is kept as it is",
-		"wp_comments|synced|1|0|0|1|0|0|0|",
+		notSynced("wp_comments"),
 		"wp_postmeta|synced|1|0|0|1|0|0|0|",
 		"wp_posts|synced|0|0|0|0|0|1|0|",
 	}, "\n")
@@ -598,5 +604,88 @@ func TestBranchSyncDependents(t *testing.T) {
 	}
 	if got := one(t, c, "SELECT CONCAT((SELECT COUNT(*) FROM wp_postmeta WHERE post_id = 3), '/', (SELECT COUNT(*) FROM wp_comments WHERE comment_post_ID = 3), '/', (SELECT COUNT(*) FROM wp_cache))"); got != "0/0/0" {
 		t.Errorf("c: %s", got)
+	}
+}
+
+// TestBranchSyncKeepsUsersAndComments: コメントとユーザーの表は取り込まない（段階 132）。両側が同じ行を変えても、同じ ID の
+// 別の行を足しても拒否せず、'parent' でもブランチの行は変わらない。写した記事のコメント数はブランチの側で
+// 数える。取り消しても、後のマージでも、4 つの表は両側ともそのまま。
+func TestBranchSyncKeepsUsersAndComments(t *testing.T) {
+	mainDB, dsn, _, stop := syncFixture(t)
+	defer stop()
+	mustExec(t, mainDB, "INSERT INTO wp_usermeta (umeta_id, user_id, meta_key, meta_value) VALUES (1, 1, 'session_tokens', 'old')")
+	mustExec(t, mainDB, "CALL heimdb_branch_create('d')")
+	d := openBranch(t, dsn, "d")
+	defer d.Close()
+	for db, side := range map[*sql.DB]string{mainDB: "main", d: "branch"} {
+		for _, q := range []string{
+			"UPDATE wp_usermeta SET meta_value = '" + side + "' WHERE umeta_id = 1",
+			"UPDATE wp_users SET user_pass = '" + side + "' WHERE ID = 1",
+			"INSERT INTO wp_users (ID, user_login, user_registered) VALUES (7, '" + side + "', '2026-01-01 00:00:00')",
+			"INSERT INTO wp_comments (comment_ID, comment_post_ID, comment_author, comment_content, comment_approved) VALUES (9, 2, 'r', '" + side + "', '1')",
+			"INSERT INTO wp_commentmeta (meta_id, comment_id, meta_key, meta_value) VALUES (1, 9, 'k', '" + side + "')",
+		} {
+			mustExec(t, db, q)
+		}
+	}
+	mustExec(t, mainDB, insertPost+"(50, 7, 'by 7', 'publish', 'post', 'x', '', '', '', '')")
+	mustExec(t, mainDB, "INSERT INTO wp_comments (comment_post_ID, comment_author, comment_content, comment_approved) VALUES (50, 'r', 'on 50', '1')")
+	mustExec(t, mainDB, "UPDATE wp_posts SET comment_count = 1 WHERE ID = 50")
+	state := func(db *sql.DB) string {
+		t.Helper()
+		var out []string
+		for _, q := range []string{
+			"SELECT GROUP_CONCAT(CONCAT_WS('/', ID, user_login, user_pass) ORDER BY ID) FROM wp_users",
+			"SELECT GROUP_CONCAT(CONCAT_WS('/', umeta_id, meta_value) ORDER BY umeta_id) FROM wp_usermeta",
+			"SELECT GROUP_CONCAT(CONCAT_WS('/', comment_ID, comment_content) ORDER BY comment_ID) FROM wp_comments",
+			"SELECT GROUP_CONCAT(CONCAT_WS('/', meta_id, meta_value) ORDER BY meta_id) FROM wp_commentmeta",
+		} {
+			out = append(out, one(t, db, q))
+		}
+		return strings.Join(out, "\n")
+	}
+	mainState, dState := state(mainDB), state(d)
+	check := func(when string) {
+		t.Helper()
+		if got := state(mainDB); got != mainState {
+			t.Errorf("%s: main:\n%s\nwant:\n%s", when, got, mainState)
+		}
+		if got := state(d); got != dState {
+			t.Errorf("%s: branch:\n%s\nwant:\n%s", when, got, dState)
+		}
+	}
+	rows := diffRows(t, mainDB, "CALL heimdb_branch_sync('d')")
+	want := strings.Join([]string{
+		notSynced("wp_commentmeta"), notSynced("wp_comments"), "wp_posts|synced|1|0|0|0|0|0|0|", notSynced("wp_usermeta"), notSynced("wp_users"),
+	}, "\n")
+	if got := strings.Join(rows[:len(rows)-1], "\n"); got != want {
+		t.Errorf("sync:\n%s\nwant:\n%s", got, want)
+	}
+	check("sync")
+	if got := one(t, d, "SELECT CONCAT(post_author, '/', comment_count) FROM wp_posts WHERE ID = 50"); got != "7/0" {
+		t.Errorf("post 50 on the branch: %s", got)
+	}
+	diffRows(t, mainDB, strings.TrimPrefix(lastRow(rows), "*|undo|0|0|0|0|0|0|0|"))
+	check("undo")
+	diffRows(t, mainDB, "CALL heimdb_branch_sync('d', 'parent')")
+	check("sync with 'parent'")
+	mustExec(t, d, "UPDATE wp_posts SET post_content = 'd' WHERE ID = 50")
+	diffRows(t, mainDB, "CALL heimdb_branch_merge('d')")
+	check("merge")
+	if got := one(t, mainDB, "SELECT CONCAT(post_content, '/', post_author, '/', comment_count) FROM wp_posts WHERE ID = 50"); got != "d/7/1" {
+		t.Errorf("post 50 on main: %s", got)
+	}
+	// 定義が違えば拒否する（取り込むと、本番だけが足した列を次のマージが消す）。そろえれば取り込め、マージで列は消えない。
+	mustExec(t, mainDB, "ALTER TABLE wp_users ADD COLUMN extra int NOT NULL DEFAULT 5")
+	if _, err := mainDB.Exec("CALL heimdb_branch_sync('d')"); sqlErrNum(err) != 51010 {
+		t.Errorf("sync with a different wp_users: %v", err)
+	}
+	mustExec(t, d, "ALTER TABLE wp_users ADD COLUMN extra int NOT NULL DEFAULT 5")
+	diffRows(t, mainDB, "CALL heimdb_branch_sync('d')")
+	mustExec(t, d, "UPDATE wp_posts SET post_content = 'd2' WHERE ID = 50")
+	diffRows(t, mainDB, "CALL heimdb_branch_merge('d')")
+	check("merge after column changes")
+	if got := one(t, mainDB, "SELECT extra FROM wp_users WHERE ID = 1"); got != "5" {
+		t.Errorf("wp_users columns on main: %s", got)
 	}
 }

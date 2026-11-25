@@ -250,6 +250,8 @@ Tables that a plugin rebuilds after a merge (such as Yoast SEO's indexes) can be
 CALL heimdb_merge_exclude('wp_yoast_%');
 ```
 
+A pattern can be removed (`heimdb_merge_include`) only when there are no branches.
+
 ### Pull production's changes into a branch
 
 When other branches were merged while `staging` was still under review, pull production's latest into `staging` and review again:
@@ -261,7 +263,7 @@ CALL heimdb_branch_sync('staging', 'branch');   -- on conflicts, keep staging's 
 CALL heimdb_branch_sync('staging', 'parent');   -- on conflicts, take production's value
 ```
 
-Columns changed only on production are written to the branch in one commit; staging's own changes are kept. Comments and users are copied too; environment-specific options and excluded tables are not. Production is not locked. Tables whose definitions differ between the two sides are refused (51010). The result ends with a `heimdb_restore` call that undoes the sync.
+Columns changed only on production are written to the branch in one commit; staging's own changes are kept. Comments, users, environment-specific options and excluded tables are not copied (to get production's comments and users, recreate the branch). Production is not locked. Tables whose definitions differ between the two sides are refused (51010). The result ends with a `heimdb_restore` call that undoes the sync.
 
 Block themes create a navigation post (`wp_navigation`) the first time the front page is shown. If both production and staging show it for the first time after the branch is created, the two navigation posts conflict. Keep production's with `'parent'`.
 

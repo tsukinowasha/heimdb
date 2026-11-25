@@ -186,6 +186,26 @@ func testMergeExcludedTables(t *testing.T) {
 		t.Errorf("wp_posts not merged: %s", got)
 	}
 
+	// ブランチがあれば消せない（段階 132）。ないパターンを消すのは何もしない。
+	if _, err := mainDB.Exec("CALL heimdb_merge_include('wp_yoast_%')"); sqlErrNum(err) != 51011 ||
+		!strings.Contains(err.Error(), "HeimDB: merge refused (branches_exist)") || !strings.HasSuffix(err.Error(), ": staging") {
+		t.Errorf("include with a branch: %v", err)
+	}
+	if got := strings.Join(diffRows(t, mainDB, "CALL heimdb_merge_include('wp_none')"), ","); got != "wp_yoast_%" {
+		t.Errorf("include of an unknown pattern: %s", got)
+	}
+	for i := 1; i <= 11; i++ {
+		mustExec(t, mainDB, fmt.Sprintf("CALL heimdb_branch_create('b%d')", i))
+	}
+	if _, err := mainDB.Exec("CALL heimdb_merge_include('wp_yoast_%')"); sqlErrNum(err) != 51011 || !strings.HasSuffix(err.Error(), ", b9 and 2 more") {
+		t.Errorf("include with 12 branches: %v", err)
+	}
+	for i := 1; i <= 11; i++ {
+		mustExec(t, mainDB, fmt.Sprintf("CALL heimdb_branch_delete('b%d')", i))
+	}
+	staging.Close()
+	mustExec(t, mainDB, "CALL heimdb_branch_delete('staging')")
+
 	// 消すと、一覧から消える。同じものを足しても消しても 1 つ。
 	mustExec(t, mainDB, "CALL heimdb_merge_exclude('WP_YOAST_%')")
 	mustExec(t, mainDB, "CALL heimdb_merge_exclude('wp_redirection_404')")

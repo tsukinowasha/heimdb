@@ -19,7 +19,7 @@ import (
 // マージから外す表と、マージを拒否する理由（docs/plan.md の段階 60）。
 //
 //	CALL heimdb_merge_exclude('wp_yoast_%');   -- マージから外す表のパターンを足す（管理者だけ）
-//	CALL heimdb_merge_include('wp_yoast_%');   -- パターンを消す（管理者だけ）
+//	CALL heimdb_merge_include('wp_yoast_%');   -- パターンを消す（管理者だけ。main のほかにブランチがあれば拒否する）
 //	CALL heimdb_merge_excludes();              -- 一覧（サイトのユーザーも読める）
 //
 // 外した表には、マージで何もしない（行、列の定義、インデックスを比べず、書かない）。WordPress 本体の表は外せない。
@@ -107,7 +107,8 @@ func (p *Provider) mergeExcludeProcedures() []sql.ExternalStoredProcedureDetails
 var publicProcedures = map[string]bool{"heimdb_merge_excludes": true}
 
 // mergeExclude は、パターンを足す（add）か消す。同じパターンを足しても、ないパターンを消しても何もしない（払い出しの
-// 手順を何度流してもよいように）。足すときは、本番の今の表で接頭辞が決まれば、本体の表に当たるパターンをエラーにする
+// 手順を何度流してもよいように）。main のほかにブランチがあるときは消せない。マージと取り込みは、外した表を揃えないまま基準を
+// 進めるので、後から比べると、本番の値を古い値に戻すことなどがある（段階 132）。足すときは、本番の今の表で接頭辞が決まれば、本体の表に当たるパターンをエラーにする
 // （WordPress のインストールの前なら受け付け、マージのときに本体の表を外さない）。
 func (p *Provider) mergeExclude(pattern string, add bool) (sql.RowIter, error) {
 	pattern = strings.TrimSpace(pattern)
@@ -133,6 +134,20 @@ func (p *Provider) mergeExclude(pattern string, add bool) (sql.RowIter, error) {
 		case add && i < 0:
 			return append(cur, pattern), nil
 		case !add && i >= 0:
+			if bs := p.st.Branches(); len(bs) > 1 {
+				names := make([]string, 0, len(bs))
+				for _, b := range bs {
+					if b.ID != store.MainBranchID {
+						names = append(names, b.Name)
+					}
+				}
+				more := ""
+				if len(names) > 10 {
+					more = fmt.Sprintf(" and %d more", len(names)-10)
+					names = names[:10]
+				}
+				return nil, refuseBranchesExist.errorf("a pattern can be removed only when there are no branches; delete them first: %s%s", strings.Join(names, ", "), more)
+			}
 			return slices.Delete(cur, i, i+1), nil
 		}
 		return cur, nil
@@ -175,6 +190,8 @@ var (
 	refuseCoreTable = refusal{"core_table", 51009}
 	// refuseSchemaDiffers は、両側で定義の違う表があるので取り込まない（heimdb_branch_sync。段階 94）。
 	refuseSchemaDiffers = refusal{"schema_differs", 51010}
+	// refuseBranchesExist は、ブランチがあるのに、マージから外すパターンを消そうとした（heimdb_merge_include。段階 132）。
+	refuseBranchesExist = refusal{"branches_exist", 51011}
 )
 
 // errorf は、理由の語と番号の付いたエラーを返す（HeimDB: merge refused (<語>): <説明>）。

@@ -320,6 +320,7 @@ Commit IDs cited in the documents for stages up to 129 (such as `65d845f`) are f
 | 129 | Preparing for publication (removing internal names, English README, contribution and vulnerability reporting channels) |
 | 130 | Measuring the effect of a backup on running queries (reads wait too when the backup copies files; recorded) |
 | 131 | Reads no longer wait for a backup's write lock, and `-backup-dir` can be inside `-data` (for Docker, a backup on the same volume hard-links the files) |
+| 132 | `heimdb_branch_sync` does not sync comments and users, and `heimdb_merge_include` is refused while branches exist |
 
 In stages 2 and 3, without indexes, every lookup is a full scan; this is acceptable at test data sizes. Character-set failures in the wpdb group get lower priority; only the dropped-connection problem is fixed, by returning an error for unsupported character sets.
 
@@ -340,7 +341,7 @@ This database sets itself apart by solving the following problems that generic b
 | `wp_postmeta` | Three-way per column. `_edit_lock`, `_edit_last`, and meta of posts that are not applied, are not applied |
 | `wp_term_taxonomy` | Three-way per column. `count` is not compared and is recounted after the merge |
 | `wp_terms`, `wp_termmeta`, `wp_term_relationships`, `wp_links`, plugin tables | Three-way per column |
-| `wp_comments`, `wp_commentmeta`, `wp_users`, `wp_usermeta` | Changes on the branch side are not applied (production's changes are always kept) |
+| `wp_comments`, `wp_commentmeta`, `wp_users`, `wp_usermeta` | Changes on the branch side are not applied (production's changes are always kept). They are not synced from the parent into a branch either (stage 132); to get them, recreate the branch |
 
 Reported as warnings: both sides separately added the same meta key to the same post; comments remain in production on a post deleted in staging.
 
