@@ -26,6 +26,10 @@ import (
 // ブランチの状態、どちらもなければ分岐の時点。候補は、親が自分の層で前の取り込み（なければ分岐）の後に書いた行。
 // 写した行は 1 つのコミットでブランチに書き、取り込みの記録（m/sync）を残す。後のマージは、直近が取り込みなら両側とも
 // この親の状態を基準に比べるので、写した行はブランチの変更に数えない。
+//
+// コメントとユーザーの表（merge.KindParentOnly）は写さない。マージでも行を反映しないので、基準が進んでも影響しない（段階 132）。
+// 定義はマージで列ごとに比べるので、違えばほかの表と同じく拒否する（拒否しないと、本番だけにある列を次のマージが消す）。ブランチに
+// 表がなければ（WordPress のインストールより前に分岐した）、ほかの新しい表と同じく表ごと写す。
 
 // syncRefused は、マージと共通の拒否（branch_not_found など）の文を、取り込みの文にする。
 func syncRefused(err error) error {
@@ -200,6 +204,15 @@ func (s *syncer) run(dryRun bool) (sql.RowIter, error) {
 		case !sameShape(pNow, cNow):
 			differs = append(differs, t.name)
 			continue
+		case d.policy.Kind(name) == merge.KindParentOnly:
+			changed, err := d.st.ChangedRows(d.parent.ID, pNow.ID, s.window, d.snap)
+			if err != nil {
+				return nil, err
+			}
+			if len(changed) == 0 {
+				continue
+			}
+			t.status, t.detail = "not synced", "comments and users are not synced; recreate the branch to get them"
 		}
 		plans = append(plans, pl)
 	}
@@ -358,21 +371,9 @@ func (s *syncer) copyTable(t *syncTable, pNow, def *schema.Table) error {
 		}
 		t.ins++
 		s.m.applied++
-		s.track(kind, def, rowOp{Kind: merge.Insert}, nil, row)
+		s.m.track(kind, def, rowOp{Kind: merge.Insert}, nil, row)
 		return nil
 	})
-}
-
-// track は、取り込みの後に数え直す記事とタームを記録する。コメントを写した記事は、コメント数を数え直す。
-func (s *syncer) track(kind merge.Kind, def *schema.Table, op rowOp, before, after sql.Row) {
-	s.m.track(kind, def, op, before, after)
-	if strings.EqualFold(def.Name, s.d.policy.Prefix+"comments") {
-		for _, row := range []sql.Row{before, after} {
-			if row != nil {
-				s.m.insertedPosts[fmt.Sprint(toMergeRow(def, row)["comment_post_id"])] = true
-			}
-		}
-	}
 }
 
 // syncRows は、両側にある表の、親の変わった行をブランチに写す。
@@ -455,7 +456,7 @@ func (s *syncer) syncRows(t *syncTable, pNow, cNow, baseDef *schema.Table) error
 		}
 		s.m.applied++
 		s.m.wrote[cNow.Name] = true
-		s.track(kind, cNow, op, before, after)
+		s.m.track(kind, cNow, op, before, after)
 		return nil
 	}
 	if idCols := d.policy.IdentityColumns(t.name); idCols != nil {
@@ -519,7 +520,7 @@ func (s *syncer) syncRows(t *syncTable, pNow, cNow, baseDef *schema.Table) error
 		if cur == nil {
 			cur = mbP
 		}
-		if reason := s.skipReason(kind, t.name, cur); reason != "" {
+		if s.dependsOnNotCopied(kind, cur) {
 			t.skip++
 			continue
 		}
@@ -545,18 +546,14 @@ func (s *syncer) syncRows(t *syncTable, pNow, cNow, baseDef *schema.Table) error
 	return nil
 }
 
-// skipReason は、親の行 cur を写さない理由を返す。写さなかった記事などにぶら下がる行は写さない。
-func (s *syncer) skipReason(kind merge.Kind, table string, cur merge.Row) string {
-	deps := dependsOn[kind]
-	if strings.EqualFold(table, s.d.policy.Prefix+"comments") {
-		deps = []dependency{{"comment_post_id", merge.KindPosts}} // 写さなかった記事のコメントも写さない
-	}
-	for _, dep := range deps {
+// dependsOnNotCopied は、親の行 cur が、写さなかった記事などにぶら下がる（ので写さない）かどうか。
+func (s *syncer) dependsOnNotCopied(kind merge.Kind, cur merge.Row) bool {
+	for _, dep := range dependsOn[kind] {
 		if s.notCopied[dep.kind][fmt.Sprint(cur[dep.col])] {
-			return fmt.Sprintf("belongs to a %s that is not synced", depName[dep.kind])
+			return true
 		}
 	}
-	return ""
+	return false
 }
 
 // branchAdded は、ブランチが基準の後に足した行（今あって基準にない）の、自然なキーから ID への対応を返す。候補は、
