@@ -141,7 +141,12 @@ func (p *Provider) mergeExclude(pattern string, add bool) (sql.RowIter, error) {
 						names = append(names, b.Name)
 					}
 				}
-				return nil, refuseBranchesExist.errorf("a pattern can be removed only when there are no branches; delete them first: %s", strings.Join(names, ", "))
+				more := ""
+				if len(names) > 10 {
+					more = fmt.Sprintf(" and %d more", len(names)-10)
+					names = names[:10]
+				}
+				return nil, refuseBranchesExist.errorf("a pattern can be removed only when there are no branches; delete them first: %s%s", strings.Join(names, ", "), more)
 			}
 			return slices.Delete(cur, i, i+1), nil
 		}
