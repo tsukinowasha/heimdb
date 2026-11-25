@@ -24,7 +24,7 @@ You operate HeimDB entirely with SQL `CALL heimdb_*(...)` statements. You can ca
 | [`heimdb_branch_merge(name[, 'dry_run'])`](#heimdb_branch_merge) | Merge into the parent (`'dry_run'` only checks) | ○ | |
 | [`heimdb_branch_sync(name[, side][, 'dry_run'])`](#heimdb_branch_sync) | Bring the parent's changes into the branch | ○ | |
 | [`heimdb_merge_exclude(pattern)`](#heimdb_merge_exclude) | Add tables to exclude from merges | ○ | |
-| [`heimdb_merge_include(pattern)`](#heimdb_merge_include) | Stop excluding tables from merges | ○ | |
+| [`heimdb_merge_include(pattern)`](#heimdb_merge_include) | Stop excluding tables from merges (only when there are no branches) | ○ | |
 | [`heimdb_merge_excludes()`](#heimdb_merge_excludes) | List the tables excluded from merges (the site's users can call it too) | | Yes |
 | [`heimdb_changes(branch, time[, tables])`](#heimdb_changes) | Show the rows changed since a time | | With the flag |
 | [`heimdb_restore_preview(branch, time[, tables])`](#heimdb_restore_preview) | Show what a restore would change | | With the flag |
@@ -339,16 +339,16 @@ CALL heimdb_branch_sync('c', 'parent', 'dry_run');
 +-------------+--------+---------+---------+---------+---------+-----------+----------+----------+--------+
 | table_name  | status | inserts | updates | deletes | skipped | conflicts | resolved | warnings | detail |
 +-------------+--------+---------+---------+---------+---------+-----------+----------+----------+--------+
-| wp_comments | synced |       1 |       0 |       0 |       0 |         0 |        0 |        0 | NULL   |
 | wp_options  | synced |       0 |       1 |       0 |       1 |         0 |        0 |        0 | NULL   |
 | wp_posts    | synced |       1 |       1 |       0 |       0 |         0 |        0 |        0 | NULL   |
-| *           | undo   |       0 |       0 |       0 |       0 |         0 |        0 |        0 | CALL heimdb_restore('c', '2026-11-01 08:00:00.000000+00:00', 'wp_comments,wp_options,wp_posts') |
+| *           | undo   |       0 |       0 |       0 |       0 |         0 |        0 |        0 | CALL heimdb_restore('c', '2026-11-01 08:00:00.000000+00:00', 'wp_options,wp_posts') |
 +-------------+--------+---------+---------+---------+---------+-----------+----------+----------+--------+
 ```
 
 - It compares the same three states as a merge, in the opposite direction. Columns changed only on the parent are written to the branch, and columns changed only on the branch are kept. The base is the time of the previous sync (if none, the previous merge; if neither, the fork).
-- What is synced: all rows (including posts, meta, terms, comments, users, auto-drafts and revisions). Tables created on the parent are created on the branch and their rows copied. For posts whose comments were copied, the comment counts, and the terms' counts, are recounted on the branch side, and `rewrite_rules` is emptied.
-- What is not synced: environment-specific options (`siteurl`, `home`, transients, `cron` and so on, as in a merge); [tables excluded from merges](#tables-excluded-from-merges); new parent rows with the same natural key (posts: type and slug; terms: slug) as a post or term the branch added (the branch's row is kept and it is shown in `warnings`; meta and other rows hanging off that row are not copied either); rows (meta, comments, term relationships) hanging off parent posts or terms that were not brought in because a conflict took the branch side; and tables dropped on the parent. Tables excluded from merges are shown in `excluded` rows (with counts of 0).
+- What is synced: all rows (including posts, meta, terms, auto-drafts and revisions) except the ones below. Tables created on the parent are created on the branch and their rows copied. The comment counts of the copied posts (from the branch's own comments) and the terms' counts are recounted on the branch side, and `rewrite_rules` is emptied.
+- Comments and users (`wp_comments`, `wp_commentmeta`, `wp_users`, `wp_usermeta`) are not synced (up to 0.3.1 they were). The branch's rows stay as they are, and if the parent's rows changed since the base, the result has a `not synced` row (with counts of 0). Merges do not apply these rows either. Differing definitions are refused (51010) as for other tables. To get them, recreate the branch (merge or give up its changes first). Until then, a copied post may have an author who is not on the branch, and comments of a post that the sync deleted stay on the branch. With WooCommerce, customers, reviews and order notes are in these tables, so they are not synced, while orders are. Only when the branch does not have the table at all (it was created before WordPress was installed) is the table copied.
+- What is also not synced: environment-specific options (`siteurl`, `home`, transients, `cron` and so on, as in a merge); [tables excluded from merges](#tables-excluded-from-merges); new parent rows with the same natural key (posts: type and slug; terms: slug) as a post or term the branch added (the branch's row is kept and it is shown in `warnings`; meta and other rows hanging off that row are not copied either); rows (meta, term relationships) hanging off parent posts or terms that were not brought in because a conflict took the branch side; and tables dropped on the parent. Tables excluded from merges are shown in `excluded` rows (with counts of 0).
 - If there are conflicts (rows where both sides changed the same column to different values, rows deleted on one side and changed on the other, rows added on both sides with the same ID but different contents), it is refused with 51004 without writing anything, and the conflicting rows are shown. The second argument, `'branch'` or `'parent'`, decides all conflicts at once for one side. Branch values kept with `'branch'` go into production at the next merge. A conflict where both sides added different rows with the same ID can only be decided with `'parent'` (`'branch'` also refuses with 51004, because keeping the branch's row would overwrite production's row at the next merge). To decide row by row, change that row on the branch to the parent's values, then sync. Records from [`heimdb_branch_resolve`](#heimdb_branch_resolve) are not used (after a sync, records made before it are no longer used).
 - If there are tables whose definitions (columns, indexes, primary key) differ between the sides, it is refused with 51010 without writing anything. Run the same plugin update (dbDelta) or `ALTER TABLE` on the branch too, then sync.
 - If `db_version` differs, it is refused (51005).
@@ -366,13 +366,14 @@ Tables you do not want in merges (indexes that can be rebuilt and so on) are exc
 
 ```sql
 CALL heimdb_merge_exclude('wp_yoast_%');   -- add
-CALL heimdb_merge_include('wp_yoast_%');   -- remove
+CALL heimdb_merge_include('wp_yoast_%');   -- remove (only when there are no branches)
 CALL heimdb_merge_excludes();              -- list
 ```
 
 - A pattern is a table name where, as in `LIKE`, `%` matches zero or more characters and `_` matches any one character (there is no escape: `wp_yoast_%` matches `wp_yoast_indexable`, and `wp_posts` also matches `wpxposts`). It is case-insensitive.
 - Tables that match a pattern but never existed on the branch side (tables created only on production) get no row in the result.
 - There is one setting per server (one site), and it applies to merges of all branches. It is an unversioned setting written through commits, so it follows replicas and backups. It is empty on a newly created site.
+- Patterns can be added at any time, but can be removed only when there are no branches other than `main` (see [`heimdb_merge_include`](#heimdb_merge_include)). Changes on a branch that were not merged before its table was excluded are no longer merged. When tables refer to each other, exclude them together. Renaming a table (`RENAME TABLE`) so that it no longer matches a pattern has the same effect as removing the pattern: do not do it while branches exist.
 - The steps for excluding Yoast SEO: "Tables to exclude from merges" in [`plugins.md`](plugins.md).
 
 #### heimdb_merge_exclude
@@ -388,6 +389,14 @@ ERROR 51009 (HY000): HeimDB: merge refused (core_table): the pattern "wp_%" matc
 #### heimdb_merge_include
 
 Removes a pattern and returns the list after removing. If it does not exist, it does nothing. Only administrators can call it. It removes the matching pattern case-insensitively.
+
+It is refused with 51011 (`branches_exist`) while there is any branch other than `main`, and nothing is changed (removing a pattern that does not exist still does nothing). A merge or a sync moves the branch's base forward without touching excluded tables, so if such a table were compared again, the merge could write old values over production's, or bring back rows deleted on production. Merge or give up the branches, delete them, remove the pattern, then create them again.
+
+```
+ERROR 51011 (HY000): HeimDB: merge refused (branches_exist): a pattern can be removed only when there are no branches; delete them first: staging
+```
+
+Up to 0.3.1, patterns could be removed at any time. If a pattern was removed after a merge or a sync of a branch that still exists, recreate that branch before merging it.
 
 #### heimdb_merge_excludes
 
@@ -412,7 +421,7 @@ WHERE c.table_schema = DATABASE() AND c.column_name = 'option_name' AND c.table_
 
 ### Reasons a merge is refused
 
-When a merge (including `dry_run`), a sync, a diff, recording a resolution, or adding an exclusion is refused, a reason word and an error number for each word are given. The form is `HeimDB: merge refused (<word>): <description>` (the same form for diff and recording resolutions; for sync it is `HeimDB: sync refused (<word>): <description>`). The SQLSTATE is `HY000`. The numbers come from the range MySQL leaves free for third parties (50000 to 51999). With PHP's mysqli, you can branch on `errno` (`mysqli_errno()`, `mysqli_sql_exception::getCode()`).
+When a merge (including `dry_run`), a sync, a diff, recording a resolution, or adding or removing an exclusion is refused, a reason word and an error number for each word are given. The form is `HeimDB: merge refused (<word>): <description>` (the same form for diff and recording resolutions; for sync it is `HeimDB: sync refused (<word>): <description>`). The SQLSTATE is `HY000`. The numbers come from the range MySQL leaves free for third parties (50000 to 51999). With PHP's mysqli, you can branch on `errno` (`mysqli_errno()`, `mysqli_sql_exception::getCode()`).
 
 **Words and numbers are not translated; they are only added to, never changed or removed** (plugins branch on them). The description text may change.
 
@@ -428,6 +437,7 @@ When a merge (including `dry_run`), a sync, a diff, recording a resolution, or a
 | 51008 | `read_only_replica` | Tried to merge on a replica |
 | 51009 | `core_table` | A [`heimdb_merge_exclude`](#heimdb_merge_exclude) pattern matches a core table |
 | 51010 | `schema_differs` | There are tables whose definitions differ between the sides, so the sync does not proceed ([`heimdb_branch_sync`](#heimdb_branch_sync)) |
+| 51011 | `branches_exist` | Tried to remove a pattern with [`heimdb_merge_include`](#heimdb_merge_include) while there are branches |
 
 Besides these, 1041 is returned if a merge stops at the memory limit, and 1197 if a merge's writes are too large (`docs/operations.md`). Neither changes anything. Other errors (wrong arguments and so on) are 1105 and have no word.
 
